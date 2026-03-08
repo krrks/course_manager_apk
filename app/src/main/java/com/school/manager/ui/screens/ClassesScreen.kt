@@ -1,0 +1,148 @@
+package com.school.manager.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.*
+import com.school.manager.data.*
+import com.school.manager.ui.components.*
+import com.school.manager.ui.theme.*
+import com.school.manager.viewmodel.AppViewModel
+
+@Composable
+fun ClassesScreen(vm: AppViewModel) {
+    val state  by vm.state.collectAsState()
+    var showAdd by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<SchoolClass?>(null) }
+    var editing by remember { mutableStateOf<SchoolClass?>(null) }
+
+    Scaffold(
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { showAdd = true },
+                icon = { Icon(Icons.Default.Add, "") },
+                text = { Text("添加班级") },
+                containerColor = FluentBlue,
+                contentColor   = Color.White,
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+    ) { inner ->
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(160.dp),
+            contentPadding = PaddingValues(inner.calculateTopPadding() + 12.dp, 12.dp, 12.dp, 80.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            if (state.classes.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { EmptyState("🏫", "暂无班级") }
+            } else {
+                items(state.classes) { cls ->
+                    val ht  = vm.teacher(cls.headTeacherId)
+                    val sts = state.students.filter { s -> s.classIds.contains(cls.id) }
+                    val gradeColor = gradeColor(cls.grade)
+
+                    FluentCard(modifier = Modifier.fillMaxWidth(), onClick = { viewing = cls }) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                ColorChip(cls.grade, gradeColor)
+                                Text("${sts.size}/${cls.count}人", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+                            }
+                            Text(cls.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("班主任：${ht?.name ?: "未设置"}", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
+                            LinearProgressIndicator(
+                                progress = { if (cls.count > 0) sts.size.toFloat() / cls.count else 0f },
+                                modifier = Modifier.fillMaxWidth().height(4.dp),
+                                color = gradeColor,
+                                trackColor = gradeColor.copy(alpha = 0.15f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    viewing?.let { cls ->
+        ClassDetailDialog(cls, state, vm,
+            onDismiss = { viewing = null },
+            onEdit    = { editing = cls; viewing = null },
+            onDelete  = { vm.deleteClass(cls.id); viewing = null }
+        )
+    }
+
+    editing?.let { cls ->
+        ClassFormDialog("编辑班级", cls, state, vm, onDismiss = { editing = null }) { updated ->
+            vm.updateClass(updated); editing = null
+        }
+    }
+
+    if (showAdd) {
+        ClassFormDialog("添加班级", null, state, vm, onDismiss = { showAdd = false }) { c ->
+            vm.addClass(c.name, c.grade, c.count, c.headTeacherId); showAdd = false
+        }
+    }
+}
+
+private fun gradeColor(grade: String) = when {
+    grade.startsWith("高一") -> FluentBlue
+    grade.startsWith("高二") -> FluentPurple
+    grade.startsWith("高三") -> FluentOrange
+    grade.startsWith("初一") -> FluentGreen
+    grade.startsWith("初二") -> FluentTeal
+    else                     -> FluentAmber
+}
+
+@Composable
+private fun ClassDetailDialog(
+    cls: SchoolClass, state: com.school.manager.data.AppState, vm: AppViewModel,
+    onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
+) {
+    val ht  = vm.teacher(cls.headTeacherId)
+    val sts = state.students.filter { s -> s.classIds.contains(cls.id) }
+    FluentDialog(title = "班级详情", onDismiss = onDismiss) {
+        DetailRow("班级名称", cls.name)
+        DetailRow("年级", cls.grade)
+        DetailRow("班主任", ht?.name ?: "未设置")
+        DetailRow("编制人数", "${cls.count} 人")
+        DetailRow("在籍学生", "${sts.size} 人")
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onEdit, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) { Text("✏️ 编辑") }
+            OutlinedButton(onClick = onDelete, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed), modifier = Modifier.weight(1f)) { Text("删除") }
+        }
+    }
+}
+
+@Composable
+private fun ClassFormDialog(
+    title: String, initial: SchoolClass?,
+    state: com.school.manager.data.AppState, vm: AppViewModel,
+    onDismiss: () -> Unit, onSave: (SchoolClass) -> Unit
+) {
+    var name    by remember { mutableStateOf(initial?.name    ?: "") }
+    var grade   by remember { mutableStateOf(initial?.grade   ?: GRADES[0]) }
+    var count   by remember { mutableStateOf(initial?.count?.toString() ?: "") }
+    var teacher by remember { mutableStateOf(state.teachers.firstOrNull { it.id == initial?.headTeacherId }?.name ?: "") }
+
+    FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
+        if (name.isNotBlank()) {
+            val tId = state.teachers.firstOrNull { it.name == teacher }?.id
+            onSave(SchoolClass(initial?.id ?: System.currentTimeMillis(), name, grade, count.toIntOrNull() ?: 0, tId))
+        }
+    }) {
+        FormTextField("班级名称", name, { name = it }, "如: 高一(1)班")
+        FormDropdown("年级", grade, GRADES) { grade = it }
+        FormTextField("编制人数", count, { count = it }, "人数")
+        FormDropdown("班主任", teacher, state.teachers.map { it.name }) { teacher = it }
+    }
+}

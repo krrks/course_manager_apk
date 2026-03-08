@@ -1,0 +1,2 @@
+-keep class com.school.manager.** { *; }
+-keepclassmembers class * extends androidx.lifecycle.ViewModel { *; }

@@ -1,0 +1,121 @@
+name: 🔨 Auto Build & Sync APK
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: 📦 Sync from school-manager-android.zip (if present)
+        run: |
+          if [ -f "school-manager-android.zip" ]; then
+            echo "✅ Found school-manager-android.zip — extracting..."
+            unzip -o school-manager-android.zip -d _zip_tmp
+            if [ -d "_zip_tmp/school-manager-android" ]; then
+              cp -rf _zip_tmp/school-manager-android/. .
+              echo "✅ Synced zip contents to root"
+            else
+              echo "⚠️  Expected folder school-manager-android/ inside zip — skipping"
+            fi
+            rm -rf _zip_tmp
+          else
+            echo "ℹ️  No school-manager-android.zip found — skipping sync step"
+          fi
+
+      - name: ☕ Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: 🔑 Grant execute permission to gradlew
+        run: chmod +x ./gradlew
+
+      - name: 📦 Download Gradle Wrapper JAR
+        run: |
+          mkdir -p gradle/wrapper
+          curl -fsSL \
+            "https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
+            -o gradle/wrapper/gradle-wrapper.jar
+
+      - name: 🔧 Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+
+      - name: 🚀 Build Release APK
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+
+      - name: 📂 Copy APKs to /apk folder
+        run: |
+          mkdir -p apk
+          cp app/build/outputs/apk/debug/app-debug.apk     apk/app-debug.apk
+          cp app/build/outputs/apk/release/app-release.apk apk/app-release.apk
+
+      - name: 🗑️ Delete school-manager-android.zip (if present)
+        run: |
+          if [ -f "school-manager-android.zip" ]; then
+            rm school-manager-android.zip
+            echo "✅ Deleted school-manager-android.zip"
+          else
+            echo "ℹ️  No zip to delete"
+          fi
+
+      - name: 📝 Update .gitignore
+        run: |
+          GITIGNORE=".gitignore"
+          touch "$GITIGNORE"
+
+          add_if_missing() {
+            local entry="$1"
+            if ! grep -qxF "$entry" "$GITIGNORE"; then
+              echo "$entry" >> "$GITIGNORE"
+              echo "  added: $entry"
+            else
+              echo "  already present: $entry"
+            fi
+          }
+
+          echo "Updating $GITIGNORE..."
+          add_if_missing ".gradle"
+          add_if_missing "app/build"
+          add_if_missing "gradle/wrapper/gradle-wrapper.jar"
+
+          # Also untrack any of these already in git index
+          git rm -r --cached .gradle                          2>/dev/null || true
+          git rm -r --cached app/build                        2>/dev/null || true
+          git rm    --cached gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
+
+      - name: 💾 Commit and push all changes
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "ℹ️  Nothing changed — skipping commit"
+          else
+            git commit -m "ci: sync source, update APKs [skip ci]"
+            git push
+            echo "✅ Changes pushed"
+          fi
