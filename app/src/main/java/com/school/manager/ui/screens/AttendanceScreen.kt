@@ -44,6 +44,7 @@ private fun durationDp(startHhmm: String, endHhmm: String): Float {
 }
 
 /** Total calendar height in dp */
+private const val CAL_V_PAD = 10f  // top+bottom padding so 08:00/22:00 labels are not clipped
 private val totalCalHeightDp: Float
     get() = (CAL_END_HOUR - CAL_START_HOUR) * DP_PER_HOUR
 
@@ -212,7 +213,7 @@ private fun WeekView(
         val scrollV = rememberScrollState()
         val calH    = totalCalHeightDp
         Box(modifier = Modifier.fillMaxSize().verticalScroll(scrollV)) {
-            Row(modifier = Modifier.height(calH.dp)) {
+            Row(modifier = Modifier.height((calH + CAL_V_PAD * 2).dp)) {
                 // Time column
                 Box(modifier = Modifier.width(TIME_COL_W.dp).fillMaxHeight()) {
                     // Hour labels
@@ -220,14 +221,14 @@ private fun WeekView(
                         val top = ((h - CAL_START_HOUR) * DP_PER_HOUR).dp
                         Text("%02d:00".format(h), style = MaterialTheme.typography.labelSmall,
                             color = FluentMuted,
-                            modifier = Modifier.offset(y = top - 7.dp).padding(start = 4.dp))
+                            modifier = Modifier.offset(y = top + CAL_V_PAD.dp - 7.dp).padding(start = 4.dp))
                     }
                     // Half-hour labels
                     for (h in CAL_START_HOUR until CAL_END_HOUR) {
                         val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + DP_PER_HOUR / 2f).dp
                         Text(":%02d".format(30), style = MaterialTheme.typography.labelSmall,
                             color = FluentBorder,
-                            modifier = Modifier.offset(y = top - 5.dp).padding(start = 8.dp))
+                            modifier = Modifier.offset(y = top + CAL_V_PAD.dp - 5.dp).padding(start = 8.dp))
                     }
                 }
                 // Day columns
@@ -238,13 +239,13 @@ private fun WeekView(
                         // Hour lines
                         for (h in CAL_START_HOUR..CAL_END_HOUR) {
                             val top = ((h - CAL_START_HOUR) * DP_PER_HOUR).dp
-                            Box(modifier = Modifier.offset(y = top).fillMaxWidth()
+                            Box(modifier = Modifier.offset(y = top + CAL_V_PAD.dp).fillMaxWidth()
                                 .height(0.5.dp).background(FluentBorder))
                         }
                         // Half-hour lines
                         for (h in CAL_START_HOUR until CAL_END_HOUR) {
                             val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + DP_PER_HOUR / 2f).dp
-                            Box(modifier = Modifier.offset(y = top).fillMaxWidth()
+                            Box(modifier = Modifier.offset(y = top + CAL_V_PAD.dp).fillMaxWidth()
                                 .height(0.5.dp).background(FluentBorder.copy(alpha = 0.4f)))
                         }
                         // Events
@@ -258,7 +259,7 @@ private fun WeekView(
                             val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
                             Box(
                                 modifier = Modifier
-                                    .offset(y = top)
+                                    .offset(y = top + CAL_V_PAD.dp)
                                     .fillMaxWidth().height(h)
                                     .padding(horizontal = 2.dp, vertical = 1.dp)
                                     .clip(RoundedCornerShape(4.dp))
@@ -317,20 +318,20 @@ private fun DayView(
 
         val scrollV = rememberScrollState()
         Box(modifier = Modifier.fillMaxSize().verticalScroll(scrollV)) {
-            Row(modifier = Modifier.height(calH.dp).fillMaxWidth()) {
+            Row(modifier = Modifier.height((calH + CAL_V_PAD * 2).dp).fillMaxWidth()) {
                 // Time column
                 Box(modifier = Modifier.width(TIME_COL_W.dp).fillMaxHeight()) {
                     for (h in CAL_START_HOUR..CAL_END_HOUR) {
                         val top = ((h - CAL_START_HOUR) * DP_PER_HOUR).dp
                         Text("%02d:00".format(h), style = MaterialTheme.typography.labelSmall,
                             color = FluentMuted,
-                            modifier = Modifier.offset(y = top - 7.dp).padding(start = 4.dp))
+                            modifier = Modifier.offset(y = top + CAL_V_PAD.dp - 7.dp).padding(start = 4.dp))
                     }
                     for (h in CAL_START_HOUR until CAL_END_HOUR) {
                         val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + DP_PER_HOUR / 2f).dp
                         Text(":30", style = MaterialTheme.typography.labelSmall,
                             color = FluentBorder,
-                            modifier = Modifier.offset(y = top - 5.dp).padding(start = 8.dp))
+                            modifier = Modifier.offset(y = top + CAL_V_PAD.dp - 5.dp).padding(start = 8.dp))
                     }
                 }
                 // Event column
@@ -338,13 +339,13 @@ private fun DayView(
                     // Hour lines
                     for (h in CAL_START_HOUR..CAL_END_HOUR) {
                         val top = ((h - CAL_START_HOUR) * DP_PER_HOUR).dp
-                        Box(modifier = Modifier.offset(y = top).fillMaxWidth()
+                        Box(modifier = Modifier.offset(y = top + CAL_V_PAD.dp).fillMaxWidth()
                             .height(0.5.dp).background(FluentBorder))
                     }
                     // Half-hour lines
                     for (h in CAL_START_HOUR until CAL_END_HOUR) {
                         val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + DP_PER_HOUR / 2f).dp
-                        Box(modifier = Modifier.offset(y = top).fillMaxWidth()
+                        Box(modifier = Modifier.offset(y = top + CAL_V_PAD.dp).fillMaxWidth()
                             .height(0.5.dp).background(FluentBorder.copy(alpha = 0.4f)))
                     }
                     if (dayRecs.isEmpty()) {
@@ -365,7 +366,7 @@ private fun DayView(
                         val color   = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
                         Box(
                             modifier = Modifier
-                                .offset(y = top)
+                                .offset(y = top + CAL_V_PAD.dp)
                                 .fillMaxWidth(0.96f).height(h)
                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                                 .clip(RoundedCornerShape(6.dp))

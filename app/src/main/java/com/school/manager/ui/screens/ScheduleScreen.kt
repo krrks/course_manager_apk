@@ -36,6 +36,8 @@ private const val DAY_COL_W          = 110
 private const val HEADER_H           = 36
 private val CAL_TOTAL_HOURS          = CAL_END_HOUR - CAL_START_HOUR   // 14
 private val CAL_TOTAL_HEIGHT_DP      = CAL_TOTAL_HOURS * DP_PER_HOUR   // 1120
+private const val CAL_V_PAD          = 10   // extra dp top+bottom so 08:00/22:00 labels are not clipped
+private val CAL_BOX_HEIGHT_DP        = CAL_TOTAL_HEIGHT_DP + CAL_V_PAD * 2
 
 /**
  * Half-hour tick labels from 08:00 to 22:00, each paired with its dp y-offset
@@ -270,7 +272,7 @@ private fun CalendarGrid(
 
                 // ── Time-axis column ─────────────────────────────────────────
                 Box(
-                    Modifier.width(TIME_COL_W.dp).height(CAL_TOTAL_HEIGHT_DP.dp)
+                    Modifier.width(TIME_COL_W.dp).height(CAL_BOX_HEIGHT_DP.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     TIME_TICKS.forEach { (label, yDp) ->
@@ -282,7 +284,7 @@ private fun CalendarGrid(
                             fontWeight = if (isHour) FontWeight.Medium else FontWeight.Normal,
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .offset(y = yDp.dp - 6.dp)
+                                .offset(y = (yDp + CAL_V_PAD - 6).dp)
                                 .padding(end = 4.dp)
                         )
                     }
@@ -291,7 +293,7 @@ private fun CalendarGrid(
                 // ── One column per weekday ───────────────────────────────────
                 DAYS.forEachIndexed { di, _ ->
                     val daySlots = slots.filter { it.day == di + 1 }
-                    Box(Modifier.width(DAY_COL_W.dp).height(CAL_TOTAL_HEIGHT_DP.dp)) {
+                    Box(Modifier.width(DAY_COL_W.dp).height(CAL_BOX_HEIGHT_DP.dp)) {
 
                         // Grid lines at every 30-min tick
                         TIME_TICKS.forEach { (label, yDp) ->
@@ -302,7 +304,7 @@ private fun CalendarGrid(
                                 thickness = if (isHour) 0.8.dp else 0.4.dp,
                                 modifier  = Modifier
                                     .align(Alignment.TopStart)
-                                    .offset(y = yDp.dp)
+                                    .offset(y = (yDp + CAL_V_PAD).dp)
                             )
                         }
                         // Right border
@@ -328,7 +330,7 @@ private fun CalendarGrid(
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
-                                    .offset(y = yDp.dp)
+                                    .offset(y = (yDp + CAL_V_PAD).dp)
                                     .fillMaxWidth()
                                     .height(hDp.dp)
                                     .padding(horizontal = 2.dp, vertical = 1.dp)
@@ -339,20 +341,26 @@ private fun CalendarGrid(
                                     .padding(horizontal = 4.dp, vertical = 3.dp)
                             ) {
                                 Column {
+                                    // Time range — always shown at top of block
+                                    Text("${slot.resolvedStart()} – ${slot.resolvedEnd()}",
+                                        style      = MaterialTheme.typography.labelSmall,
+                                        color      = color.copy(alpha = 0.85f),
+                                        maxLines   = 1,
+                                        overflow   = TextOverflow.Ellipsis)
                                     Text(sub?.name ?: "?",
                                         style      = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color      = color,
                                         maxLines   = 1,
                                         overflow   = TextOverflow.Ellipsis)
-                                    if (hDp > 32f) {
+                                    if (hDp > 42f) {
                                         Text(cl?.name ?: "",
                                             style    = MaterialTheme.typography.labelSmall,
                                             color    = FluentMuted,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis)
                                     }
-                                    if (hDp > 52f && te != null) {
+                                    if (hDp > 62f && te != null) {
                                         Text(te.name,
                                             style    = MaterialTheme.typography.labelSmall,
                                             color    = FluentMuted,
