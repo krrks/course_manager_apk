@@ -80,31 +80,6 @@ jobs:
             echo "ℹ️  No zip to delete"
           fi
 
-      - name: 📝 Update .gitignore
-        run: |
-          GITIGNORE=".gitignore"
-          touch "$GITIGNORE"
-
-          add_if_missing() {
-            local entry="$1"
-            if ! grep -qxF "$entry" "$GITIGNORE"; then
-              echo "$entry" >> "$GITIGNORE"
-              echo "  added: $entry"
-            else
-              echo "  already present: $entry"
-            fi
-          }
-
-          echo "Updating $GITIGNORE..."
-          add_if_missing ".gradle"
-          add_if_missing "app/build"
-          add_if_missing "gradle/wrapper/gradle-wrapper.jar"
-
-          # Also untrack any of these already in git index
-          git rm -r --cached .gradle                          2>/dev/null || true
-          git rm -r --cached app/build                        2>/dev/null || true
-          git rm    --cached gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
-
       - name: 💾 Commit and push all changes
         run: |
           git config user.name  "github-actions[bot]"
