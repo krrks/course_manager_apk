@@ -24,7 +24,6 @@ jobs:
 
       - name: 📦 Sync from school-manager-android*.zip (if present)
         run: |
-          # Pick the first file (alphabetically) matching school-manager-android*.zip
           TARGET_ZIP=$(ls school-manager-android*.zip 2>/dev/null | sort | head -n 1)
           if [ -n "$TARGET_ZIP" ]; then
             echo "✅ Found $TARGET_ZIP — extracting..."
@@ -47,27 +46,47 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
+          # No cache: 'gradle' here — we use the committed .gradle dir directly
 
       - name: 🔑 Grant execute permission to gradlew
         run: chmod +x ./gradlew
 
-      - name: 📦 Download Gradle Wrapper JAR
+      - name: 📦 Ensure Gradle Wrapper JAR exists
         run: |
-          mkdir -p gradle/wrapper
-          curl -fsSL \
-            "https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
-            -o gradle/wrapper/gradle-wrapper.jar
+          # Use committed jar if present, otherwise download it
+          if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "✅ gradle-wrapper.jar already present — skipping download"
+          else
+            echo "⬇️  Downloading gradle-wrapper.jar..."
+            mkdir -p gradle/wrapper
+            curl -fsSL \
+              "https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
+              -o gradle/wrapper/gradle-wrapper.jar
+          fi
 
       - name: 🔧 Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          # GRADLE_USER_HOME points to the committed .gradle dir so the cached
+          # Gradle distribution and build-cache are reused across runs.
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --build-cache \
+            --configuration-cache \
+            -Dorg.gradle.parallel=true
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+          GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
       - name: 🚀 Build Release APK
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          ./gradlew assembleRelease \
+            --no-daemon \
+            --build-cache \
+            --configuration-cache \
+            -Dorg.gradle.parallel=true
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+          GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
       - name: 📂 Copy APKs to /apk folder
         run: |
