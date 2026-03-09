@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.school.manager.data.*
+
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
@@ -546,8 +547,10 @@ private fun AttendanceDetailDialog(
     }
 
     FluentDialog(title = "上课记录详情", onDismiss = onDismiss) {
+        if (rec.code.isNotBlank()) DetailRow("编号", rec.code)
         DetailRow("班级", cl?.name ?: "─")
-        DetailRow("科目", sub?.name ?: "─")
+        val classSubject = cl?.subject?.takeIf { it.isNotBlank() }
+        DetailRow("科目", sub?.name ?: classSubject ?: "─")
         DetailRow("教师", te?.name ?: "─")
         DetailRow("日期", rec.date)
         val s = rec.resolvedStart(); val e = rec.resolvedEnd()
@@ -588,8 +591,7 @@ internal fun AttendanceFormDialog(
     onDismiss: () -> Unit,
     onSave: (Attendance) -> Unit
 ) {
-    var className  by remember { mutableStateOf(state.classes.firstOrNull  { it.id == initial?.classId }?.name ?: "") }
-    var subjectName by remember { mutableStateOf(state.subjects.firstOrNull { it.id == initial?.subjectId }?.name ?: "") }
+    var className  by remember { mutableStateOf(state.classes.firstOrNull { it.id == initial?.classId }?.name ?: "") }
     var teacherName by remember { mutableStateOf(state.teachers.firstOrNull { it.id == initial?.teacherId }?.name ?: "") }
     var date       by remember { mutableStateOf(initial?.date ?: LocalDate.now().toString()) }
     var startTime  by remember { mutableStateOf(initial?.resolvedStart() ?: "08:00") }
@@ -598,20 +600,28 @@ internal fun AttendanceFormDialog(
     var status     by remember { mutableStateOf(initial?.status ?: "completed") }
     var notes      by remember { mutableStateOf(initial?.notes ?: "") }
     var attendees  by remember { mutableStateOf<List<Long>>(initial?.attendees ?: emptyList()) }
+    var code       by remember { mutableStateOf(initial?.code?.ifBlank { null } ?: genCode("ATT")) }
 
-    val classStudents = state.students.filter { s ->
-        s.classIds.contains(state.classes.firstOrNull { it.name == className }?.id)
-    }
+    val selectedClass = state.classes.firstOrNull { it.name == className }
+    val classStudents = state.students.filter { s -> s.classIds.contains(selectedClass?.id) }
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
-        val cId   = state.classes.firstOrNull  { it.name == className }?.id  ?: return@FluentDialog
-        val sId   = state.subjects.firstOrNull { it.name == subjectName }?.id ?: return@FluentDialog
+        val cls   = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
+        val sId   = state.subjects.firstOrNull { it.name == cls.subject }?.id
+                    ?: initial?.subjectId ?: state.subjects.firstOrNull()?.id ?: 1L
         val tId   = state.teachers.firstOrNull { it.name == teacherName }?.id
         val newId = if (initial != null && initial.id != 0L) initial.id else System.currentTimeMillis()
-        onSave(Attendance(newId, cId, sId, tId, date, 0, startTime, endTime, topic, status, notes, attendees))
+        onSave(Attendance(newId, cls.id, sId, tId, date, 0, startTime, endTime, topic, status, notes,
+                          attendees, code.trim().ifBlank { genCode("ATT") }))
     }) {
+        FormTextField("编号", code, { code = it }, "自动生成，可修改")
         FormDropdown("班级", className, state.classes.map { it.name }) { className = it; attendees = emptyList() }
-        FormDropdown("科目", subjectName, state.subjects.map { it.name }) { subjectName = it }
+        if (selectedClass?.subject?.isNotBlank() == true) {
+            Text("  科目：${selectedClass.subject}",
+                style = MaterialTheme.typography.bodySmall,
+                color = FluentPurple,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
         FormDropdown("教师", teacherName, state.teachers.map { it.name }) { teacherName = it }
         FormTextField("日期 (yyyy-MM-dd)", date, { date = it }, "2025-01-01")
         // Free-form time with quick presets

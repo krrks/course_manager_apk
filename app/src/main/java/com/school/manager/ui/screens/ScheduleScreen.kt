@@ -31,6 +31,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.school.manager.data.*
+import com.school.manager.data.genCode
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
@@ -258,6 +259,7 @@ fun ScheduleScreen(vm: AppViewModel) {
             it.subjectId == slot.subjectId && it.classId == slot.classId && it.status == "completed"
         }
         FluentDialog(title = "课程详情", onDismiss = { viewSlot = null }) {
+            if (slot.code.isNotBlank()) DetailRow("编号", slot.code)
             DetailRow("班级",   cl?.name  ?: "─")
             DetailRow("科目",   sub?.name ?: "─")
             DetailRow("教师",   te?.name  ?: "─")
@@ -754,28 +756,39 @@ private fun SingleChoiceRow(
 @Composable
 private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -> Unit) {
     var className   by remember { mutableStateOf("") }
-    var subjectName by remember { mutableStateOf("") }
     var teacherName by remember { mutableStateOf("") }
     var day         by remember { mutableStateOf("") }
     var startTime   by remember { mutableStateOf("08:00") }
     var endTime     by remember { mutableStateOf("09:00") }
+    var code        by remember { mutableStateOf(genCode("SCH")) }
+
+    // Auto-fill class subject info
+    val selectedClass = state.classes.firstOrNull { it.name == className }
+    val classSubject  = selectedClass?.subject ?: ""
 
     FluentDialog(title = "添加课程", onDismiss = onDismiss, onConfirm = {
-        val cId    = state.classes.firstOrNull  { it.name == className }?.id  ?: return@FluentDialog
-        val sId    = state.subjects.firstOrNull { it.name == subjectName }?.id ?: return@FluentDialog
+        val cls    = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
+        // Use existing subject record if name matches, else use first subject as placeholder (id=0 ok)
+        val sId    = state.subjects.firstOrNull { it.name == cls.subject }?.id
+                     ?: state.subjects.firstOrNull()?.id ?: 1L
         if (day.isBlank()) return@FluentDialog
         val tId    = state.teachers.firstOrNull { it.name == teacherName }?.id
         val dayIdx = DAYS.indexOf(day) + 1
         if (dayIdx < 1) return@FluentDialog
-        // Validate time format loosely — accept any non-blank value
-        val sTime = startTime.trim().ifBlank { "08:00" }
-        val eTime = endTime.trim().ifBlank   { "09:00" }
-        vm.addSchedule(cId, sId, tId, dayIdx, sTime, eTime)
+        val sTime  = startTime.trim().ifBlank { "08:00" }
+        val eTime  = endTime.trim().ifBlank   { "09:00" }
+        vm.addSchedule(cls.id, sId, tId, dayIdx, sTime, eTime, code.trim())
         onDismiss()
     }) {
-        FormDropdown("班级",   className,   state.classes.map   { it.name }) { className   = it }
-        FormDropdown("科目",   subjectName, state.subjects.map  { it.name }) { subjectName = it }
-        FormDropdown("教师",   teacherName, state.teachers.map  { it.name }) { teacherName = it }
+        FormTextField("编号", code, { code = it }, "自动生成，可修改")
+        FormDropdown("班级", className, state.classes.map { it.name }) { className = it }
+        if (classSubject.isNotBlank()) {
+            Text("  科目：$classSubject",
+                style = MaterialTheme.typography.bodySmall,
+                color = FluentPurple,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
+        FormDropdown("教师",   teacherName, state.teachers.map { it.name }) { teacherName = it }
         FormDropdown("星期",   day,         DAYS)                             { day         = it }
         TimeRangeRow(startTime, endTime,
             onStartChange = { startTime = it },
@@ -787,31 +800,41 @@ private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -
 private fun EditScheduleDialog(
     slot: Schedule, state: AppState, vm: AppViewModel, onDismiss: () -> Unit
 ) {
-    var className   by remember { mutableStateOf(state.classes.firstOrNull  { it.id == slot.classId }?.name ?: "") }
-    var subjectName by remember { mutableStateOf(state.subjects.firstOrNull { it.id == slot.subjectId }?.name ?: "") }
-    var teacherName by remember { mutableStateOf(state.teachers.firstOrNull { it.id == slot.teacherId }?.name ?: "") }
+    var className   by remember { mutableStateOf(state.classes.firstOrNull   { it.id == slot.classId }?.name ?: "") }
+    var teacherName by remember { mutableStateOf(state.teachers.firstOrNull  { it.id == slot.teacherId }?.name ?: "") }
     var day         by remember { mutableStateOf(DAYS.getOrNull(slot.day - 1) ?: DAYS[0]) }
     var startTime   by remember { mutableStateOf(slot.resolvedStart()) }
     var endTime     by remember { mutableStateOf(slot.resolvedEnd()) }
+    var code        by remember { mutableStateOf(slot.code.ifBlank { genCode("SCH") }) }
+
+    val selectedClass = state.classes.firstOrNull { it.name == className }
+    val classSubject  = selectedClass?.subject ?: ""
 
     FluentDialog(title = "编辑课程", onDismiss = onDismiss, onConfirm = {
-        val cId = state.classes.firstOrNull  { it.name == className }?.id  ?: return@FluentDialog
-        val sId = state.subjects.firstOrNull { it.name == subjectName }?.id ?: return@FluentDialog
+        val cls = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
+        val sId = state.subjects.firstOrNull { it.name == cls.subject }?.id ?: slot.subjectId
         val tId = state.teachers.firstOrNull { it.name == teacherName }?.id
         vm.updateSchedule(slot.copy(
-            classId   = cId,
+            classId   = cls.id,
             subjectId = sId,
             teacherId = tId,
             day       = DAYS.indexOf(day) + 1,
             startTime = startTime.trim().ifBlank { "08:00" },
-            endTime   = endTime.trim().ifBlank   { "09:00" }
+            endTime   = endTime.trim().ifBlank   { "09:00" },
+            code      = code.trim().ifBlank { slot.code }
         ))
         onDismiss()
     }) {
-        FormDropdown("班级",   className,   state.classes.map   { it.name }) { className   = it }
-        FormDropdown("科目",   subjectName, state.subjects.map  { it.name }) { subjectName = it }
-        FormDropdown("教师",   teacherName, state.teachers.map  { it.name }) { teacherName = it }
-        FormDropdown("星期",   day,         DAYS)                             { day         = it }
+        FormTextField("编号", code, { code = it }, "可修改")
+        FormDropdown("班级",   className,   state.classes.map  { it.name }) { className   = it }
+        if (classSubject.isNotBlank()) {
+            Text("  科目：$classSubject",
+                style = MaterialTheme.typography.bodySmall,
+                color = FluentPurple,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
+        FormDropdown("教师",   teacherName, state.teachers.map { it.name }) { teacherName = it }
+        FormDropdown("星期",   day,         DAYS)                            { day         = it }
         TimeRangeRow(startTime, endTime,
             onStartChange = { startTime = it },
             onEndChange   = { endTime   = it })

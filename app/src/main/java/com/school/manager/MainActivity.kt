@@ -146,7 +146,6 @@ fun SchoolManagerApp() {
                 composable(Screen.Classes.route)    { ClassesScreen(vm) }
                 composable(Screen.Teachers.route)   { TeachersScreen(vm) }
                 composable(Screen.Students.route)   { StudentsScreen(vm) }
-                composable(Screen.Subjects.route)   { SubjectsScreen(vm) }
                 composable(Screen.Stats.route)      { StatsScreen(vm) }
                 composable(Screen.Export.route)     { ExportScreen(vm) }
             }

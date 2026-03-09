@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-// Nullable mirror of AppState for safe Gson deserialization
 private data class GsonState(
     val subjects:   List<Subject>?,
     val teachers:   List<Teacher>?,
@@ -47,14 +46,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Lookups ─────────────────────────────────────────────────────────────
-
     fun subject(id: Long?)     = _state.value.subjects.find  { it.id == id }
     fun teacher(id: Long?)     = _state.value.teachers.find  { it.id == id }
     fun schoolClass(id: Long?) = _state.value.classes.find   { it.id == id }
     fun student(id: Long?)     = _state.value.students.find  { it.id == id }
 
-    // ─── Subjects ─────────────────────────────────────────────────────────────
-
+    // ─── Subjects (kept for backward compat) ─────────────────────────────────
     fun addSubject(name: String, color: Long, teacherId: Long?) {
         _state.update { it.copy(subjects = it.subjects + Subject(System.currentTimeMillis(), name, color, teacherId)) }
         save()
@@ -69,9 +66,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
-
-    fun addTeacher(name: String, gender: String, phone: String, subjectIds: List<Long> = emptyList(), avatarUri: String? = null) {
-        _state.update { it.copy(teachers = it.teachers + Teacher(System.currentTimeMillis(), name, gender, phone, subjectIds, avatarUri)) }
+    fun addTeacher(name: String, gender: String, phone: String,
+                   subjectIds: List<Long> = emptyList(), avatarUri: String? = null,
+                   code: String = "") {
+        val c = code.ifBlank { genCode("T") }
+        _state.update { it.copy(teachers = it.teachers +
+            Teacher(System.currentTimeMillis(), name, gender, phone, subjectIds, avatarUri, c)) }
         save()
     }
     fun updateTeacher(t: Teacher) {
@@ -84,9 +84,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Classes ──────────────────────────────────────────────────────────────
-
-    fun addClass(name: String, grade: String, count: Int, headTeacherId: Long?) {
-        _state.update { it.copy(classes = it.classes + SchoolClass(System.currentTimeMillis(), name, grade, count, headTeacherId)) }
+    fun addClass(name: String, grade: String, count: Int, headTeacherId: Long?,
+                 subject: String = "", code: String = "") {
+        val c = code.ifBlank { genCode("C") }
+        _state.update { it.copy(classes = it.classes +
+            SchoolClass(System.currentTimeMillis(), name, grade, count, headTeacherId, subject, c)) }
         save()
     }
     fun updateClass(c: SchoolClass) {
@@ -99,9 +101,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Students ─────────────────────────────────────────────────────────────
-
-    fun addStudent(name: String, studentNo: String, gender: String, grade: String, classIds: List<Long>, avatarUri: String? = null) {
-        _state.update { it.copy(students = it.students + Student(System.currentTimeMillis(), name, studentNo, gender, grade, classIds, avatarUri)) }
+    fun addStudent(name: String, studentNo: String, gender: String, grade: String,
+                   classIds: List<Long>, avatarUri: String? = null) {
+        _state.update { it.copy(students = it.students +
+            Student(System.currentTimeMillis(), name, studentNo, gender, grade, classIds, avatarUri)) }
         save()
     }
     fun updateStudent(s: Student) {
@@ -114,12 +117,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Schedule ─────────────────────────────────────────────────────────────
-
     fun addSchedule(classId: Long, subjectId: Long, teacherId: Long?, day: Int,
-                    startTime: String, endTime: String) {
-        _state.update { it.copy(schedule = it.schedule + Schedule(
-            System.currentTimeMillis(), classId, subjectId, teacherId, day,
-            startTime = startTime, endTime = endTime)) }
+                    startTime: String, endTime: String, code: String = "") {
+        val c = code.ifBlank { genCode("SCH") }
+        _state.update { it.copy(schedule = it.schedule +
+            Schedule(System.currentTimeMillis(), classId, subjectId, teacherId, day,
+                startTime = startTime, endTime = endTime, code = c)) }
         save()
     }
     fun updateSchedule(s: Schedule) {
@@ -132,18 +135,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Attendance ───────────────────────────────────────────────────────────
-
-    fun addAttendance(
-        classId: Long, subjectId: Long, teacherId: Long?,
-        date: String, startTime: String, endTime: String,
-        topic: String, status: String, notes: String, attendees: List<Long>
-    ) {
-        _state.update {
-            it.copy(attendance = it.attendance + Attendance(
-                System.currentTimeMillis(), classId, subjectId, teacherId,
-                date, 0, startTime, endTime, topic, status, notes, attendees
-            ))
-        }
+    fun addAttendance(classId: Long, subjectId: Long, teacherId: Long?,
+                      date: String, startTime: String, endTime: String,
+                      topic: String, status: String, notes: String,
+                      attendees: List<Long>, code: String = "") {
+        val c = code.ifBlank { genCode("ATT") }
+        _state.update { it.copy(attendance = it.attendance +
+            Attendance(System.currentTimeMillis(), classId, subjectId, teacherId,
+                date, 0, startTime, endTime, topic, status, notes, attendees, c)) }
         save()
     }
     fun updateAttendance(a: Attendance) {
@@ -155,75 +154,68 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         save()
     }
 
-    // ─── Stats helpers ────────────────────────────────────────────────────────
-
+    // ─── Stats ────────────────────────────────────────────────────────────────
     fun completedAttendance() = _state.value.attendance.filter { it.status == "completed" }
 
     // ─── Export helpers ───────────────────────────────────────────────────────
 
-    /** Pretty-printed JSON of schedule entries (uses resolvedStart/End for correct times). */
-    fun exportScheduleJson(): String {
-        data class ScheduleExport(
-            val id: Long, val day: String, val startTime: String, val endTime: String,
-            val subject: String, val className: String, val teacher: String
-        )
-        val rows = _state.value.schedule.map { s ->
-            ScheduleExport(
-                id        = s.id,
-                day       = com.school.manager.data.DAYS.getOrElse(s.day - 1) { "?" },
-                startTime = s.resolvedStart(),
-                endTime   = s.resolvedEnd(),
-                subject   = subject(s.subjectId)?.name ?: "?",
-                className = schoolClass(s.classId)?.name ?: "?",
-                teacher   = teacher(s.teacherId)?.name ?: "─"
-            )
-        }
-        return gson.toJson(rows)
-    }
-
-    /** Pretty-printed JSON of attendance records (uses resolvedStart/End for correct times). */
-    fun exportAttendanceJson(): String {
-        data class AttendanceExport(
-            val id: Long, val date: String, val startTime: String, val endTime: String,
-            val subject: String, val className: String, val teacher: String,
-            val topic: String, val status: String, val attendeeCount: Int, val notes: String
-        )
-        val rows = _state.value.attendance.map { a ->
-            AttendanceExport(
-                id            = a.id,
-                date          = a.date,
-                startTime     = a.resolvedStart(),
-                endTime       = a.resolvedEnd(),
-                subject       = subject(a.subjectId)?.name ?: "?",
-                className     = schoolClass(a.classId)?.name ?: "?",
-                teacher       = teacher(a.teacherId)?.name ?: "─",
-                topic         = a.topic,
-                status        = a.status,
-                attendeeCount = a.attendees.size,
-                notes         = a.notes
-            )
-        }
-        return gson.toJson(rows)
-    }
-
-    /** Full AppState serialised as JSON — suitable for import round-trip. */
+    /** Full AppState JSON — supports merge import */
     fun exportFullStateJson(): String = gson.toJson(_state.value)
 
+    /** Schedule records with resolved names */
+    fun exportScheduleJson(teacherId: Long? = null): String {
+        data class Row(val code: String, val day: String, val startTime: String, val endTime: String,
+                       val subject: String, val className: String, val teacher: String)
+        val src = if (teacherId != null) _state.value.schedule.filter { it.teacherId == teacherId }
+                  else _state.value.schedule
+        return gson.toJson(src.map { s ->
+            Row(s.code,
+                DAYS.getOrElse(s.day - 1) { "?" },
+                s.resolvedStart(), s.resolvedEnd(),
+                s.resolvedSubjectName(_state.value.subjects, _state.value.classes),
+                schoolClass(s.classId)?.name ?: "?",
+                teacher(s.teacherId)?.name ?: "─")
+        })
+    }
+
+    /** Attendance records with resolved names */
+    fun exportAttendanceJson(teacherId: Long? = null): String {
+        data class Row(val code: String, val date: String, val startTime: String, val endTime: String,
+                       val subject: String, val className: String, val teacher: String,
+                       val topic: String, val status: String, val attendeeCount: Int, val notes: String)
+        val src = if (teacherId != null) _state.value.attendance.filter { it.teacherId == teacherId }
+                  else _state.value.attendance
+        return gson.toJson(src.map { a ->
+            Row(a.code, a.date, a.resolvedStart(), a.resolvedEnd(),
+                subject(a.subjectId)?.name
+                    ?: schoolClass(a.classId)?.subject?.takeIf { it.isNotBlank() } ?: "?",
+                schoolClass(a.classId)?.name ?: "?",
+                teacher(a.teacherId)?.name ?: "─",
+                a.topic, a.status, a.attendees.size, a.notes)
+        })
+    }
+
     /**
-     * Import from a full-state JSON string (as produced by [exportFullStateJson]).
-     * Returns true on success, false if parsing failed.
+     * Merge-import: existing records with the same [id] are updated,
+     * new records (id not present) are appended. Nothing is deleted.
      */
-    fun importFullState(json: String): Boolean {
+    fun mergeImport(json: String): Boolean {
         return try {
             val raw = gson.fromJson(json, GsonState::class.java)
-            _state.update { current ->
-                current.copy(
-                    subjects   = raw.subjects   ?: current.subjects,
-                    teachers   = raw.teachers   ?: current.teachers,
-                    classes    = raw.classes    ?: current.classes,
-                    students   = raw.students   ?: current.students,
-                    schedule   = raw.schedule   ?: current.schedule,
-                    attendance = raw.attendance ?: current.attendance
+            _state.update { cur ->
+                fun <T : Any> merge(current: List<T>, incoming: List<T>?, getId: (T) -> Long): List<T> {
+                    if (incoming.isNullOrEmpty()) return current
+                    val map = current.associateBy(getId).toMutableMap()
+                    incoming.forEach { item -> map[getId(item)] = item }
+                    return map.values.toList()
+                }
+                cur.copy(
+                    subjects   = merge(cur.subjects,   raw.subjects)   { it.id },
+                    teachers   = merge(cur.teachers,   raw.teachers)   { it.id },
+                    classes    = merge(cur.classes,    raw.classes)    { it.id },
+                    students   = merge(cur.students,   raw.students)   { it.id },
+                    schedule   = merge(cur.schedule,   raw.schedule)   { it.id },
+                    attendance = merge(cur.attendance, raw.attendance) { it.id }
                 )
             }
             save()

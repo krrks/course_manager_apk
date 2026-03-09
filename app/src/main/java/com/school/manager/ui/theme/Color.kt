@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 val FluentBlue       = Color(0xFF1A56DB)
 val FluentBlueDark   = Color(0xFF1E3A8A)
 val FluentBlueLight  = Color(0xFFEFF6FF)
+val FluentGreenLight = Color(0xFFECFDF5)
 val FluentGreen      = Color(0xFF0E9F6E)
 val FluentPurple     = Color(0xFF7E3AF2)
 val FluentOrange     = Color(0xFFFF5A1F)
