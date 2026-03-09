@@ -16,12 +16,14 @@ jobs:
       contents: write
 
     steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: 📥 Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
+      # ── 2. Sync source from zip (if uploaded) ────────────────────────────────
       - name: 📦 Sync from school-manager-android*.zip (if present)
         run: |
           TARGET_ZIP=$(ls school-manager-android*.zip 2>/dev/null | sort | head -n 1)
@@ -30,8 +32,9 @@ jobs:
             echo "PROCESSED_ZIP=$TARGET_ZIP" >> "$GITHUB_ENV"
             unzip -o "$TARGET_ZIP" -d _zip_tmp
             if [ -d "_zip_tmp/school-manager-android" ]; then
-              cp -rf _zip_tmp/school-manager-android/. .
-              echo "✅ Synced zip contents to root"
+              # Exclude .github so build.yml is never overwritten by the zip
+              rsync -av --exclude='.github' _zip_tmp/school-manager-android/. .
+              echo "✅ Synced zip contents to root (skipped .github/)"
             else
               echo "⚠️  Expected folder school-manager-android/ inside zip — skipping"
             fi
@@ -41,21 +44,60 @@ jobs:
             echo "PROCESSED_ZIP=" >> "$GITHUB_ENV"
           fi
 
+      # ── 3. One-time cleanup: remove files that should never be in the repo ───
+      - name: 🧹 Untrack & remove previously committed junk
+        run: |
+          changed=0
+
+          # Gradle environment dirs — large, belong in Actions cache, not git
+          for path in .gradle build app/build; do
+            if git ls-files --error-unmatch "$path" >/dev/null 2>&1 \
+               || git ls-files "$path" | grep -q .; then
+              git rm -r --cached --ignore-unmatch "$path" 2>/dev/null || true
+              rm -rf "$path"
+              echo "🗑️  Untracked & removed: $path"
+              changed=1
+            fi
+          done
+
+          # Unnecessary loose files committed in the past
+          for file in \
+            "gradle/wrapper/README.txt" \
+            "gradle/wrapper/gradle-wrapper.jar.bak"; do
+            if git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+              git rm --cached --ignore-unmatch "$file" 2>/dev/null || true
+              rm -f "$file"
+              echo "🗑️  Untracked & removed: $file"
+              changed=1
+            fi
+          done
+
+          # Any other file > 50 MB that somehow got tracked
+          git ls-files | while IFS= read -r f; do
+            if [ -f "$f" ]; then
+              size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+              if [ "$size" -gt 52428800 ]; then
+                git rm --cached --ignore-unmatch "$f" 2>/dev/null || true
+                rm -f "$f"
+                echo "🗑️  Removed oversized tracked file: $f"
+              fi
+            fi
+          done
+
+          echo "JUNK_CLEANED=$changed" >> "$GITHUB_ENV"
+
+      # ── 4. JDK ───────────────────────────────────────────────────────────────
       - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-          # No cache: 'gradle' here — we use the committed .gradle dir directly
 
-      - name: 🔑 Grant execute permission to gradlew
-        run: chmod +x ./gradlew
-
-      - name: 📦 Ensure Gradle Wrapper JAR exists
+      # ── 5. Gradle wrapper JAR (tiny ~60 KB, safe to commit) ──────────────────
+      - name: 📦 Ensure gradle-wrapper.jar exists
         run: |
-          # Use committed jar if present, otherwise download it
           if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "✅ gradle-wrapper.jar already present — skipping download"
+            echo "✅ gradle-wrapper.jar present"
           else
             echo "⬇️  Downloading gradle-wrapper.jar..."
             mkdir -p gradle/wrapper
@@ -63,33 +105,38 @@ jobs:
               "https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
               -o gradle/wrapper/gradle-wrapper.jar
           fi
+          chmod +x ./gradlew
 
-      - name: 📦 Ensure Gradle distribution exists (re-download if missing from cache)
-        run: |
-          # If the distribution was stripped before a previous push, re-download it now
-          # so --build-cache / --configuration-cache still accelerates compilation.
-          DIST_DIR=".gradle/wrapper/dists"
-          if [ -d "$DIST_DIR" ] && find "$DIST_DIR" -name "gradle" -type f | grep -q .; then
-            echo "✅ Gradle distribution already present in cache"
-          else
-            echo "⬇️  Gradle distribution missing — letting wrapper download it..."
-            # Running 'help' is the cheapest task; it will trigger the distribution download
-            GRADLE_USER_HOME="${{ github.workspace }}/.gradle" \
-              ./gradlew help --no-daemon -q || true
-            echo "✅ Gradle distribution ready"
-          fi
+      # ── 6. Restore Gradle caches from Actions cache (not from repo) ──────────
+      #
+      #  Cached paths (runner home, never committed to git):
+      #    ~/.gradle/wrapper/dists   — Gradle distribution zip + unpacked (~120 MB)
+      #    ~/.gradle/caches/modules  — Maven/Gradle dependency jars   (~200 MB)
+      #    ~/.gradle/caches/build-cache-* — incremental build outputs
+      #
+      #  Cache key invalidates when any gradle config file changes.
+      #  Restore keys allow a partial hit so at least deps are reused.
+      - name: 💾 Restore Gradle caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper/dists
+            ~/.gradle/caches/modules-*
+            ~/.gradle/caches/jars-*
+            ~/.gradle/caches/build-cache-*
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties','**/libs.versions.toml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
 
+      # ── 7. Build ──────────────────────────────────────────────────────────────
       - name: 🔧 Build Debug APK
         run: |
-          # GRADLE_USER_HOME points to the committed .gradle dir so the cached
-          # Gradle distribution and build-cache are reused across runs.
           ./gradlew assembleDebug \
             --no-daemon \
             --build-cache \
             --configuration-cache \
             -Dorg.gradle.parallel=true
         env:
-          GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
       - name: 🚀 Build Release APK
@@ -100,15 +147,16 @@ jobs:
             --configuration-cache \
             -Dorg.gradle.parallel=true
         env:
-          GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
+      # ── 8. Copy APKs ──────────────────────────────────────────────────────────
       - name: 📂 Copy APKs to /apk folder
         run: |
           mkdir -p apk
           cp app/build/outputs/apk/debug/app-debug.apk     apk/app-debug.apk
           cp app/build/outputs/apk/release/app-release.apk apk/app-release.apk
 
+      # ── 9. Delete uploaded zip ────────────────────────────────────────────────
       - name: 🗑️ Delete processed zip (if present)
         run: |
           if [ -n "$PROCESSED_ZIP" ] && [ -f "$PROCESSED_ZIP" ]; then
@@ -118,27 +166,31 @@ jobs:
             echo "ℹ️  No zip to delete"
           fi
 
-      - name: 🧹 Remove large files before push
+      # ── 10. Ensure build/ and .gradle/ are gitignored going forward ───────────
+      - name: 📝 Ensure .gitignore excludes build artifacts
         run: |
-          echo "=== Removing Gradle distribution archives (re-downloaded automatically next run) ==="
-          # These zip files are typically 100–150 MB each and exceed GitHub's limit.
-          # The .gradle/caches/ build-cache and module cache are kept for speed.
-          find .gradle/wrapper/dists -type f \( -name "*.zip" -o -name "*.zip.part" \) \
-            -print -delete 2>/dev/null || true
+          GITIGNORE=".gitignore"
+          touch "$GITIGNORE"
 
-          echo "=== Removing any remaining files > 50 MB ==="
-          find . -not -path './.git/*' -type f -size +50M | while IFS= read -r f; do
-            echo "⚠️  Removing oversized file: $f ($(du -sh "$f" 2>/dev/null | cut -f1))"
-            rm "$f"
-          done
+          add_if_missing() {
+            grep -qxF "$1" "$GITIGNORE" || echo "$1" >> "$GITIGNORE"
+          }
 
-          echo "✅ Large-file cleanup done"
+          add_if_missing ".gradle/"
+          add_if_missing "build/"
+          add_if_missing "app/build/"
+          add_if_missing "*.zip"
+          add_if_missing "local.properties"
 
-      - name: 💾 Commit and push all changes
+          echo "✅ .gitignore up to date"
+
+      # ── 11. Commit & push (source + APKs only, no Gradle env) ────────────────
+      - name: 💾 Commit and push
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Stage everything — .gitignore now excludes build/ and .gradle/
           git add -A
 
           if git diff --cached --quiet; then
