@@ -91,64 +91,83 @@ fun ScheduleScreen(vm: AppViewModel) {
     }
 
     fun exportJpg() {
-        pendingBitmap = renderScheduleBitmap(context, slots, state)
-        val tag = when (filterMode) {
-            "teacher" -> vm.teacher(filterId)?.name ?: "teacher"
-            "student" -> vm.student(filterId)?.name ?: "student"
-            else      -> "all"
+        val filterLabel = when (filterMode) {
+            "teacher" -> vm.teacher(filterId)?.name ?: ""
+            "student" -> vm.student(filterId)?.name ?: ""
+            else      -> ""
         }
-        saveBitmapLauncher.launch("schedule_$tag.jpg")
+        val title = if (filterLabel.isNotBlank()) "${filterLabel}课表" else "全部课表"
+        pendingBitmap = renderScheduleBitmap(context, slots, state, title)
+        saveBitmapLauncher.launch("schedule_${filterLabel.ifBlank { "all" }}.jpg")
     }
 
-    Scaffold(
-        floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SmallFloatingActionButton(
-                    onClick        = { exportJpg() },
-                    containerColor = FluentPurple,
-                    contentColor   = Color.White,
-                    shape          = RoundedCornerShape(12.dp)
-                ) { Icon(Icons.Default.Image, "导出图片") }
+    Scaffold { inner ->
+        Box(modifier = Modifier.padding(inner).fillMaxSize()) {
 
-                ExtendedFloatingActionButton(
-                    onClick        = { showAdd = true },
-                    icon           = { Icon(Icons.Default.Add, "添加") },
-                    text           = { Text("添加课程") },
-                    containerColor = FluentBlue,
-                    contentColor   = Color.White,
-                    shape          = RoundedCornerShape(16.dp)
-                )
-            }
-        }
-    ) { inner ->
-        Column(modifier = Modifier.padding(inner).fillMaxSize()) {
-
-            // Filter chips
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(selected = filterMode == "all",
-                    onClick = { filterMode = "all"; filterId = 0 },
-                    label   = { Text("全部") })
-                FilterChip(selected = filterMode == "teacher",
-                    onClick = { filterMode = "teacher" },
-                    label   = { Text("按教师") })
-                FilterChip(selected = filterMode == "student",
-                    onClick = { filterMode = "student" },
-                    label   = { Text("按学生") })
-            }
-
-            if (filterMode == "teacher") {
-                SingleChoiceRow(state.teachers.map { it.id to it.name }, filterId) { filterId = it }
-            } else if (filterMode == "student") {
-                SingleChoiceRow(state.students.map { it.id to it.name }, filterId) { filterId = it }
-            }
-
+            // ── Calendar (full screen) ─────────────────────────────────────
             CalendarGrid(slots, vm, state, onSlotClick = { viewSlot = it })
+
+            // ── Secondary filter row (teacher/student names) ───────────────
+            if (filterMode != "all") {
+                val items = if (filterMode == "teacher")
+                    state.teachers.map { it.id to it.name }
+                else
+                    state.students.map { it.id to it.name }
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 172.dp, bottom = 16.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items.forEach { (id, name) ->
+                        FilterChip(
+                            selected = filterId == id,
+                            onClick  = { filterId = id },
+                            label    = { Text(name, style = MaterialTheme.typography.labelMedium) }
+                        )
+                    }
+                }
+            }
+
+            // ── Combined action panel (bottom-right) ──────────────────────
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 16.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Filter chips
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("all" to "全部", "teacher" to "按教师", "student" to "按学生").forEach { (mode, label) ->
+                        FilterChip(
+                            selected = filterMode == mode,
+                            onClick  = { filterMode = mode; if (mode == "all") filterId = 0 },
+                            label    = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+                // Action buttons
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallFloatingActionButton(
+                        onClick        = { exportJpg() },
+                        containerColor = FluentPurple,
+                        contentColor   = Color.White,
+                        shape          = RoundedCornerShape(12.dp)
+                    ) { Icon(Icons.Default.Image, "导出图片") }
+
+                    ExtendedFloatingActionButton(
+                        onClick        = { showAdd = true },
+                        icon           = { Icon(Icons.Default.Add, "添加") },
+                        text           = { Text("添加课程") },
+                        containerColor = FluentBlue,
+                        contentColor   = Color.White,
+                        shape          = RoundedCornerShape(16.dp)
+                    )
+                }
+            }
         }
     }
 
@@ -382,7 +401,8 @@ private fun CalendarGrid(
 private fun renderScheduleBitmap(
     context: Context,
     slots: List<Schedule>,
-    state: AppState
+    state: AppState,
+    title: String = "课表"
 ): Bitmap {
     val dens   = context.resources.displayMetrics.density
     val dp     = { v: Float -> v * dens }
@@ -390,20 +410,33 @@ private fun renderScheduleBitmap(
 
     val timeColPx = dpi(TIME_COL_W.toFloat())
     val dayColPx  = dpi(DAY_COL_W.toFloat())
+    val titleH    = dpi(28f)                          // title row height
     val headerPx  = dpi(HEADER_H.toFloat() + 4)
+    val vPadPx    = dpi(10f)                          // top+bottom padding matching CAL_V_PAD
     val hrPx      = dp(DP_PER_HOUR.toFloat())
-    val bodyH     = (hrPx * CAL_TOTAL_HOURS).roundToInt()
+    val bodyH     = (hrPx * CAL_TOTAL_HOURS).roundToInt() + vPadPx * 2
     val totalW    = timeColPx + dayColPx * DAYS.size
-    val totalH    = headerPx + bodyH
+    val totalH    = titleH + headerPx + bodyH
 
     val bmp    = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
 
     canvas.drawColor(android.graphics.Color.WHITE)
 
-    // Header background (blue)
+    // ── Title row ─────────────────────────────────────────────────────────────
+    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color     = 0xFF1A56DB.toInt()
+        textSize  = dp(14f)
+        typeface  = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    canvas.drawText(title, totalW / 2f, titleH / 2f + titlePaint.textSize * 0.35f, titlePaint)
+
+    // ── Day header row ────────────────────────────────────────────────────────
+    val hdrTop = titleH.toFloat()
+    val hdrBot = (titleH + headerPx).toFloat()
     val hdrPaint = Paint().apply { color = 0xFF1A56DB.toInt() }
-    canvas.drawRect(0f, 0f, totalW.toFloat(), headerPx.toFloat(), hdrPaint)
+    canvas.drawRect(0f, hdrTop, totalW.toFloat(), hdrBot, hdrPaint)
 
     // Day name text
     val dayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -414,11 +447,14 @@ private fun renderScheduleBitmap(
     }
     DAYS.forEachIndexed { di, name ->
         val cx = (timeColPx + di * dayColPx + dayColPx / 2).toFloat()
-        canvas.drawText(name, cx, headerPx / 2f + dp(5f), dayPaint)
+        canvas.drawText(name, cx, hdrTop + headerPx / 2f + dp(5f), dayPaint)
     }
 
+    // ── Calendar body base Y  (after title + header + top vPad) ─────────────
+    val bodyBaseY = titleH + headerPx   // events/labels offset from here + vPadPx
+
     // Time axis background (light blue tint)
-    canvas.drawRect(0f, headerPx.toFloat(), timeColPx.toFloat(), totalH.toFloat(),
+    canvas.drawRect(0f, hdrBot, timeColPx.toFloat(), totalH.toFloat(),
         Paint().apply { color = 0xFFF0F4FF.toInt() })
 
     // Grid lines + time labels
@@ -432,11 +468,12 @@ private fun renderScheduleBitmap(
     }
 
     TIME_TICKS.forEach { (label, yDpFloat) ->
-        val y = headerPx + dp(yDpFloat)
+        val y = bodyBaseY + vPadPx + dp(yDpFloat)
         val isHour = label.endsWith(":00")
         canvas.drawLine(timeColPx.toFloat(), y, totalW.toFloat(), y,
             if (isHour) hourLinePaint else halfLinePaint)
         val tp = if (isHour) hourTextPaint else halfTextPaint
+        // baseline centred on the grid line
         canvas.drawText(label, timeColPx - dp(4f), y + tp.textSize * 0.35f, tp)
     }
 
@@ -444,7 +481,7 @@ private fun renderScheduleBitmap(
     val sepPaint = Paint().apply { color = 0xFFE5E7EB.toInt(); strokeWidth = dp(0.8f) }
     for (di in 0..DAYS.size) {
         val x = (timeColPx + di * dayColPx).toFloat()
-        canvas.drawLine(x, headerPx.toFloat(), x, totalH.toFloat(), sepPaint)
+        canvas.drawLine(x, hdrBot, x, totalH.toFloat(), sepPaint)
     }
 
     // Events
@@ -452,8 +489,8 @@ private fun renderScheduleBitmap(
     slots.forEach { slot ->
         val startMins = timeToMinutes(slot.resolvedStart()) - CAL_START_HOUR * 60
         val endMins   = timeToMinutes(slot.resolvedEnd())   - CAL_START_HOUR * 60
-        val yTop  = headerPx + dp(startMins * DP_PER_HOUR / 60f)
-        val yBot  = (headerPx + dp(endMins * DP_PER_HOUR / 60f)).coerceAtLeast(yTop + dp(20f))
+        val yTop  = bodyBaseY + vPadPx + dp(startMins * DP_PER_HOUR / 60f)
+        val yBot  = (bodyBaseY + vPadPx + dp(endMins * DP_PER_HOUR / 60f)).coerceAtLeast(yTop + dp(20f))
         val xLeft  = (timeColPx + (slot.day - 1) * dayColPx) + dp(2f)
         val xRight = (timeColPx + slot.day * dayColPx)        - dp(2f)
 
