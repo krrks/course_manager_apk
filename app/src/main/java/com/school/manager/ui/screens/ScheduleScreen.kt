@@ -19,7 +19,13 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.school.manager.data.*
@@ -102,69 +108,111 @@ fun ScheduleScreen(vm: AppViewModel) {
     }
 
     Scaffold { inner ->
-        Box(modifier = Modifier.padding(inner).fillMaxSize()) {
+        Box(modifier = Modifier
+            .padding(bottom = inner.calculateBottomPadding())
+            .fillMaxSize()) {
 
             // ── Calendar (full screen) ─────────────────────────────────────
             CalendarGrid(slots, vm, state, onSlotClick = { viewSlot = it })
 
-            // ── Secondary filter row (teacher/student names) ───────────────
-            if (filterMode != "all") {
-                val items = if (filterMode == "teacher")
-                    state.teachers.map { it.id to it.name }
-                else
-                    state.students.map { it.id to it.name }
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .padding(start = 8.dp, end = 172.dp, bottom = 16.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items.forEach { (id, name) ->
-                        FilterChip(
-                            selected = filterId == id,
-                            onClick  = { filterId = id },
-                            label    = { Text(name, style = MaterialTheme.typography.labelMedium) }
-                        )
-                    }
-                }
+            // ── Speed-dial FAB (bottom-right) ─────────────────────────
+            var menuOpen by remember { mutableStateOf(false) }
+
+            // Dim overlay when menu is open
+            if (menuOpen) {
+                Box(
+                    Modifier.fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f))
+                        .clickable(indication = null,
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        ) { menuOpen = false }
+                )
             }
 
-            // ── Combined action panel (bottom-right) ──────────────────────
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 16.dp),
+                    .padding(end = 16.dp, bottom = 20.dp),
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Filter chips
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("all" to "全部", "teacher" to "按教师", "student" to "按学生").forEach { (mode, label) ->
-                        FilterChip(
-                            selected = filterMode == mode,
-                            onClick  = { filterMode = mode; if (mode == "all") filterId = 0 },
-                            label    = { Text(label, style = MaterialTheme.typography.labelSmall) }
-                        )
+                // ── Expanded menu items ───────────────────────────────────
+                AnimatedVisibility(
+                    visible = menuOpen,
+                    enter   = fadeIn() + slideInVertically { it / 2 },
+                    exit    = fadeOut() + slideOutVertically { it / 2 }
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Filter: all
+                        SpeedDialItem("全部课表", Icons.Default.CalendarMonth, FluentBlue,
+                            selected = filterMode == "all"
+                        ) { filterMode = "all"; filterId = 0; menuOpen = false }
+
+                        // Filter: teacher
+                        SpeedDialItem("按教师筛选", Icons.Default.Person, FluentGreen,
+                            selected = filterMode == "teacher"
+                        ) { filterMode = "teacher"; menuOpen = false }
+                        if (filterMode == "teacher") {
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.padding(end = 4.dp)
+                            ) {
+                                state.teachers.forEach { t ->
+                                    FilterChip(
+                                        selected = filterId == t.id,
+                                        onClick  = { filterId = t.id },
+                                        label    = { Text(t.name, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Filter: student
+                        SpeedDialItem("按学生筛选", Icons.Default.Group, FluentOrange,
+                            selected = filterMode == "student"
+                        ) { filterMode = "student"; menuOpen = false }
+                        if (filterMode == "student") {
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.padding(end = 4.dp)
+                            ) {
+                                state.students.forEach { s ->
+                                    FilterChip(
+                                        selected = filterId == s.id,
+                                        onClick  = { filterId = s.id },
+                                        label    = { Text(s.name, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Export JPG
+                        SpeedDialItem("导出为图片", Icons.Default.Image, FluentPurple) {
+                            menuOpen = false; exportJpg()
+                        }
+
+                        // Add schedule
+                        SpeedDialItem("添加课程", Icons.Default.Add, FluentBlue) {
+                            menuOpen = false; showAdd = true
+                        }
                     }
                 }
-                // Action buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallFloatingActionButton(
-                        onClick        = { exportJpg() },
-                        containerColor = FluentPurple,
-                        contentColor   = Color.White,
-                        shape          = RoundedCornerShape(12.dp)
-                    ) { Icon(Icons.Default.Image, "导出图片") }
 
-                    ExtendedFloatingActionButton(
-                        onClick        = { showAdd = true },
-                        icon           = { Icon(Icons.Default.Add, "添加") },
-                        text           = { Text("添加课程") },
-                        containerColor = FluentBlue,
-                        contentColor   = Color.White,
-                        shape          = RoundedCornerShape(16.dp)
+                // ── Main FAB ─────────────────────────────────────────────
+                FloatingActionButton(
+                    onClick        = { menuOpen = !menuOpen },
+                    containerColor = FluentBlue,
+                    contentColor   = Color.White,
+                    shape          = androidx.compose.foundation.shape.CircleShape
+                ) {
+                    Icon(
+                        if (menuOpen) Icons.Default.Close else Icons.Default.Menu,
+                        contentDescription = if (menuOpen) "关闭菜单" else "打开菜单"
                     )
                 }
             }
@@ -512,16 +560,25 @@ private fun renderScheduleBitmap(
                 color = android.graphics.Color.argb(160, rr, gg, bb)
                 style = Paint.Style.STROKE; strokeWidth = dp(1f)
             })
+        // Time range (always first)
+        val timeText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.argb(200, rr, gg, bb); textSize = dp(9f)
+        }
+        val timeStr = "${slot.resolvedStart()} – ${slot.resolvedEnd()}"
+        canvas.drawText(timeStr, xLeft + dp(4f), yTop + dp(3f) + timeText.textSize, timeText)
+
         // Subject name
         val evText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = argb; textSize = dp(10f)
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        canvas.drawText(subj?.name ?: "?",
-            xLeft + dp(4f), yTop + dp(4f) + evText.textSize, evText)
-        if (yBot - yTop > dp(30f)) {
+        val nameY = yTop + dp(3f) + timeText.textSize + dp(2f) + evText.textSize
+        if (nameY < yBot - dp(2f)) {
+            canvas.drawText(subj?.name ?: "?", xLeft + dp(4f), nameY, evText)
+        }
+        if (yBot - yTop > dp(44f)) {
             canvas.drawText(cls?.name ?: "",
-                xLeft + dp(4f), yTop + dp(4f) + evText.textSize + dp(2f) + clsPaint.textSize, clsPaint)
+                xLeft + dp(4f), nameY + dp(2f) + clsPaint.textSize, clsPaint)
         }
     }
     return bmp
@@ -616,6 +673,42 @@ private fun EditScheduleDialog(
         TimeRangeRow(startTime, endTime,
             onStartChange = { startTime = it },
             onEndChange   = { endTime   = it })
+    }
+}
+
+@Composable
+private fun SpeedDialItem(
+    label:    String,
+    icon:     androidx.compose.ui.graphics.vector.ImageVector,
+    color:    Color,
+    selected: Boolean = false,
+    onClick:  () -> Unit
+) {
+    Row(
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Surface(
+            shape  = RoundedCornerShape(8.dp),
+            color  = if (selected) color.copy(alpha = 0.15f)
+                     else MaterialTheme.colorScheme.surface,
+            shadowElevation = 2.dp,
+            modifier = Modifier.clickable { onClick() }
+        ) {
+            Text(
+                label,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                style    = MaterialTheme.typography.labelMedium,
+                color    = if (selected) color else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            )
+        }
+        SmallFloatingActionButton(
+            onClick        = onClick,
+            containerColor = if (selected) color else color.copy(alpha = 0.85f),
+            contentColor   = Color.White,
+            shape          = CircleShape
+        ) { Icon(icon, null, modifier = Modifier.size(18.dp)) }
     }
 }
 
