@@ -101,7 +101,7 @@ fun ExportScreen(vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // ── Import section ────────────────────────────────────────────────────
-        Text("数据导入", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("导入", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text("按 ID 合并导入备份 JSON 文件：已存在记录更新，新记录追加，不删除原有数据。",
             style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
         IoCard(
@@ -153,7 +153,7 @@ fun ExportScreen(vm: AppViewModel) {
         HorizontalDivider(color = FluentBorder, modifier = Modifier.padding(vertical = 4.dp))
 
         // ── Export section ────────────────────────────────────────────────────
-        Text("数据导出", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("导出", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text("以 JSON 格式将数据保存到您选择的位置。",
             style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
 

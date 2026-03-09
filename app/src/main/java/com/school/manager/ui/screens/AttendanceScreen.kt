@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.school.manager.data.*
+import com.school.manager.ui.screens.DatePickerField
 
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
@@ -623,8 +624,7 @@ internal fun AttendanceFormDialog(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         FormDropdown("教师", teacherName, state.teachers.map { it.name }) { teacherName = it }
-        FormTextField("日期 (yyyy-MM-dd)", date, { date = it }, "2025-01-01")
-        // Free-form time with quick presets
+        DatePickerField("日期", date) { date = it }
         TimeRangeRow(startTime, endTime,
             onStartChange = { startTime = it },
             onEndChange   = { endTime   = it })

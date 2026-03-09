@@ -12,7 +12,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Teachers   : Screen("teachers",   "教师",     Icons.Outlined.Person)
     data object Students   : Screen("students",   "学生",     Icons.Outlined.Group)
     data object Stats      : Screen("stats",      "课时统计", Icons.Outlined.BarChart)
-    data object Export     : Screen("export",     "导入/导出", Icons.Default.SwapVert)
+    data object Export     : Screen("export",     "设置", Icons.Default.Settings)
 }
 
 val ALL_SCREENS = listOf(

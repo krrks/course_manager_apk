@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -113,9 +114,32 @@ fun ScheduleScreen(vm: AppViewModel) {
         saveBitmapLauncher.launch("schedule_${filterLabel.ifBlank { "all" }}.jpg")
     }
 
-    Scaffold { inner ->
+    val screenTitle = when (filterMode) {
+        "teacher" -> state.teachers.firstOrNull { it.id == filterId }?.let { "${it.name}的课表" } ?: "课表"
+        "student" -> state.students.firstOrNull { it.id == filterId }?.let { "${it.name}的课表" } ?: "课表"
+        else      -> "课表"
+    }
+
+    Scaffold(
+        topBar = {
+            if (filterMode != "all" && filterId != 0L) {
+                TopAppBar(
+                    title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = FluentBlue,
+                        titleContentColor = Color.White
+                    ),
+                    actions = {
+                        IconButton(onClick = { filterMode = "all"; filterId = 0 }) {
+                            Icon(Icons.Default.Close, "清除筛选", tint = Color.White)
+                        }
+                    }
+                )
+            }
+        }
+    ) { inner ->
         Box(modifier = Modifier
-            .padding(bottom = inner.calculateBottomPadding())
+            .padding(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding())
             .fillMaxSize()) {
 
             // ── Calendar or List view ──────────────────────────────────────
@@ -173,48 +197,55 @@ fun ScheduleScreen(vm: AppViewModel) {
                             selected = filterMode == "all"
                         ) { filterMode = "all"; filterId = 0; menuOpen = false }
 
-                        // ── Filter: teacher ───────────────────────────────
-                        SpeedDialItem("按教师筛选", Icons.Default.Person, FluentGreen,
-                            selected = filterMode == "teacher"
-                        ) {
-                            // toggle sub-list; don't close menu
-                            filterMode = if (filterMode == "teacher") "all" else "teacher"
-                            if (filterMode != "teacher") filterId = 0
-                        }
-                        if (filterMode == "teacher") {
-                            Column(
-                                horizontalAlignment = Alignment.End,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(end = 4.dp)
+                        // ── Filter: teacher – side popup ─────────────
+                        var teacherMenuOpen by remember { mutableStateOf(false) }
+                        Box {
+                            SpeedDialItem("按教师筛选", Icons.Default.Person, FluentGreen,
+                                selected = filterMode == "teacher"
+                            ) { teacherMenuOpen = true }
+                            DropdownMenu(
+                                expanded         = teacherMenuOpen,
+                                onDismissRequest = { teacherMenuOpen = false },
+                                modifier = Modifier.heightIn(max = 300.dp)
                             ) {
+                                DropdownMenuItem(
+                                    text    = { Text("全部") },
+                                    onClick = { filterMode = "all"; filterId = 0; teacherMenuOpen = false; menuOpen = false }
+                                )
                                 state.teachers.forEach { t ->
-                                    FilterChip(
-                                        selected = filterId == t.id,
-                                        onClick  = { filterId = t.id; menuOpen = false },
-                                        label    = { Text(t.name, style = MaterialTheme.typography.labelSmall) }
+                                    DropdownMenuItem(
+                                        text    = { Text(t.name) },
+                                        onClick = { filterMode = "teacher"; filterId = t.id; teacherMenuOpen = false; menuOpen = false },
+                                        leadingIcon = if (filterId == t.id && filterMode == "teacher") ({
+                                            Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp), tint = FluentGreen)
+                                        }) else null
                                     )
                                 }
                             }
                         }
 
-                        // ── Filter: student ───────────────────────────────
-                        SpeedDialItem("按学生筛选", Icons.Default.Group, FluentOrange,
-                            selected = filterMode == "student"
-                        ) {
-                            filterMode = if (filterMode == "student") "all" else "student"
-                            if (filterMode != "student") filterId = 0
-                        }
-                        if (filterMode == "student") {
-                            Column(
-                                horizontalAlignment = Alignment.End,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(end = 4.dp)
+                        // ── Filter: student – side popup ──────────────────
+                        var studentMenuOpen by remember { mutableStateOf(false) }
+                        Box {
+                            SpeedDialItem("按学生筛选", Icons.Default.Group, FluentOrange,
+                                selected = filterMode == "student"
+                            ) { studentMenuOpen = true }
+                            DropdownMenu(
+                                expanded         = studentMenuOpen,
+                                onDismissRequest = { studentMenuOpen = false },
+                                modifier = Modifier.heightIn(max = 300.dp)
                             ) {
+                                DropdownMenuItem(
+                                    text    = { Text("全部") },
+                                    onClick = { filterMode = "all"; filterId = 0; studentMenuOpen = false; menuOpen = false }
+                                )
                                 state.students.forEach { s ->
-                                    FilterChip(
-                                        selected = filterId == s.id,
-                                        onClick  = { filterId = s.id; menuOpen = false },
-                                        label    = { Text(s.name, style = MaterialTheme.typography.labelSmall) }
+                                    DropdownMenuItem(
+                                        text    = { Text(s.name) },
+                                        onClick = { filterMode = "student"; filterId = s.id; studentMenuOpen = false; menuOpen = false },
+                                        leadingIcon = if (filterId == s.id && filterMode == "student") ({
+                                            Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp), tint = FluentOrange)
+                                        }) else null
                                     )
                                 }
                             }
@@ -762,22 +793,27 @@ private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -
     var endTime     by remember { mutableStateOf("09:00") }
     var code        by remember { mutableStateOf(genCode("SCH")) }
 
-    // Auto-fill class subject info
+    // Auto-fill class subject + headteacher when class is selected
     val selectedClass = state.classes.firstOrNull { it.name == className }
     val classSubject  = selectedClass?.subject ?: ""
+    // Auto-fill teacher from headTeacherId when class changes (if teacher not manually set)
+    LaunchedEffect(className) {
+        val htId = selectedClass?.headTeacherId
+        if (htId != null) {
+            val htName = state.teachers.firstOrNull { it.id == htId }?.name
+            if (htName != null) teacherName = htName
+        }
+    }
 
     FluentDialog(title = "添加课程", onDismiss = onDismiss, onConfirm = {
         val cls    = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
-        // Use existing subject record if name matches, else use first subject as placeholder (id=0 ok)
         val sId    = state.subjects.firstOrNull { it.name == cls.subject }?.id
                      ?: state.subjects.firstOrNull()?.id ?: 1L
         if (day.isBlank()) return@FluentDialog
         val tId    = state.teachers.firstOrNull { it.name == teacherName }?.id
         val dayIdx = DAYS.indexOf(day) + 1
         if (dayIdx < 1) return@FluentDialog
-        val sTime  = startTime.trim().ifBlank { "08:00" }
-        val eTime  = endTime.trim().ifBlank   { "09:00" }
-        vm.addSchedule(cls.id, sId, tId, dayIdx, sTime, eTime, code.trim())
+        vm.addSchedule(cls.id, sId, tId, dayIdx, startTime.trim(), endTime.trim(), code.trim())
         onDismiss()
     }) {
         FormTextField("编号", code, { code = it }, "自动生成，可修改")
@@ -819,8 +855,8 @@ private fun EditScheduleDialog(
             subjectId = sId,
             teacherId = tId,
             day       = DAYS.indexOf(day) + 1,
-            startTime = startTime.trim().ifBlank { "08:00" },
-            endTime   = endTime.trim().ifBlank   { "09:00" },
+            startTime = startTime.trim(),
+            endTime   = endTime.trim(),
             code      = code.trim().ifBlank { slot.code }
         ))
         onDismiss()
@@ -877,7 +913,68 @@ private fun SpeedDialItem(
     }
 }
 
-/** Free-text start/end time row with preset quick-fill chips */
+/** Date field with calendar picker dialog */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+internal fun DatePickerField(label: String, value: String, onChange: (String) -> Unit) {
+    var showPicker by remember { mutableStateOf(false) }
+
+    // Parse current value to epoch millis for the picker
+    val epochMs: Long? = remember(value) {
+        runCatching {
+            val ld = java.time.LocalDate.parse(value)
+            ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        }.getOrNull()
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value         = value,
+            onValueChange = onChange,
+            label         = { Text(label) },
+            placeholder   = { Text("yyyy-MM-dd", color = FluentMuted) },
+            shape         = RoundedCornerShape(12.dp),
+            modifier      = Modifier.weight(1f),
+            singleLine    = true,
+            colors        = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor   = FluentBlue,
+                unfocusedBorderColor = FluentBorder)
+        )
+        IconButton(onClick = { showPicker = true }) {
+            Icon(Icons.Default.CalendarMonth, "选择日期", tint = FluentBlue)
+        }
+    }
+
+    if (showPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = epochMs)
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPicker = false
+                    state.selectedDateMillis?.let { ms ->
+                        val ld = java.time.Instant.ofEpochMilli(ms)
+                            .atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                        onChange(ld.toString())
+                    }
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = state)
+        }
+    }
+}
+
+/** Scroll-wheel time picker row (HH:mm, 24h, no quick-fill chips) */
 @Composable
 internal fun TimeRangeRow(
     startTime:     String,
@@ -885,49 +982,100 @@ internal fun TimeRangeRow(
     onStartChange: (String) -> Unit,
     onEndChange:   (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment     = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value         = startTime,
-                onValueChange = onStartChange,
-                label         = { Text("开始时间") },
-                placeholder   = { Text("08:00", color = FluentMuted) },
-                shape         = RoundedCornerShape(12.dp),
-                modifier      = Modifier.weight(1f),
-                singleLine    = true,
-                colors        = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = FluentBlue,
-                    unfocusedBorderColor = FluentBorder)
-            )
-            Text("─", color = FluentMuted)
-            OutlinedTextField(
-                value         = endTime,
-                onValueChange = onEndChange,
-                label         = { Text("结束时间") },
-                placeholder   = { Text("09:00", color = FluentMuted) },
-                shape         = RoundedCornerShape(12.dp),
-                modifier      = Modifier.weight(1f),
-                singleLine    = true,
-                colors        = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = FluentBlue,
-                    unfocusedBorderColor = FluentBorder)
-            )
+    Row(
+        modifier              = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment     = Alignment.Top
+    ) {
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
+               verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("开始时间", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+            TimeWheelPicker(startTime, onStartChange)
         }
-        Text("快速填入", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            PERIOD_TIMES.zip(PERIOD_END_TIMES).forEach { (s, e) ->
-                FilterChip(
-                    selected = (startTime == s && endTime == e),
-                    onClick  = { onStartChange(s); onEndChange(e) },
-                    label    = { Text(s, style = MaterialTheme.typography.labelSmall) }
-                )
+        Text("─", color = FluentMuted, modifier = Modifier.padding(top = 32.dp))
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
+               verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("结束时间", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+            TimeWheelPicker(endTime, onEndChange)
+        }
+    }
+}
+
+/** Single time wheel picker showing HH and mm columns with snap-scroll */
+@Composable
+private fun TimeWheelPicker(value: String, onChange: (String) -> Unit) {
+    val parts   = value.split(":").mapNotNull { it.toIntOrNull() }
+    var selHour = remember(value) { mutableIntStateOf(parts.getOrElse(0) { 8 }.coerceIn(0, 23)) }
+    var selMin  = remember(value) { mutableIntStateOf(parts.getOrElse(1) { 0 }.coerceIn(0, 59)) }
+
+    // Emit combined value whenever either column changes
+    LaunchedEffect(selHour.intValue, selMin.intValue) {
+        onChange("%02d:%02d".format(selHour.intValue, selMin.intValue))
+    }
+
+    val itemH    = 36.dp
+    val visItems = 3   // visible items (odd so selected is centred)
+
+    @Composable
+    fun WheelColumn(count: Int, selected: Int, label: (Int) -> String, onSelect: (Int) -> Unit) {
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, selected - 1))
+        val flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(listState)
+
+        LaunchedEffect(selected) {
+            val target = (selected - 1).coerceAtLeast(0)
+            listState.animateScrollToItem(target)
+        }
+
+        LaunchedEffect(listState.isScrollInProgress) {
+            if (!listState.isScrollInProgress) {
+                onSelect((listState.firstVisibleItemIndex + 1).coerceIn(0, count - 1))
             }
         }
+
+        Box(
+            Modifier
+                .width(48.dp)
+                .height(itemH * visItems)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            LazyColumn(
+                state       = listState,
+                flingBehavior = flingBehavior,
+                modifier    = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = itemH)
+            ) {
+                items(count) { i ->
+                    Box(
+                        Modifier.fillMaxWidth().height(itemH),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label(i),
+                            style      = if (i == selected) MaterialTheme.typography.titleMedium
+                                         else MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal,
+                            color      = if (i == selected) FluentBlue
+                                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                        )
+                    }
+                }
+            }
+            // Highlight band
+            Box(
+                Modifier.align(Alignment.Center)
+                    .fillMaxWidth().height(itemH)
+                    .background(FluentBlue.copy(alpha = 0.08f))
+            )
+        }
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment     = Alignment.CenterVertically
+    ) {
+        WheelColumn(24, selHour.intValue, { "%02d".format(it) }) { selHour.intValue = it }
+        Text(":", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = FluentBlue)
+        WheelColumn(60, selMin.intValue,  { "%02d".format(it) }) { selMin.intValue = it }
     }
 }
