@@ -20,6 +20,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -67,6 +69,9 @@ fun ScheduleScreen(vm: AppViewModel) {
     var toast                by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
+    // ── View mode: calendar | list ────────────────────────────────────────────
+    var viewMode by remember { mutableStateOf("calendar") }  // "calendar" | "list"
+
     // ── Filter: all | teacher | student ──────────────────────────────────────
     var filterMode by remember { mutableStateOf("all") }
     var filterId   by remember { mutableLongStateOf(0L) }
@@ -112,8 +117,12 @@ fun ScheduleScreen(vm: AppViewModel) {
             .padding(bottom = inner.calculateBottomPadding())
             .fillMaxSize()) {
 
-            // ── Calendar (full screen) ─────────────────────────────────────
-            CalendarGrid(slots, vm, state, onSlotClick = { viewSlot = it })
+            // ── Calendar or List view ──────────────────────────────────────
+            if (viewMode == "calendar") {
+                CalendarGrid(slots, vm, state, onSlotClick = { viewSlot = it })
+            } else {
+                ScheduleListView(slots, vm, onSlotClick = { viewSlot = it })
+            }
 
             // ── Speed-dial FAB (bottom-right) ─────────────────────────
             var menuOpen by remember { mutableStateOf(false) }
@@ -144,17 +153,33 @@ fun ScheduleScreen(vm: AppViewModel) {
                 ) {
                     Column(
                         horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = 4.dp)
                     ) {
-                        // Filter: all
+                        // ── View mode toggle ──────────────────────────────
+                        SpeedDialItem(
+                            if (viewMode == "calendar") "切换列表视图" else "切换日历视图",
+                            if (viewMode == "calendar") Icons.Default.ViewList else Icons.Default.CalendarViewMonth,
+                            FluentBlue
+                        ) { viewMode = if (viewMode == "calendar") "list" else "calendar" }
+
+                        HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f))
+
+                        // ── Filter: all ───────────────────────────────────
                         SpeedDialItem("全部课表", Icons.Default.CalendarMonth, FluentBlue,
                             selected = filterMode == "all"
                         ) { filterMode = "all"; filterId = 0; menuOpen = false }
 
-                        // Filter: teacher
+                        // ── Filter: teacher ───────────────────────────────
                         SpeedDialItem("按教师筛选", Icons.Default.Person, FluentGreen,
                             selected = filterMode == "teacher"
-                        ) { filterMode = "teacher"; menuOpen = false }
+                        ) {
+                            // toggle sub-list; don't close menu
+                            filterMode = if (filterMode == "teacher") "all" else "teacher"
+                            if (filterMode != "teacher") filterId = 0
+                        }
                         if (filterMode == "teacher") {
                             Column(
                                 horizontalAlignment = Alignment.End,
@@ -164,17 +189,20 @@ fun ScheduleScreen(vm: AppViewModel) {
                                 state.teachers.forEach { t ->
                                     FilterChip(
                                         selected = filterId == t.id,
-                                        onClick  = { filterId = t.id },
+                                        onClick  = { filterId = t.id; menuOpen = false },
                                         label    = { Text(t.name, style = MaterialTheme.typography.labelSmall) }
                                     )
                                 }
                             }
                         }
 
-                        // Filter: student
+                        // ── Filter: student ───────────────────────────────
                         SpeedDialItem("按学生筛选", Icons.Default.Group, FluentOrange,
                             selected = filterMode == "student"
-                        ) { filterMode = "student"; menuOpen = false }
+                        ) {
+                            filterMode = if (filterMode == "student") "all" else "student"
+                            if (filterMode != "student") filterId = 0
+                        }
                         if (filterMode == "student") {
                             Column(
                                 horizontalAlignment = Alignment.End,
@@ -184,19 +212,21 @@ fun ScheduleScreen(vm: AppViewModel) {
                                 state.students.forEach { s ->
                                     FilterChip(
                                         selected = filterId == s.id,
-                                        onClick  = { filterId = s.id },
+                                        onClick  = { filterId = s.id; menuOpen = false },
                                         label    = { Text(s.name, style = MaterialTheme.typography.labelSmall) }
                                     )
                                 }
                             }
                         }
 
-                        // Export JPG
+                        HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f))
+
+                        // ── Export JPG ────────────────────────────────────
                         SpeedDialItem("导出为图片", Icons.Default.Image, FluentPurple) {
                             menuOpen = false; exportJpg()
                         }
 
-                        // Add schedule
+                        // ── Add schedule ──────────────────────────────────
                         SpeedDialItem("添加课程", Icons.Default.Add, FluentBlue) {
                             menuOpen = false; showAdd = true
                         }
@@ -582,6 +612,118 @@ private fun renderScheduleBitmap(
         }
     }
     return bmp
+}
+
+// ── Schedule list view ────────────────────────────────────────────────────────
+
+@Composable
+private fun ScheduleListView(
+    slots: List<Schedule>,
+    vm: AppViewModel,
+    onSlotClick: (Schedule) -> Unit
+) {
+    val grouped = DAYS.mapIndexed { di, day ->
+        day to slots.filter { it.day == di + 1 }
+            .sortedBy { timeToMinutes(it.resolvedStart()) }
+    }.filter { (_, list) -> list.isNotEmpty() }
+
+    if (grouped.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("暂无课程", style = MaterialTheme.typography.bodyLarge, color = FluentMuted)
+        }
+        return
+    }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        grouped.forEach { (day, daySlots) ->
+            item {
+                // Day header
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        Modifier.size(28.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(FluentBlue),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(day.last().toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White)
+                    }
+                    Text(day,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = FluentBlue)
+                    HorizontalDivider(
+                        modifier = Modifier.weight(1f),
+                        color = FluentBlue.copy(alpha = 0.25f))
+                    Text("${daySlots.size} 节",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = FluentMuted)
+                }
+            }
+            daySlots.forEach { slot ->
+                item(key = slot.id) {
+                    val sub   = vm.subject(slot.subjectId)
+                    val cl    = vm.schoolClass(slot.classId)
+                    val te    = vm.teacher(slot.teacherId)
+                    val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(color.copy(alpha = 0.08f))
+                            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                            .clickable { onSlotClick(slot) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Colour accent bar
+                        Box(
+                            Modifier.width(4.dp).height(44.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(color)
+                        )
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(sub?.name ?: "未知科目",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold, color = color)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (cl != null) Text(cl.name,
+                                    style = MaterialTheme.typography.bodySmall, color = FluentMuted)
+                                if (te != null) Text(te.name,
+                                    style = MaterialTheme.typography.bodySmall, color = FluentMuted)
+                            }
+                        }
+                        // Time badge
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = color.copy(alpha = 0.15f)
+                            ) {
+                                Text("${slot.resolvedStart()}",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = color, fontWeight = FontWeight.Bold)
+                            }
+                            Text("↓ ${slot.resolvedEnd()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = FluentMuted)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ── Dialogs & shared sub-composables ──────────────────────────────────────────
