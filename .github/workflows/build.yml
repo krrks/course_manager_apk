@@ -64,6 +64,21 @@ jobs:
               -o gradle/wrapper/gradle-wrapper.jar
           fi
 
+      - name: 📦 Ensure Gradle distribution exists (re-download if missing from cache)
+        run: |
+          # If the distribution was stripped before a previous push, re-download it now
+          # so --build-cache / --configuration-cache still accelerates compilation.
+          DIST_DIR=".gradle/wrapper/dists"
+          if [ -d "$DIST_DIR" ] && find "$DIST_DIR" -name "gradle" -type f | grep -q .; then
+            echo "✅ Gradle distribution already present in cache"
+          else
+            echo "⬇️  Gradle distribution missing — letting wrapper download it..."
+            # Running 'help' is the cheapest task; it will trigger the distribution download
+            GRADLE_USER_HOME="${{ github.workspace }}/.gradle" \
+              ./gradlew help --no-daemon -q || true
+            echo "✅ Gradle distribution ready"
+          fi
+
       - name: 🔧 Build Debug APK
         run: |
           # GRADLE_USER_HOME points to the committed .gradle dir so the cached
@@ -102,6 +117,22 @@ jobs:
           else
             echo "ℹ️  No zip to delete"
           fi
+
+      - name: 🧹 Remove large files before push
+        run: |
+          echo "=== Removing Gradle distribution archives (re-downloaded automatically next run) ==="
+          # These zip files are typically 100–150 MB each and exceed GitHub's limit.
+          # The .gradle/caches/ build-cache and module cache are kept for speed.
+          find .gradle/wrapper/dists -type f \( -name "*.zip" -o -name "*.zip.part" \) \
+            -print -delete 2>/dev/null || true
+
+          echo "=== Removing any remaining files > 50 MB ==="
+          find . -not -path './.git/*' -type f -size +50M | while IFS= read -r f; do
+            echo "⚠️  Removing oversized file: $f ($(du -sh "$f" 2>/dev/null | cut -f1))"
+            rm "$f"
+          done
+
+          echo "✅ Large-file cleanup done"
 
       - name: 💾 Commit and push all changes
         run: |
