@@ -22,11 +22,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: 📦 Sync from school-manager-android.zip (if present)
+      - name: 📦 Sync from school-manager-android*.zip (if present)
         run: |
-          if [ -f "school-manager-android.zip" ]; then
-            echo "✅ Found school-manager-android.zip — extracting..."
-            unzip -o school-manager-android.zip -d _zip_tmp
+          # Pick the first file (alphabetically) matching school-manager-android*.zip
+          TARGET_ZIP=$(ls school-manager-android*.zip 2>/dev/null | sort | head -n 1)
+          if [ -n "$TARGET_ZIP" ]; then
+            echo "✅ Found $TARGET_ZIP — extracting..."
+            echo "PROCESSED_ZIP=$TARGET_ZIP" >> "$GITHUB_ENV"
+            unzip -o "$TARGET_ZIP" -d _zip_tmp
             if [ -d "_zip_tmp/school-manager-android" ]; then
               cp -rf _zip_tmp/school-manager-android/. .
               echo "✅ Synced zip contents to root"
@@ -35,7 +38,8 @@ jobs:
             fi
             rm -rf _zip_tmp
           else
-            echo "ℹ️  No school-manager-android.zip found — skipping sync step"
+            echo "ℹ️  No school-manager-android*.zip found — skipping sync step"
+            echo "PROCESSED_ZIP=" >> "$GITHUB_ENV"
           fi
 
       - name: ☕ Set up JDK 17
@@ -71,11 +75,11 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk     apk/app-debug.apk
           cp app/build/outputs/apk/release/app-release.apk apk/app-release.apk
 
-      - name: 🗑️ Delete school-manager-android.zip (if present)
+      - name: 🗑️ Delete processed zip (if present)
         run: |
-          if [ -f "school-manager-android.zip" ]; then
-            rm school-manager-android.zip
-            echo "✅ Deleted school-manager-android.zip"
+          if [ -n "$PROCESSED_ZIP" ] && [ -f "$PROCESSED_ZIP" ]; then
+            rm "$PROCESSED_ZIP"
+            echo "✅ Deleted $PROCESSED_ZIP"
           else
             echo "ℹ️  No zip to delete"
           fi
