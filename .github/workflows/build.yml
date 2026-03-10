@@ -241,9 +241,7 @@ jobs:
             RELEASE_NOTE_FILE="zip_update/release_note.md"
             if [ -f "$RELEASE_NOTE_FILE" ]; then
               RELEASE_NOTE_BODY=$(cat "$RELEASE_NOTE_FILE")
-              COMMIT_MSG="🧹 apply patch & clean zip_update [skip ci]
-
-${RELEASE_NOTE_BODY}"
+              COMMIT_MSG=$(printf '🧹 apply patch & clean zip_update [skip ci]\n\n%s' "$RELEASE_NOTE_BODY")
             else
               COMMIT_MSG="🧹 apply patch & clean zip_update [skip ci]"
             fi
