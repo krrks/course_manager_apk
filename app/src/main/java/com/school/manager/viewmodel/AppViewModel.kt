@@ -8,6 +8,11 @@ import com.school.manager.data.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 private data class GsonState(
     val subjects:   List<Subject>?,
@@ -51,7 +56,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun schoolClass(id: Long?) = _state.value.classes.find   { it.id == id }
     fun student(id: Long?)     = _state.value.students.find  { it.id == id }
 
-    // ─── Subjects (kept for backward compat) ─────────────────────────────────
+    // ─── Subjects ─────────────────────────────────────────────────────────────
     fun addSubject(name: String, color: Long, teacherId: Long?) {
         _state.update { it.copy(subjects = it.subjects + Subject(System.currentTimeMillis(), name, color, teacherId)) }
         save()
@@ -67,8 +72,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
     fun addTeacher(name: String, gender: String, phone: String,
-                   subjectIds: List<Long> = emptyList(), avatarUri: String? = null,
-                   code: String = "") {
+                   subjectIds: List<Long> = emptyList(), avatarUri: String? = null, code: String = "") {
         val c = code.ifBlank { genCode("T") }
         _state.update { it.copy(teachers = it.teachers +
             Teacher(System.currentTimeMillis(), name, gender, phone, subjectIds, avatarUri, c)) }
@@ -91,8 +95,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             SchoolClass(System.currentTimeMillis(), name, grade, count, headTeacherId, subject, c)) }
         save()
     }
-    fun updateClass(c: SchoolClass) {
-        _state.update { st -> st.copy(classes = st.classes.map { if (it.id == c.id) c else it }) }
+    fun updateClass(cl: SchoolClass) {
+        _state.update { st -> st.copy(classes = st.classes.map { if (it.id == cl.id) cl else it }) }
         save()
     }
     fun deleteClass(id: Long) {
@@ -169,8 +173,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val src = if (teacherId != null) _state.value.schedule.filter { it.teacherId == teacherId }
                   else _state.value.schedule
         return gson.toJson(src.map { s ->
-            Row(s.code,
-                DAYS.getOrElse(s.day - 1) { "?" },
+            Row(s.code, DAYS.getOrElse(s.day - 1) { "?" },
                 s.resolvedStart(), s.resolvedEnd(),
                 s.resolvedSubjectName(_state.value.subjects, _state.value.classes),
                 schoolClass(s.classId)?.name ?: "?",
@@ -196,7 +199,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Merge-import: existing records with the same [id] are updated,
+     * Merge-import JSON: existing records with the same [id] are updated,
      * new records (id not present) are appended. Nothing is deleted.
      */
     fun mergeImport(json: String): Boolean {
@@ -222,4 +225,96 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             true
         } catch (_: Exception) { false }
     }
+
+    // ─── ZIP 完整备份（含头像图片）────────────────────────────────────────────
+
+    /**
+     * 导出完整备份 ZIP：
+     *   state.json  — 全部结构化数据
+     *   avatars/    — 教师 / 学生头像原始文件
+     *
+     * 返回 ZIP 字节数组，失败返回 null。
+     */
+    fun exportFullBackupZip(context: Context): ByteArray? = try {
+        val baos = ByteArrayOutputStream()
+        ZipOutputStream(baos).use { zos ->
+            // ── 1. state.json ──────────────────────────────────────────────
+            zos.putNextEntry(ZipEntry("state.json"))
+            zos.write(gson.toJson(_state.value).toByteArray(Charsets.UTF_8))
+            zos.closeEntry()
+
+            // ── 2. avatars/ ────────────────────────────────────────────────
+            val avatarDir = File(context.filesDir, "avatars")
+            if (avatarDir.exists()) {
+                avatarDir.listFiles()?.forEach { file ->
+                    zos.putNextEntry(ZipEntry("avatars/${file.name}"))
+                    file.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
+            }
+        }
+        baos.toByteArray()
+    } catch (_: Exception) { null }
+
+    /**
+     * 导入完整备份 ZIP（由 [exportFullBackupZip] 生成）：
+     *   1. 提取头像图片到 app 私有目录，并重建路径映射
+     *   2. 按 ID 合并导入 state.json（与 [mergeImport] 逻辑相同）
+     *
+     * 返回 true 表示成功。
+     */
+    fun importFullBackupZip(context: Context, zipBytes: ByteArray): Boolean = try {
+        val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
+        var stateJson: String? = null
+        val pathRemap = mutableMapOf<String, String>()
+
+        ZipInputStream(zipBytes.inputStream()).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                when {
+                    entry.name == "state.json" ->
+                        stateJson = zis.readBytes().toString(Charsets.UTF_8)
+
+                    entry.name.startsWith("avatars/") && !entry.isDirectory -> {
+                        val name = entry.name.removePrefix("avatars/")
+                        val dest = File(avatarDir, name)
+                        dest.outputStream().use { out -> zis.copyTo(out) }
+                        pathRemap[name] = dest.absolutePath
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+
+        val json = stateJson ?: return false
+        val raw  = gson.fromJson(json, GsonState::class.java)
+
+        fun remapPath(old: String?): String? {
+            if (old == null) return null
+            val name = File(old).name
+            return pathRemap[name] ?: old
+        }
+
+        _state.update { cur ->
+            fun <T : Any> merge(current: List<T>, incoming: List<T>?, getId: (T) -> Long): List<T> {
+                if (incoming.isNullOrEmpty()) return current
+                val map = current.associateBy(getId).toMutableMap()
+                incoming.forEach { map[getId(it)] = it }
+                return map.values.toList()
+            }
+            val teachers = raw.teachers?.map { it.copy(avatarUri = remapPath(it.avatarUri)) }
+            val students = raw.students?.map { it.copy(avatarUri = remapPath(it.avatarUri)) }
+            cur.copy(
+                subjects   = merge(cur.subjects,   raw.subjects)   { it.id },
+                teachers   = merge(cur.teachers,   teachers)       { it.id },
+                classes    = merge(cur.classes,    raw.classes)    { it.id },
+                students   = merge(cur.students,   students)       { it.id },
+                schedule   = merge(cur.schedule,   raw.schedule)   { it.id },
+                attendance = merge(cur.attendance, raw.attendance) { it.id }
+            )
+        }
+        save()
+        true
+    } catch (_: Exception) { false }
 }

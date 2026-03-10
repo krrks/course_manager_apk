@@ -44,14 +44,13 @@ private const val DP_PER_HOUR        = 80
 private const val TIME_COL_W         = 52
 private const val DAY_COL_W          = 110
 private const val HEADER_H           = 36
-private val CAL_TOTAL_HOURS          = CAL_END_HOUR - CAL_START_HOUR   // 14
-private val CAL_TOTAL_HEIGHT_DP      = CAL_TOTAL_HOURS * DP_PER_HOUR   // 1120
-private const val CAL_V_PAD          = 10   // extra dp top+bottom so 08:00/22:00 labels are not clipped
+private val CAL_TOTAL_HOURS          = CAL_END_HOUR - CAL_START_HOUR
+private val CAL_TOTAL_HEIGHT_DP      = CAL_TOTAL_HOURS * DP_PER_HOUR
+private const val CAL_V_PAD          = 10
 private val CAL_BOX_HEIGHT_DP        = CAL_TOTAL_HEIGHT_DP + CAL_V_PAD * 2
 
 /**
- * Half-hour tick labels from 08:00 to 22:00, each paired with its dp y-offset
- * so any event at HH:mm is placed correctly regardless of value.
+ * Half-hour tick labels from 08:00 to 22:00, each paired with its dp y-offset.
  */
 private val TIME_TICKS: List<Pair<String, Float>> = buildList {
     for (h in CAL_START_HOUR..CAL_END_HOUR) {
@@ -71,10 +70,7 @@ fun ScheduleScreen(vm: AppViewModel) {
     var toast                by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
-    // ── View mode: calendar | list ────────────────────────────────────────────
-    var viewMode by remember { mutableStateOf("calendar") }  // "calendar" | "list"
-
-    // ── Filter: all | teacher | student ──────────────────────────────────────
+    var viewMode   by remember { mutableStateOf("calendar") }
     var filterMode by remember { mutableStateOf("all") }
     var filterId   by remember { mutableLongStateOf(0L) }
 
@@ -86,7 +82,6 @@ fun ScheduleScreen(vm: AppViewModel) {
         }
     }
 
-    // ── JPG export via SAF ────────────────────────────────────────────────────
     var pendingBitmap by remember { mutableStateOf<Bitmap?>(null) }
     val saveBitmapLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("image/jpeg")
@@ -120,57 +115,11 @@ fun ScheduleScreen(vm: AppViewModel) {
         else      -> "课表"
     }
 
+    var menuOpen by remember { mutableStateOf(false) }
+
     Scaffold(
-        topBar = {
-            if (filterMode != "all" && filterId != 0L) {
-                TopAppBar(
-                    title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = FluentBlue,
-                        titleContentColor = Color.White
-                    ),
-                    actions = {
-                        IconButton(onClick = { filterMode = "all"; filterId = 0 }) {
-                            Icon(Icons.Default.Close, "清除筛选", tint = Color.White)
-                        }
-                    }
-                )
-            }
-        }
-    ) { inner ->
-        Box(modifier = Modifier
-            .padding(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding())
-            .fillMaxSize()) {
-
-            // ── Calendar or List view ──────────────────────────────────────
-            if (viewMode == "calendar") {
-                CalendarGrid(slots, vm, state, onSlotClick = { viewSlot = it })
-            } else {
-                ScheduleListView(slots, vm, onSlotClick = { viewSlot = it })
-            }
-
-            // ── Speed-dial FAB (bottom-right) ─────────────────────────
-            var menuOpen by remember { mutableStateOf(false) }
-
-            // Dim overlay when menu is open
-            if (menuOpen) {
-                Box(
-                    Modifier.fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.35f))
-                        .clickable(indication = null,
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                        ) { menuOpen = false }
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 20.dp),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // ── Expanded menu items ───────────────────────────────────
+        floatingActionButton = {
+            Column(horizontalAlignment = Alignment.End) {
                 AnimatedVisibility(
                     visible = menuOpen,
                     enter   = fadeIn() + slideInVertically { it / 2 },
@@ -183,7 +132,6 @@ fun ScheduleScreen(vm: AppViewModel) {
                             .verticalScroll(rememberScrollState())
                             .padding(bottom = 4.dp)
                     ) {
-                        // ── View mode toggle ──────────────────────────────
                         SpeedDialItem(
                             if (viewMode == "calendar") "切换列表视图" else "切换日历视图",
                             if (viewMode == "calendar") Icons.Default.ViewList else Icons.Default.CalendarViewMonth,
@@ -192,12 +140,10 @@ fun ScheduleScreen(vm: AppViewModel) {
 
                         HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f))
 
-                        // ── Filter: all ───────────────────────────────────
                         SpeedDialItem("全部课表", Icons.Default.CalendarMonth, FluentBlue,
                             selected = filterMode == "all"
                         ) { filterMode = "all"; filterId = 0; menuOpen = false }
 
-                        // ── Filter: teacher – side popup ─────────────
                         var teacherMenuOpen by remember { mutableStateOf(false) }
                         Box {
                             SpeedDialItem("按教师筛选", Icons.Default.Person, FluentGreen,
@@ -208,26 +154,18 @@ fun ScheduleScreen(vm: AppViewModel) {
                                 onDismissRequest = { teacherMenuOpen = false },
                                 modifier = Modifier.heightIn(max = 300.dp)
                             ) {
-                                DropdownMenuItem(
-                                    text    = { Text("全部") },
-                                    onClick = { filterMode = "all"; filterId = 0; teacherMenuOpen = false; menuOpen = false }
-                                )
+                                DropdownMenuItem(text = { Text("全部") },
+                                    onClick = { filterMode = "all"; filterId = 0; teacherMenuOpen = false; menuOpen = false })
                                 state.teachers.forEach { t ->
-                                    DropdownMenuItem(
-                                        text    = { Text(t.name) },
-                                        onClick = { filterMode = "teacher"; filterId = t.id; teacherMenuOpen = false; menuOpen = false },
-                                        leadingIcon = if (filterId == t.id && filterMode == "teacher") ({
-                                            Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp), tint = FluentGreen)
-                                        }) else null
-                                    )
+                                    DropdownMenuItem(text = { Text(t.name) },
+                                        onClick = { filterMode = "teacher"; filterId = t.id; teacherMenuOpen = false; menuOpen = false })
                                 }
                             }
                         }
 
-                        // ── Filter: student – side popup ──────────────────
                         var studentMenuOpen by remember { mutableStateOf(false) }
                         Box {
-                            SpeedDialItem("按学生筛选", Icons.Default.Group, FluentOrange,
+                            SpeedDialItem("按学生筛选", Icons.Default.Group, FluentPurple,
                                 selected = filterMode == "student"
                             ) { studentMenuOpen = true }
                             DropdownMenu(
@@ -235,111 +173,70 @@ fun ScheduleScreen(vm: AppViewModel) {
                                 onDismissRequest = { studentMenuOpen = false },
                                 modifier = Modifier.heightIn(max = 300.dp)
                             ) {
-                                DropdownMenuItem(
-                                    text    = { Text("全部") },
-                                    onClick = { filterMode = "all"; filterId = 0; studentMenuOpen = false; menuOpen = false }
-                                )
+                                DropdownMenuItem(text = { Text("全部") },
+                                    onClick = { filterMode = "all"; filterId = 0; studentMenuOpen = false; menuOpen = false })
                                 state.students.forEach { s ->
-                                    DropdownMenuItem(
-                                        text    = { Text(s.name) },
-                                        onClick = { filterMode = "student"; filterId = s.id; studentMenuOpen = false; menuOpen = false },
-                                        leadingIcon = if (filterId == s.id && filterMode == "student") ({
-                                            Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp), tint = FluentOrange)
-                                        }) else null
-                                    )
+                                    DropdownMenuItem(text = { Text(s.name) },
+                                        onClick = { filterMode = "student"; filterId = s.id; studentMenuOpen = false; menuOpen = false })
                                 }
                             }
                         }
 
                         HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f))
 
-                        // ── Export JPG ────────────────────────────────────
-                        SpeedDialItem("导出为图片", Icons.Default.Image, FluentPurple) {
-                            menuOpen = false; exportJpg()
-                        }
-
-                        // ── Add schedule ──────────────────────────────────
-                        SpeedDialItem("添加课程", Icons.Default.Add, FluentBlue) {
-                            menuOpen = false; showAdd = true
-                        }
+                        SpeedDialItem("导出为 JPG", Icons.Default.Image, FluentAmber) { exportJpg(); menuOpen = false }
+                        SpeedDialItem("添加课程", Icons.Default.Add, FluentBlue) { showAdd = true; menuOpen = false }
                     }
                 }
 
-                // ── Main FAB ─────────────────────────────────────────────
                 FloatingActionButton(
                     onClick        = { menuOpen = !menuOpen },
-                    containerColor = FluentBlue,
+                    containerColor = if (menuOpen) FluentMuted else FluentBlue,
                     contentColor   = Color.White,
-                    shape          = androidx.compose.foundation.shape.CircleShape
-                ) {
-                    Icon(
-                        if (menuOpen) Icons.Default.Close else Icons.Default.Menu,
-                        contentDescription = if (menuOpen) "关闭菜单" else "打开菜单"
-                    )
+                    shape          = CircleShape
+                ) { Icon(if (menuOpen) Icons.Default.Close else Icons.Default.MoreVert, null) }
+            }
+        }
+    ) { inner ->
+        Column(modifier = Modifier.padding(inner).fillMaxSize()) {
+            if (filterMode != "all") {
+                Surface(color = FluentBlue.copy(alpha = 0.1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(screenTitle, style = MaterialTheme.typography.labelLarge, color = FluentBlue, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { filterMode = "all"; filterId = 0 }) { Text("清除筛选") }
+                    }
                 }
             }
-        }
-    }
-
-    // ── Dialogs ────────────────────────────────────────────────────────────────
-    viewSlot?.let { slot ->
-        val sub = vm.subject(slot.subjectId)
-        val te  = vm.teacher(slot.teacherId)
-        val cl  = vm.schoolClass(slot.classId)
-        val lessonCount = state.attendance.count {
-            it.subjectId == slot.subjectId && it.classId == slot.classId && it.status == "completed"
-        }
-        FluentDialog(title = "课程详情", onDismiss = { viewSlot = null }) {
-            if (slot.code.isNotBlank()) DetailRow("编号", slot.code)
-            DetailRow("班级",   cl?.name  ?: "─")
-            DetailRow("科目",   sub?.name ?: "─")
-            DetailRow("教师",   te?.name  ?: "─")
-            DetailRow("星期",   DAYS.getOrNull(slot.day - 1) ?: "─")
-            DetailRow("时间",   "${slot.resolvedStart()} – ${slot.resolvedEnd()}")
-            DetailRow("已上课次", "$lessonCount 次")
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick  = { addAttendanceForSlot = slot; viewSlot = null },
-                shape    = RoundedCornerShape(12.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = FluentGreen),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("添加上课记录")
+            when (viewMode) {
+                "list"     -> ScheduleListView(slots, state, vm, { viewSlot = it })
+                "calendar" -> CalendarGrid(slots, vm, state, { viewSlot = it })
             }
-            OutlinedButton(
-                onClick  = { editSlot = slot; viewSlot = null },
-                shape    = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("✏️ 编辑课程") }
-            OutlinedButton(
-                onClick  = { vm.deleteSchedule(slot.id); viewSlot = null },
-                colors   = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed),
-                shape    = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("删除课程") }
         }
     }
 
+    viewSlot?.let { slot ->
+        ScheduleDetailDialog(slot, state, vm,
+            onDismiss = { viewSlot = null },
+            onEdit    = { editSlot = slot; viewSlot = null },
+            onDelete  = { vm.deleteSchedule(slot.id); viewSlot = null },
+            onAddAttendance = { addAttendanceForSlot = slot; viewSlot = null }
+        )
+    }
     editSlot?.let { slot ->
         EditScheduleDialog(slot, state, vm, onDismiss = { editSlot = null })
     }
-
     addAttendanceForSlot?.let { slot ->
-        val prefill = Attendance(
-            id = 0L, classId = slot.classId, subjectId = slot.subjectId,
-            teacherId = slot.teacherId, date = LocalDate.now().toString(),
-            startTime = slot.resolvedStart(), endTime = slot.resolvedEnd(),
-            topic = "", status = "completed", notes = "", attendees = emptyList()
-        )
         AttendanceFormDialog(
-            title     = "添加上课记录",
-            initial   = prefill,
-            state     = state,
-            vm        = vm,
+            title = "从课程添加记录",
+            initial = null,
+            state = state,
+            vm = vm,
             onDismiss = { addAttendanceForSlot = null },
-            onSave    = { a ->
+            onSave = { a ->
                 vm.addAttendance(a.classId, a.subjectId, a.teacherId, a.date,
                     a.startTime, a.endTime, a.topic, a.status, a.notes, a.attendees)
                 addAttendanceForSlot = null
@@ -349,7 +246,6 @@ fun ScheduleScreen(vm: AppViewModel) {
 
     if (showAdd) { AddScheduleDialog(state, vm, onDismiss = { showAdd = false }) }
 
-    // Toast
     toast?.let { msg ->
         LaunchedEffect(msg) { kotlinx.coroutines.delay(2500); toast = null }
         Box(
@@ -377,7 +273,6 @@ private fun CalendarGrid(
     val scrollV = rememberScrollState()
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Sticky day-name header row (horizontal scroll only)
         Row(modifier = Modifier.horizontalScroll(scrollH)) {
             Box(
                 Modifier.width(TIME_COL_W.dp).height(HEADER_H.dp)
@@ -396,11 +291,8 @@ private fun CalendarGrid(
         }
         HorizontalDivider(color = FluentBorder, thickness = 1.dp)
 
-        // Scrollable body (both axes, shares scrollH with header)
         Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.horizontalScroll(scrollH).verticalScroll(scrollV)) {
-
-                // ── Time-axis column ─────────────────────────────────────────
                 Box(
                     Modifier.width(TIME_COL_W.dp).height(CAL_BOX_HEIGHT_DP.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -420,47 +312,35 @@ private fun CalendarGrid(
                     }
                 }
 
-                // ── One column per weekday ───────────────────────────────────
                 DAYS.forEachIndexed { di, _ ->
                     val daySlots = slots.filter { it.day == di + 1 }
                     Box(Modifier.width(DAY_COL_W.dp).height(CAL_BOX_HEIGHT_DP.dp)) {
-
-                        // Grid lines at every 30-min tick
                         TIME_TICKS.forEach { (label, yDp) ->
                             val isHour = label.endsWith(":00")
-                            HorizontalDivider(
-                                color     = if (isHour) FluentBorder
-                                            else FluentBorder.copy(alpha = 0.5f),
+                            Divider(
+                                color     = if (isHour) FluentBorder else FluentBorder.copy(alpha = 0.4f),
                                 thickness = if (isHour) 0.8.dp else 0.4.dp,
-                                modifier  = Modifier
-                                    .align(Alignment.TopStart)
-                                    .offset(y = (yDp + CAL_V_PAD).dp)
+                                modifier  = Modifier.offset(y = (yDp + CAL_V_PAD).dp)
                             )
                         }
-                        // Right border
-                        Box(
-                            Modifier.align(Alignment.TopEnd)
-                                .width(0.5.dp)
-                                .fillMaxHeight()
-                                .background(FluentBorder)
-                        )
-
-                        // ── Events — absolute pixel position from any HH:mm ──
                         daySlots.forEach { slot ->
-                            val startMins = timeToMinutes(slot.resolvedStart()) - CAL_START_HOUR * 60
-                            val endMins   = timeToMinutes(slot.resolvedEnd())   - CAL_START_HOUR * 60
-                            val yDp  = (startMins * DP_PER_HOUR / 60f).coerceAtLeast(0f)
-                            val hDp  = ((endMins - startMins) * DP_PER_HOUR / 60f).coerceAtLeast(22f)
-
-                            val sub   = vm.subject(slot.subjectId)
-                            val cl    = vm.schoolClass(slot.classId)
-                            val te    = vm.teacher(slot.teacherId)
-                            val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
+                            val startStr = slot.resolvedStart()
+                            val endStr   = slot.resolvedEnd()
+                            val yDp      = minuteOffsetDp(startStr) + CAL_V_PAD
+                            val hDp      = durationDp(startStr, endStr).coerceAtLeast(28f)
+                            val sub      = state.subjects.find { it.id == slot.subjectId }
+                                ?: state.subjects.find { s ->
+                                    state.classes.find { it.id == slot.classId }?.subject == s.name
+                                }
+                            val cl       = state.classes.find { it.id == slot.classId }
+                            val colorIdx = state.subjects.indexOf(sub).takeIf { it >= 0 }
+                                ?: (slot.subjectId % SUBJECT_COLORS.size).toInt()
+                            val color    = subjectColor(colorIdx)
 
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
-                                    .offset(y = (yDp + CAL_V_PAD).dp)
+                                    .offset(y = yDp.dp)
                                     .fillMaxWidth()
                                     .height(hDp.dp)
                                     .padding(horizontal = 2.dp, vertical = 1.dp)
@@ -471,7 +351,6 @@ private fun CalendarGrid(
                                     .padding(horizontal = 4.dp, vertical = 3.dp)
                             ) {
                                 Column {
-                                    // Time range — always shown at top of block
                                     Text("${slot.resolvedStart()} – ${slot.resolvedEnd()}",
                                         style      = MaterialTheme.typography.labelSmall,
                                         color      = color.copy(alpha = 0.85f),
@@ -484,14 +363,7 @@ private fun CalendarGrid(
                                         maxLines   = 1,
                                         overflow   = TextOverflow.Ellipsis)
                                     if (hDp > 42f) {
-                                        Text(cl?.name ?: "",
-                                            style    = MaterialTheme.typography.labelSmall,
-                                            color    = FluentMuted,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis)
-                                    }
-                                    if (hDp > 62f && te != null) {
-                                        Text(te.name,
+                                        Text(cl?.name ?: "?",
                                             style    = MaterialTheme.typography.labelSmall,
                                             color    = FluentMuted,
                                             maxLines = 1,
@@ -507,251 +379,70 @@ private fun CalendarGrid(
     }
 }
 
-// ── Bitmap renderer (programmatic Android Canvas) ──────────────────────────────
-
-private fun renderScheduleBitmap(
-    context: Context,
-    slots: List<Schedule>,
-    state: AppState,
-    title: String = "课表"
-): Bitmap {
-    val dens   = context.resources.displayMetrics.density
-    val dp     = { v: Float -> v * dens }
-    val dpi    = { v: Float -> (v * dens).roundToInt() }
-
-    val timeColPx = dpi(TIME_COL_W.toFloat())
-    val dayColPx  = dpi(DAY_COL_W.toFloat())
-    val titleH    = dpi(28f)                          // title row height
-    val headerPx  = dpi(HEADER_H.toFloat() + 4)
-    val vPadPx    = dpi(10f)                          // top+bottom padding matching CAL_V_PAD
-    val hrPx      = dp(DP_PER_HOUR.toFloat())
-    val bodyH     = (hrPx * CAL_TOTAL_HOURS).roundToInt() + vPadPx * 2
-    val totalW    = timeColPx + dayColPx * DAYS.size
-    val totalH    = titleH + headerPx + bodyH
-
-    val bmp    = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bmp)
-
-    canvas.drawColor(android.graphics.Color.WHITE)
-
-    // ── Title row ─────────────────────────────────────────────────────────────
-    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color     = 0xFF1A56DB.toInt()
-        textSize  = dp(14f)
-        typeface  = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
-    }
-    canvas.drawText(title, totalW / 2f, titleH / 2f + titlePaint.textSize * 0.35f, titlePaint)
-
-    // ── Day header row ────────────────────────────────────────────────────────
-    val hdrTop = titleH.toFloat()
-    val hdrBot = (titleH + headerPx).toFloat()
-    val hdrPaint = Paint().apply { color = 0xFF1A56DB.toInt() }
-    canvas.drawRect(0f, hdrTop, totalW.toFloat(), hdrBot, hdrPaint)
-
-    // Day name text
-    val dayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color     = android.graphics.Color.WHITE
-        textSize  = dp(12f)
-        typeface  = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
-    }
-    DAYS.forEachIndexed { di, name ->
-        val cx = (timeColPx + di * dayColPx + dayColPx / 2).toFloat()
-        canvas.drawText(name, cx, hdrTop + headerPx / 2f + dp(5f), dayPaint)
-    }
-
-    // ── Calendar body base Y  (after title + header + top vPad) ─────────────
-    val bodyBaseY = titleH + headerPx   // events/labels offset from here + vPadPx
-
-    // Time axis background (light blue tint)
-    canvas.drawRect(0f, hdrBot, timeColPx.toFloat(), totalH.toFloat(),
-        Paint().apply { color = 0xFFF0F4FF.toInt() })
-
-    // Grid lines + time labels
-    val hourLinePaint = Paint().apply { color = 0xFFE5E7EB.toInt(); strokeWidth = dp(0.8f) }
-    val halfLinePaint = Paint().apply { color = 0xFFE5E7EB.toInt(); alpha = 100; strokeWidth = dp(0.4f) }
-    val hourTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF1A56DB.toInt(); textSize = dp(10f); textAlign = Paint.Align.RIGHT
-    }
-    val halfTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF6B7280.toInt(); textSize = dp(9f); textAlign = Paint.Align.RIGHT
-    }
-
-    TIME_TICKS.forEach { (label, yDpFloat) ->
-        val y = bodyBaseY + vPadPx + dp(yDpFloat)
-        val isHour = label.endsWith(":00")
-        canvas.drawLine(timeColPx.toFloat(), y, totalW.toFloat(), y,
-            if (isHour) hourLinePaint else halfLinePaint)
-        val tp = if (isHour) hourTextPaint else halfTextPaint
-        // baseline centred on the grid line
-        canvas.drawText(label, timeColPx - dp(4f), y + tp.textSize * 0.35f, tp)
-    }
-
-    // Vertical column separators
-    val sepPaint = Paint().apply { color = 0xFFE5E7EB.toInt(); strokeWidth = dp(0.8f) }
-    for (di in 0..DAYS.size) {
-        val x = (timeColPx + di * dayColPx).toFloat()
-        canvas.drawLine(x, hdrBot, x, totalH.toFloat(), sepPaint)
-    }
-
-    // Events
-    val clsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF6B7280.toInt(); textSize = dp(9f) }
-    slots.forEach { slot ->
-        val startMins = timeToMinutes(slot.resolvedStart()) - CAL_START_HOUR * 60
-        val endMins   = timeToMinutes(slot.resolvedEnd())   - CAL_START_HOUR * 60
-        val yTop  = bodyBaseY + vPadPx + dp(startMins * DP_PER_HOUR / 60f)
-        val yBot  = (bodyBaseY + vPadPx + dp(endMins * DP_PER_HOUR / 60f)).coerceAtLeast(yTop + dp(20f))
-        val xLeft  = (timeColPx + (slot.day - 1) * dayColPx) + dp(2f)
-        val xRight = (timeColPx + slot.day * dayColPx)        - dp(2f)
-
-        val subj = state.subjects.find { it.id == slot.subjectId }
-        val cls  = state.classes.find  { it.id == slot.classId }
-        val argb = (subj?.color ?: SUBJECT_COLORS[0]).toInt()
-        val rr   = android.graphics.Color.red(argb)
-        val gg   = android.graphics.Color.green(argb)
-        val bb   = android.graphics.Color.blue(argb)
-        val rect = RectF(xLeft, yTop, xRight, yBot)
-        val rad  = dp(6f)
-
-        // Background fill
-        canvas.drawRoundRect(rect, rad, rad,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.argb(46, rr, gg, bb) })
-        // Border
-        canvas.drawRoundRect(rect, rad, rad,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.argb(160, rr, gg, bb)
-                style = Paint.Style.STROKE; strokeWidth = dp(1f)
-            })
-        // Time range (always first)
-        val timeText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.argb(200, rr, gg, bb); textSize = dp(9f)
-        }
-        val timeStr = "${slot.resolvedStart()} – ${slot.resolvedEnd()}"
-        canvas.drawText(timeStr, xLeft + dp(4f), yTop + dp(3f) + timeText.textSize, timeText)
-
-        // Subject name
-        val evText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = argb; textSize = dp(10f)
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        val nameY = yTop + dp(3f) + timeText.textSize + dp(2f) + evText.textSize
-        if (nameY < yBot - dp(2f)) {
-            canvas.drawText(subj?.name ?: "?", xLeft + dp(4f), nameY, evText)
-        }
-        if (yBot - yTop > dp(44f)) {
-            canvas.drawText(cls?.name ?: "",
-                xLeft + dp(4f), nameY + dp(2f) + clsPaint.textSize, clsPaint)
-        }
-    }
-    return bmp
+private fun minuteOffsetDp(hhmm: String): Float {
+    if (hhmm.isBlank()) return 0f
+    val mins = timeToMinutes(hhmm) - CAL_START_HOUR * 60
+    return (mins * (DP_PER_HOUR / 60f)).coerceAtLeast(0f)
 }
 
-// ── Schedule list view ────────────────────────────────────────────────────────
+private fun durationDp(startHhmm: String, endHhmm: String): Float {
+    if (startHhmm.isBlank() || endHhmm.isBlank()) return DP_PER_HOUR / 2f
+    val mins = (timeToMinutes(endHhmm) - timeToMinutes(startHhmm)).coerceAtLeast(10)
+    return mins * (DP_PER_HOUR / 60f)
+}
+
+// ── List view ──────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ScheduleListView(
     slots: List<Schedule>,
+    state: AppState,
     vm: AppViewModel,
-    onSlotClick: (Schedule) -> Unit
+    onClick: (Schedule) -> Unit
 ) {
-    val grouped = DAYS.mapIndexed { di, day ->
-        day to slots.filter { it.day == di + 1 }
-            .sortedBy { timeToMinutes(it.resolvedStart()) }
-    }.filter { (_, list) -> list.isNotEmpty() }
-
-    if (grouped.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("暂无课程", style = MaterialTheme.typography.bodyLarge, color = FluentMuted)
-        }
-        return
-    }
-
     androidx.compose.foundation.lazy.LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize()
     ) {
-        grouped.forEach { (day, daySlots) ->
-            item {
-                // Day header
+        if (slots.isEmpty()) item { EmptyState("📅", "暂无课程") }
+        else items(slots, key = { it.id }) { slot ->
+            val sub   = state.subjects.find { it.id == slot.subjectId }
+            val cl    = state.classes.find  { it.id == slot.classId }
+            val te    = state.teachers.find { it.id == slot.teacherId }
+            val color = subjectColor(state.subjects.indexOf(sub).coerceAtLeast(0))
+            Surface(
+                shape           = RoundedCornerShape(14.dp),
+                shadowElevation = 2.dp,
+                color           = MaterialTheme.colorScheme.surface,
+                modifier        = Modifier.fillMaxWidth().clickable { onClick(slot) }
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Box(
-                        Modifier.size(28.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(FluentBlue),
+                        Modifier.size(48.dp).clip(RoundedCornerShape(10.dp))
+                            .background(color.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(day.last().toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White)
+                        Text(DAYS.getOrElse(slot.day - 1) { "?" },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = color, fontWeight = FontWeight.Bold)
                     }
-                    Text(day,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = FluentBlue)
-                    HorizontalDivider(
-                        modifier = Modifier.weight(1f),
-                        color = FluentBlue.copy(alpha = 0.25f))
-                    Text("${daySlots.size} 节",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = FluentMuted)
-                }
-            }
-            daySlots.forEach { slot ->
-                item(key = slot.id) {
-                    val sub   = vm.subject(slot.subjectId)
-                    val cl    = vm.schoolClass(slot.classId)
-                    val te    = vm.teacher(slot.teacherId)
-                    val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(color.copy(alpha = 0.08f))
-                            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-                            .clickable { onSlotClick(slot) }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Colour accent bar
-                        Box(
-                            Modifier.width(4.dp).height(44.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(color)
-                        )
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(sub?.name ?: "未知科目",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold, color = color)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (cl != null) Text(cl.name,
-                                    style = MaterialTheme.typography.bodySmall, color = FluentMuted)
-                                if (te != null) Text(te.name,
-                                    style = MaterialTheme.typography.bodySmall, color = FluentMuted)
-                            }
-                        }
-                        // Time badge
-                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = color.copy(alpha = 0.15f)
-                            ) {
-                                Text("${slot.resolvedStart()}",
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = color, fontWeight = FontWeight.Bold)
-                            }
-                            Text("↓ ${slot.resolvedEnd()}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = FluentMuted)
-                        }
+                    Column(Modifier.weight(1f)) {
+                        Text(sub?.name ?: cl?.subject ?: "?",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold, color = color)
+                        Text("${cl?.name ?: "?"} · ${te?.name ?: "─"}",
+                            style = MaterialTheme.typography.bodySmall, color = FluentMuted)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(slot.resolvedStart(),
+                            style = MaterialTheme.typography.labelMedium, color = color, fontWeight = FontWeight.Bold)
+                        Text("↓ ${slot.resolvedEnd()}",
+                            style = MaterialTheme.typography.labelSmall, color = FluentMuted)
                     }
                 }
             }
@@ -759,27 +450,37 @@ private fun ScheduleListView(
     }
 }
 
-// ── Dialogs & shared sub-composables ──────────────────────────────────────────
+// ── Dialogs ────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SingleChoiceRow(
-    items: List<Pair<Long, String>>,
-    selected: Long,
-    onSelect: (Long) -> Unit
+private fun ScheduleDetailDialog(
+    slot: Schedule,
+    state: AppState,
+    vm: AppViewModel,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onAddAttendance: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        items.forEach { (id, name) ->
-            FilterChip(
-                selected = selected == id,
-                onClick  = { onSelect(id) },
-                label    = { Text(name, style = MaterialTheme.typography.labelMedium) }
-            )
+    val sub = state.subjects.find { it.id == slot.subjectId }
+    val cl  = state.classes.find  { it.id == slot.classId }
+    val te  = state.teachers.find { it.id == slot.teacherId }
+    FluentDialog(title = "课程详情", onDismiss = onDismiss, onConfirm = onEdit, confirmLabel = "编辑") {
+        DetailRow("编号",   slot.code)
+        DetailRow("班级",   cl?.name  ?: "?")
+        DetailRow("科目",   sub?.name ?: cl?.subject ?: "?")
+        DetailRow("教师",   te?.name  ?: "─")
+        DetailRow("星期",   DAYS.getOrElse(slot.day - 1) { "?" })
+        DetailRow("开始",   slot.resolvedStart())
+        DetailRow("结束",   slot.resolvedEnd())
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp)) {
+            OutlinedButton(onClick = onAddAttendance, shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)) { Text("➕ 添加记录") }
+            OutlinedButton(onClick = onDelete, shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed),
+                modifier = Modifier.weight(1f)) { Text("删除") }
         }
     }
 }
@@ -793,10 +494,8 @@ private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -
     var endTime     by remember { mutableStateOf("09:00") }
     var code        by remember { mutableStateOf(genCode("SCH")) }
 
-    // Auto-fill class subject + headteacher when class is selected
     val selectedClass = state.classes.firstOrNull { it.name == className }
     val classSubject  = selectedClass?.subject ?: ""
-    // Auto-fill teacher from headTeacherId when class changes (if teacher not manually set)
     LaunchedEffect(className) {
         val htId = selectedClass?.headTeacherId
         if (htId != null) {
@@ -808,40 +507,34 @@ private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -
     FluentDialog(title = "添加课程", onDismiss = onDismiss, onConfirm = {
         val cls    = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
         val sId    = state.subjects.firstOrNull { it.name == cls.subject }?.id
-                     ?: state.subjects.firstOrNull()?.id ?: 1L
-        if (day.isBlank()) return@FluentDialog
+                     ?: state.subjects.firstOrNull()?.id ?: return@FluentDialog
         val tId    = state.teachers.firstOrNull { it.name == teacherName }?.id
         val dayIdx = DAYS.indexOf(day) + 1
         if (dayIdx < 1) return@FluentDialog
         vm.addSchedule(cls.id, sId, tId, dayIdx, startTime.trim(), endTime.trim(), code.trim())
         onDismiss()
     }) {
-        FormTextField("编号", code, { code = it }, "自动生成，可修改")
-        FormDropdown("班级", className, state.classes.map { it.name }) { className = it }
+        FormTextField("编号", code, { code = it }, "如: SCH001")
+        FormDropdown("班级",  className, state.classes.map { it.name })  { className   = it }
         if (classSubject.isNotBlank()) {
             Text("  科目：$classSubject",
-                style = MaterialTheme.typography.bodySmall,
-                color = FluentPurple,
+                style = MaterialTheme.typography.bodySmall, color = FluentPurple,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
-        FormDropdown("教师",   teacherName, state.teachers.map { it.name }) { teacherName = it }
-        FormDropdown("星期",   day,         DAYS)                             { day         = it }
-        TimeRangeRow(startTime, endTime,
-            onStartChange = { startTime = it },
-            onEndChange   = { endTime   = it })
+        FormDropdown("教师",  teacherName, state.teachers.map { it.name }) { teacherName = it }
+        FormDropdown("星期",  day, DAYS)                                    { day         = it }
+        TimeRangeRow(startTime, endTime, { startTime = it }, { endTime = it })
     }
 }
 
 @Composable
-private fun EditScheduleDialog(
-    slot: Schedule, state: AppState, vm: AppViewModel, onDismiss: () -> Unit
-) {
-    var className   by remember { mutableStateOf(state.classes.firstOrNull   { it.id == slot.classId }?.name ?: "") }
-    var teacherName by remember { mutableStateOf(state.teachers.firstOrNull  { it.id == slot.teacherId }?.name ?: "") }
-    var day         by remember { mutableStateOf(DAYS.getOrNull(slot.day - 1) ?: DAYS[0]) }
+private fun EditScheduleDialog(slot: Schedule, state: AppState, vm: AppViewModel, onDismiss: () -> Unit) {
+    var className   by remember { mutableStateOf(state.classes.firstOrNull  { it.id == slot.classId   }?.name ?: "") }
+    var teacherName by remember { mutableStateOf(state.teachers.firstOrNull { it.id == slot.teacherId }?.name ?: "") }
+    var day         by remember { mutableStateOf(DAYS.getOrElse(slot.day - 1) { "" }) }
     var startTime   by remember { mutableStateOf(slot.resolvedStart()) }
     var endTime     by remember { mutableStateOf(slot.resolvedEnd()) }
-    var code        by remember { mutableStateOf(slot.code.ifBlank { genCode("SCH") }) }
+    var code        by remember { mutableStateOf(slot.code) }
 
     val selectedClass = state.classes.firstOrNull { it.name == className }
     val classSubject  = selectedClass?.subject ?: ""
@@ -865,15 +558,12 @@ private fun EditScheduleDialog(
         FormDropdown("班级",   className,   state.classes.map  { it.name }) { className   = it }
         if (classSubject.isNotBlank()) {
             Text("  科目：$classSubject",
-                style = MaterialTheme.typography.bodySmall,
-                color = FluentPurple,
+                style = MaterialTheme.typography.bodySmall, color = FluentPurple,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         FormDropdown("教师",   teacherName, state.teachers.map { it.name }) { teacherName = it }
         FormDropdown("星期",   day,         DAYS)                            { day         = it }
-        TimeRangeRow(startTime, endTime,
-            onStartChange = { startTime = it },
-            onEndChange   = { endTime   = it })
+        TimeRangeRow(startTime, endTime, { startTime = it }, { endTime = it })
     }
 }
 
@@ -919,7 +609,6 @@ private fun SpeedDialItem(
 internal fun DatePickerField(label: String, value: String, onChange: (String) -> Unit) {
     var showPicker by remember { mutableStateOf(false) }
 
-    // Parse current value to epoch millis for the picker
     val epochMs: Long? = remember(value) {
         runCatching {
             val ld = java.time.LocalDate.parse(value)
@@ -974,7 +663,7 @@ internal fun DatePickerField(label: String, value: String, onChange: (String) ->
     }
 }
 
-/** Scroll-wheel time picker row (HH:mm, 24h, no quick-fill chips) */
+/** Scroll-wheel time picker row (HH:mm, 24h) */
 @Composable
 internal fun TimeRangeRow(
     startTime:     String,
@@ -1001,34 +690,42 @@ internal fun TimeRangeRow(
     }
 }
 
-/** Single time wheel picker showing HH and mm columns with snap-scroll */
+/**
+ * Single time wheel picker showing HH and mm columns with snap-scroll.
+ *
+ * FIX: contentPadding = PaddingValues(vertical = itemH) pushes item[N] to the
+ * vertical centre of the viewport when the LazyColumn is snapped to index N.
+ * Therefore the centred item == firstVisibleItemIndex (not +1), and we must
+ * initialise / animate-scroll to `selected` (not `selected - 1`).
+ */
 @Composable
 private fun TimeWheelPicker(value: String, onChange: (String) -> Unit) {
     val parts   = value.split(":").mapNotNull { it.toIntOrNull() }
     var selHour = remember(value) { mutableIntStateOf(parts.getOrElse(0) { 8 }.coerceIn(0, 23)) }
     var selMin  = remember(value) { mutableIntStateOf(parts.getOrElse(1) { 0 }.coerceIn(0, 59)) }
 
-    // Emit combined value whenever either column changes
     LaunchedEffect(selHour.intValue, selMin.intValue) {
         onChange("%02d:%02d".format(selHour.intValue, selMin.intValue))
     }
 
     val itemH    = 36.dp
-    val visItems = 3   // visible items (odd so selected is centred)
+    val visItems = 3
 
     @Composable
     fun WheelColumn(count: Int, selected: Int, label: (Int) -> String, onSelect: (Int) -> Unit) {
-        val listState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, selected - 1))
+        // ── FIX: scroll to `selected`, not `selected - 1` ──────────────────
+        val listState     = rememberLazyListState(initialFirstVisibleItemIndex = selected.coerceAtLeast(0))
         val flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(listState)
 
+        // Keep scroll position in sync when `selected` changes programmatically
         LaunchedEffect(selected) {
-            val target = (selected - 1).coerceAtLeast(0)
-            listState.animateScrollToItem(target)
+            listState.animateScrollToItem(selected.coerceAtLeast(0))
         }
 
+        // ── FIX: centred item == firstVisibleItemIndex (no +1) ─────────────
         LaunchedEffect(listState.isScrollInProgress) {
             if (!listState.isScrollInProgress) {
-                onSelect((listState.firstVisibleItemIndex + 1).coerceIn(0, count - 1))
+                onSelect(listState.firstVisibleItemIndex.coerceIn(0, count - 1))
             }
         }
 
@@ -1040,9 +737,11 @@ private fun TimeWheelPicker(value: String, onChange: (String) -> Unit) {
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             LazyColumn(
-                state       = listState,
+                state         = listState,
                 flingBehavior = flingBehavior,
-                modifier    = Modifier.fillMaxSize(),
+                modifier      = Modifier.fillMaxSize(),
+                // Top/bottom padding equal to one item height centres item[0]
+                // in the viewport when scrolled to index 0.
                 contentPadding = PaddingValues(vertical = itemH)
             ) {
                 items(count) { i ->
@@ -1061,7 +760,7 @@ private fun TimeWheelPicker(value: String, onChange: (String) -> Unit) {
                     }
                 }
             }
-            // Highlight band
+            // Highlight band for the centre slot
             Box(
                 Modifier.align(Alignment.Center)
                     .fillMaxWidth().height(itemH)
@@ -1078,4 +777,99 @@ private fun TimeWheelPicker(value: String, onChange: (String) -> Unit) {
         Text(":", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = FluentBlue)
         WheelColumn(60, selMin.intValue,  { "%02d".format(it) }) { selMin.intValue = it }
     }
+}
+
+// ── Bitmap export ──────────────────────────────────────────────────────────────
+
+private fun renderScheduleBitmap(
+    context: Context,
+    slots: List<Schedule>,
+    state: AppState,
+    title: String
+): Bitmap {
+    fun dp(v: Float) = (v * context.resources.displayMetrics.density).roundToInt().toFloat()
+
+    val timeColPx = dp(TIME_COL_W.toFloat()).toInt()
+    val dayColPx  = dp(DAY_COL_W.toFloat()).toInt()
+    val headerPx  = dp(HEADER_H.toFloat()).toInt()
+    val titleH    = dp(32f).toInt()
+    val vPadPx    = dp(CAL_V_PAD.toFloat()).toInt()
+    val hourPx    = dp(DP_PER_HOUR.toFloat()).toInt()
+    val totalH    = titleH + headerPx + (CAL_END_HOUR - CAL_START_HOUR) * hourPx + vPadPx * 2
+    val totalW    = timeColPx + DAYS.size * dayColPx
+
+    val bmp    = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    canvas.drawColor(android.graphics.Color.WHITE)
+
+    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color     = 0xFF1A56DB.toInt()
+        textSize  = dp(14f)
+        typeface  = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    canvas.drawText(title, totalW / 2f, titleH / 2f + titlePaint.textSize * 0.35f, titlePaint)
+
+    val hdrPaint = Paint().apply { color = 0xFF1A56DB.toInt() }
+    val hdrTop = titleH.toFloat(); val hdrBot = (titleH + headerPx).toFloat()
+    canvas.drawRect(0f, hdrTop, totalW.toFloat(), hdrBot, hdrPaint)
+
+    val dayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE; textSize = dp(12f)
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); textAlign = Paint.Align.CENTER
+    }
+    DAYS.forEachIndexed { di, name ->
+        val cx = (timeColPx + di * dayColPx + dayColPx / 2).toFloat()
+        canvas.drawText(name, cx, hdrTop + headerPx / 2f + dp(5f), dayPaint)
+    }
+
+    canvas.drawRect(0f, hdrBot, timeColPx.toFloat(), totalH.toFloat(),
+        Paint().apply { color = 0xFFF0F4FF.toInt() })
+
+    val hourLinePaint = Paint().apply { color = 0xFFE5E7EB.toInt(); strokeWidth = dp(0.8f) }
+    val halfLinePaint = Paint().apply { color = 0xFFE5E7EB.toInt(); alpha = 100; strokeWidth = dp(0.5f) }
+    val timePaint     = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF6B7280.toInt(); textSize = dp(9f); textAlign = Paint.Align.RIGHT
+    }
+
+    for (h in CAL_START_HOUR..CAL_END_HOUR) {
+        val y = (hdrBot + vPadPx + (h - CAL_START_HOUR) * hourPx).toFloat()
+        canvas.drawLine(timeColPx.toFloat(), y, totalW.toFloat(), y, hourLinePaint)
+        canvas.drawText("%02d:00".format(h), (timeColPx - dp(4f)), y + dp(3f), timePaint)
+        if (h < CAL_END_HOUR) {
+            val yh = y + hourPx / 2f
+            canvas.drawLine(timeColPx.toFloat(), yh, totalW.toFloat(), yh, halfLinePaint)
+        }
+    }
+
+    val bgPaints = SUBJECT_COLORS.map { c -> Paint().apply { color = (c.toInt() and 0x00FFFFFF) or 0x30000000 } }
+    val txtPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = dp(9f); color = android.graphics.Color.BLACK }
+
+    slots.forEach { slot ->
+        val di    = slot.day - 1
+        val start = slot.resolvedStart(); val end = slot.resolvedEnd()
+        val startMin = timeToMinutes(start) - CAL_START_HOUR * 60
+        val endMin   = timeToMinutes(end)   - CAL_START_HOUR * 60
+        val top      = hdrBot + vPadPx + startMin * hourPx / 60f
+        val bot      = hdrBot + vPadPx + endMin   * hourPx / 60f
+        val left     = (timeColPx + di * dayColPx + dp(2f))
+        val right    = (timeColPx + (di + 1) * dayColPx - dp(2f))
+
+        val sub      = state.subjects.find { it.id == slot.subjectId }
+        val colorIdx = state.subjects.indexOf(sub).coerceAtLeast(0) % SUBJECT_COLORS.size
+        canvas.drawRoundRect(RectF(left, top, right, bot), dp(4f), dp(4f), bgPaints[colorIdx])
+
+        txtPaint.color = when (colorIdx) {
+            0 -> 0xFF1A56DB.toInt(); 1 -> 0xFF0E9F6E.toInt(); 2 -> 0xFF7E3AF2.toInt()
+            3 -> 0xFFFF5A1F.toInt(); 4 -> 0xFFE3A008.toInt(); 5 -> 0xFFE11D48.toInt()
+            6 -> 0xFF0891B2.toInt(); else -> 0xFF65A30D.toInt()
+        }
+        val subName = sub?.name ?: state.classes.find { it.id == slot.classId }?.subject ?: "?"
+        canvas.drawText(subName, left + dp(3f), top + dp(10f), txtPaint)
+        val cl = state.classes.find { it.id == slot.classId }
+        if ((bot - top) > dp(20f))
+            canvas.drawText(cl?.name ?: "?", left + dp(3f), top + dp(20f), Paint(txtPaint).apply { color = 0xFF6B7280.toInt() })
+    }
+
+    return bmp
 }

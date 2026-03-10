@@ -1,5 +1,8 @@
 package com.school.manager.data
 
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
 // ─── Domain Models ────────────────────────────────────────────────────────────
 
 /** Subject kept for backward-compat with old saved data; no longer shown in nav */
@@ -87,7 +90,7 @@ val SUBJECT_COLORS = listOf(
 )
 
 val GRADES = listOf("高一","高二","高三","初一","初二","初三")
-val DAYS   = listOf("周二","周三","周四","周五","周六","周日","周一")
+val DAYS   = listOf("周一","周二","周三","周四","周五","周六","周日")
 
 val PERIOD_TIMES     = listOf("08:00","09:00","10:00","11:00","14:00","15:00","16:00","19:00")
 val PERIOD_END_TIMES = listOf("08:45","09:45","10:45","11:45","14:45","15:45","16:45","19:45")
@@ -168,11 +171,37 @@ val sampleSchedule = listOf(
     Schedule(8, 3, 2, 2, 1, startTime = "08:00", endTime = "08:45", code = "SCH0008"),
 )
 
-val sampleAttendance = listOf(
-    Attendance(1, 1, 1, 1, "2025-03-03", startTime="08:00", endTime="08:45", topic="函数与极限",  status="completed", notes="讲解了基本函数类型", attendees=listOf(1,2), code="ATT0001"),
-    Attendance(2, 1, 2, 2, "2025-03-03", startTime="09:00", endTime="09:45", topic="古诗文鉴赏",  status="completed", notes="",                 attendees=listOf(1),   code="ATT0002"),
-    Attendance(3, 1, 3, 3, "2025-03-04", startTime="08:00", endTime="08:45", topic="时态复习",    status="completed", notes="重点复习过去完成时",   attendees=listOf(2),   code="ATT0003"),
-    Attendance(4, 2, 1, 1, "2025-03-04", startTime="10:00", endTime="10:45", topic="方程组",      status="cancelled", notes="教师请假",           attendees=emptyList(), code="ATT0004"),
-    Attendance(5, 1, 4, 1, "2025-03-10", startTime="10:00", endTime="10:45", topic="牛顿运动定律", status="completed", notes="",                 attendees=listOf(1,2), code="ATT0005"),
-    Attendance(6, 3, 2, 2, "2025-02-20", startTime="08:00", endTime="08:45", topic="现代文阅读",   status="completed", notes="",                 attendees=listOf(5),   code="ATT0006"),
-)
+// ── Fix: 使用动态日期，确保预设记录始终出现在当月视图中 ──────────────────────────
+// 每次 AppState() 被调用时（首次安装 / 清空数据）重新计算日期，
+// 相对 today 偏移，使大部分记录落在本月，一条落在上月。
+val sampleAttendance: List<Attendance>
+    get() {
+        val fmt   = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val today = LocalDate.now()
+        return listOf(
+            Attendance(1, 1, 1, 1, fmt.format(today.minusDays(7)),
+                startTime="08:00", endTime="08:45", topic="函数与极限",
+                status="completed", notes="讲解了基本函数类型",
+                attendees=listOf(1,2), code="ATT0001"),
+            Attendance(2, 1, 2, 2, fmt.format(today.minusDays(7)),
+                startTime="09:00", endTime="09:45", topic="古诗文鉴赏",
+                status="completed", notes="",
+                attendees=listOf(1), code="ATT0002"),
+            Attendance(3, 1, 3, 3, fmt.format(today.minusDays(6)),
+                startTime="08:00", endTime="08:45", topic="时态复习",
+                status="completed", notes="重点复习过去完成时",
+                attendees=listOf(2), code="ATT0003"),
+            Attendance(4, 2, 1, 1, fmt.format(today.minusDays(6)),
+                startTime="10:00", endTime="10:45", topic="方程组",
+                status="cancelled", notes="教师请假",
+                attendees=emptyList(), code="ATT0004"),
+            Attendance(5, 1, 4, 1, fmt.format(today),
+                startTime="10:00", endTime="10:45", topic="牛顿运动定律",
+                status="completed", notes="",
+                attendees=listOf(1,2), code="ATT0005"),
+            Attendance(6, 3, 2, 2, fmt.format(today.minusMonths(1)),
+                startTime="08:00", endTime="08:45", topic="现代文阅读",
+                status="completed", notes="",
+                attendees=listOf(5), code="ATT0006"),
+        )
+    }
