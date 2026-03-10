@@ -3,18 +3,16 @@
 | 字段 | 值 |
 |------|----|
 | ZIP 文件 | `update.zip` |
-| 打包时间 (UTC) | `2026-03-10T09:32:35Z` |
-| 生成时间 (UTC) | `2026-03-10T09:32:50Z` |
+| 打包时间 (UTC) | `2026-03-10T17:20:33Z` |
+| 生成时间 (UTC) | `2026-03-10T17:22:16Z` |
 | 触发分支 | `main` |
-| 提交 SHA | `a9ec37d131c148dc0bd25d6d7d2f5f3b56ce60fc` |
+| 提交 SHA | `88c269a40585392cec05d571690fe516c5742049` |
 
 ## 📁 本次 patch 包含的文件
 
 ```
-app/src/main/java/com/school/manager/data/Models.kt
 app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
 app/src/main/java/com/school/manager/ui/screens/ScheduleScreen.kt
-app/src/main/java/com/school/manager/viewmodel/AppViewModel.kt
 ```
 
 ## 🗂 仓库源码目录（patch 后快照，排除 build/ 和 .gradle/）

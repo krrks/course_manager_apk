@@ -428,7 +428,7 @@ private fun ScheduleListView(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(DAYS.getOrElse(slot.day - 1) { "?" },
-                            style = MaterialTheme.typography.labelLarge,
+                            style      = MaterialTheme.typography.labelLarge,
                             color = color, fontWeight = FontWeight.Bold)
                     }
                     Column(Modifier.weight(1f)) {
@@ -465,7 +465,8 @@ private fun ScheduleDetailDialog(
     val sub = state.subjects.find { it.id == slot.subjectId }
     val cl  = state.classes.find  { it.id == slot.classId }
     val te  = state.teachers.find { it.id == slot.teacherId }
-    FluentDialog(title = "课程详情", onDismiss = onDismiss, onConfirm = onEdit, confirmLabel = "编辑") {
+    // FIX: was confirmLabel (non-existent param), correct param name is confirmText
+    FluentDialog(title = "课程详情", onDismiss = onDismiss, onConfirm = onEdit, confirmText = "编辑") {
         DetailRow("编号",   slot.code)
         DetailRow("班级",   cl?.name  ?: "?")
         DetailRow("科目",   sub?.name ?: cl?.subject ?: "?")
@@ -713,16 +714,13 @@ private fun TimeWheelPicker(value: String, onChange: (String) -> Unit) {
 
     @Composable
     fun WheelColumn(count: Int, selected: Int, label: (Int) -> String, onSelect: (Int) -> Unit) {
-        // ── FIX: scroll to `selected`, not `selected - 1` ──────────────────
         val listState     = rememberLazyListState(initialFirstVisibleItemIndex = selected.coerceAtLeast(0))
         val flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(listState)
 
-        // Keep scroll position in sync when `selected` changes programmatically
         LaunchedEffect(selected) {
             listState.animateScrollToItem(selected.coerceAtLeast(0))
         }
 
-        // ── FIX: centred item == firstVisibleItemIndex (no +1) ─────────────
         LaunchedEffect(listState.isScrollInProgress) {
             if (!listState.isScrollInProgress) {
                 onSelect(listState.firstVisibleItemIndex.coerceIn(0, count - 1))
@@ -740,8 +738,6 @@ private fun TimeWheelPicker(value: String, onChange: (String) -> Unit) {
                 state         = listState,
                 flingBehavior = flingBehavior,
                 modifier      = Modifier.fillMaxSize(),
-                // Top/bottom padding equal to one item height centres item[0]
-                // in the viewport when scrolled to index 0.
                 contentPadding = PaddingValues(vertical = itemH)
             ) {
                 items(count) { i ->
