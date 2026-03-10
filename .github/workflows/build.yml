@@ -162,6 +162,28 @@ jobs:
           rm -rf _zip_tmp
           echo "✅ Extracted to repo root (skipped .github/)"
 
+      # ── 2.5. 删除 zip_update/ 下所有 zip 并立即提交回仓库 ──────────────────
+      #   提交信息含 [skip ci]，防止本次 push 再次触发 workflow 循环。
+      - name: 🧹 Clean up zip files and push to repo
+        if: needs.check.outputs.zip_found == 'true'
+        run: |
+          rm -f zip_update/*.zip
+          echo "🗑️  Removed all *.zip from zip_update/"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 暂存 zip_update/ 目录的变更（删除操作）以及解压覆盖的源码
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "ℹ️  Nothing to commit"
+          else
+            git commit -m "🧹 apply patch & clean zip_update [skip ci]"
+            git push origin HEAD
+            echo "✅ Cleanup commit pushed"
+          fi
+
       # ── 3. JDK 17 ─────────────────────────────────────────────────────────
       - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
