@@ -83,3 +83,8 @@ Go to **Actions → Build & Release APK → Run workflow**
 - **Navigation**: Navigation Compose
 - **State**: ViewModel + StateFlow (in-memory)
 - **Build**: Gradle 8.7 + AGP 8.5
+
+## AI instructions: 
+- do not pack build.yml into update.zip file, give it to user as a single file.
+- include changes description zip_update/release_note.md into update.zip
+- update.zip will apply during github workflow with build.yml. make sure it has right structure.
