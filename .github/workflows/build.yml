@@ -1,4 +1,4 @@
-name: 🔨 Auto Build & Sync APK
+name: 🔨 Auto Build & Release APK
 
 on:
   push:
@@ -7,10 +7,20 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: '强制编译（忽略 zip 时间戳比对）'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   build:
-    name: Build APK
+    name: Build & Release APK
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,82 +33,119 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      # ── 2. Sync source from zip (if uploaded) ────────────────────────────────
-      - name: 📦 Sync from school-manager-android*.zip (if present)
+      # ── 2. 跳过：本次提交仅改动 .github 目录 ────────────────────────────────
+      - name: 🔍 Check if only .github files changed
+        id: check_github_only
+        if: github.event_name == 'push'
         run: |
-          TARGET_ZIP=$(ls school-manager-android*.zip 2>/dev/null | sort | head -n 1)
-          if [ -n "$TARGET_ZIP" ]; then
-            echo "✅ Found $TARGET_ZIP — extracting..."
-            echo "PROCESSED_ZIP=$TARGET_ZIP" >> "$GITHUB_ENV"
-            unzip -o "$TARGET_ZIP" -d _zip_tmp
-            if [ -d "_zip_tmp/school-manager-android" ]; then
-              # Exclude .github so build.yml is never overwritten by the zip
-              rsync -av --exclude='.github' _zip_tmp/school-manager-android/. .
-              echo "✅ Synced zip contents to root (skipped .github/)"
-            else
-              echo "⚠️  Expected folder school-manager-android/ inside zip — skipping"
-            fi
-            rm -rf _zip_tmp
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+
+          if [ -z "$CHANGED" ]; then
+            echo "⚠️  Could not determine changed files (possibly first commit)"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           else
-            echo "ℹ️  No school-manager-android*.zip found — skipping sync step"
-            echo "PROCESSED_ZIP=" >> "$GITHUB_ENV"
+            NON_GITHUB=$(echo "$CHANGED" | grep -v '^\.github/' || true)
+            if [ -z "$NON_GITHUB" ]; then
+              echo "ℹ️  Only .github/ files changed — skipping build"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "✅ Non-.github changes detected — proceeding with build"
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
-      # ── 3. One-time cleanup: remove files that should never be in the repo ───
-      - name: 🧹 Untrack & remove previously committed junk
+      - name: ⏭️ Exit early (only .github changed)
+        if: steps.check_github_only.outputs.skip == 'true'
         run: |
-          changed=0
+          echo "Nothing to build — all changes are inside .github/"
+          exit 0
 
-          # Gradle environment dirs — large, belong in Actions cache, not git
-          for path in .gradle build app/build; do
-            if git ls-files --error-unmatch "$path" >/dev/null 2>&1 \
-               || git ls-files "$path" | grep -q .; then
-              git rm -r --cached --ignore-unmatch "$path" 2>/dev/null || true
-              rm -rf "$path"
-              echo "🗑️  Untracked & removed: $path"
-              changed=1
-            fi
-          done
+      # ── 3. 检查 zip_update/ 文件夹，获取最新 zip ────────────────────────────
+      - name: 📦 Find latest zip in zip_update/
+        id: find_zip
+        run: |
+          ZIP_DIR="zip_update"
+          if [ -d "$ZIP_DIR" ]; then
+            LATEST_ZIP=$(find "$ZIP_DIR" -maxdepth 1 -name "*.zip" \
+                          -printf '%T@ %p\n' 2>/dev/null \
+                         | sort -rn | head -n1 | awk '{print $2}')
+          fi
 
-          # Unnecessary loose files committed in the past
-          for file in \
-            "gradle/wrapper/README.txt" \
-            "gradle/wrapper/gradle-wrapper.jar.bak"; do
-            if git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
-              git rm --cached --ignore-unmatch "$file" 2>/dev/null || true
-              rm -f "$file"
-              echo "🗑️  Untracked & removed: $file"
-              changed=1
-            fi
-          done
+          if [ -n "$LATEST_ZIP" ] && [ -f "$LATEST_ZIP" ]; then
+            # 取文件修改时间（UTC ISO-8601）
+            ZIP_MTIME=$(date -u -r "$LATEST_ZIP" '+%Y-%m-%dT%H:%M:%SZ')
+            echo "✅ Latest zip: $LATEST_ZIP  (mtime: $ZIP_MTIME)"
+            echo "zip_path=$LATEST_ZIP"   >> "$GITHUB_OUTPUT"
+            echo "zip_mtime=$ZIP_MTIME"   >> "$GITHUB_OUTPUT"
+            echo "zip_found=true"         >> "$GITHUB_OUTPUT"
+          else
+            echo "ℹ️  No zip found in $ZIP_DIR/ — skipping zip steps"
+            echo "zip_found=false"        >> "$GITHUB_OUTPUT"
+          fi
 
-          # Any other file > 50 MB that somehow got tracked
-          git ls-files | while IFS= read -r f; do
-            if [ -f "$f" ]; then
-              size=$(stat -c%s "$f" 2>/dev/null || echo 0)
-              if [ "$size" -gt 52428800 ]; then
-                git rm --cached --ignore-unmatch "$f" 2>/dev/null || true
-                rm -f "$f"
-                echo "🗑️  Removed oversized tracked file: $f"
-              fi
-            fi
-          done
+      # ── 4. 对比最新 Release 的 zip mtime，避免重复编译 ──────────────────────
+      - name: 🔎 Compare zip mtime with latest release
+        id: compare_release
+        if: steps.find_zip.outputs.zip_found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ZIP_MTIME: ${{ steps.find_zip.outputs.zip_mtime }}
+          FORCE: ${{ github.event.inputs.force_build }}
+        run: |
+          if [ "$FORCE" = "true" ]; then
+            echo "ℹ️  force_build=true — skipping mtime comparison"
+            echo "skip_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-          echo "JUNK_CLEANED=$changed" >> "$GITHUB_ENV"
+          # 获取最新 release 的 body
+          RELEASE_BODY=$(gh release list --limit 1 --json tagName,body \
+                          -q '.[0].body' 2>/dev/null || echo "")
 
-      # ── 4. JDK ───────────────────────────────────────────────────────────────
+          if echo "$RELEASE_BODY" | grep -qF "$ZIP_MTIME"; then
+            echo "⏭️  Latest release already built from zip mtime=$ZIP_MTIME — skipping"
+            echo "skip_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "✅ mtime mismatch — will build"
+            echo "skip_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: ⏭️ Exit early (zip already released)
+        if: >
+          steps.find_zip.outputs.zip_found == 'true' &&
+          steps.compare_release.outputs.skip_build == 'true'
+        run: |
+          echo "This zip has already been released. Nothing to do."
+          exit 0
+
+      # ── 5. 解压 zip 到根目录（覆盖，保留 .github） ──────────────────────────
+      - name: 📂 Extract zip to repo root
+        if: steps.find_zip.outputs.zip_found == 'true'
+        env:
+          ZIP_PATH: ${{ steps.find_zip.outputs.zip_path }}
+        run: |
+          echo "⬇️  Extracting $ZIP_PATH ..."
+          unzip -o "$ZIP_PATH" -d _zip_tmp
+
+          # 支持 zip 内有一层同名子目录，也支持直接解压到根
+          INNER=$(find _zip_tmp -mindepth 1 -maxdepth 1 -type d | head -n1)
+          SRC="${INNER:-_zip_tmp}"
+
+          rsync -av --exclude='.github' "$SRC/" .
+          rm -rf _zip_tmp
+          echo "✅ Extracted to repo root (skipped .github/)"
+
+      # ── 6. JDK 17 ───────────────────────────────────────────────────────────
       - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 5. Gradle wrapper JAR (tiny ~60 KB, safe to commit) ──────────────────
+      # ── 7. Gradle wrapper jar ────────────────────────────────────────────────
       - name: 📦 Ensure gradle-wrapper.jar exists
         run: |
-          if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "✅ gradle-wrapper.jar present"
-          else
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
             echo "⬇️  Downloading gradle-wrapper.jar..."
             mkdir -p gradle/wrapper
             curl -fsSL \
@@ -107,15 +154,7 @@ jobs:
           fi
           chmod +x ./gradlew
 
-      # ── 6. Restore Gradle caches from Actions cache (not from repo) ──────────
-      #
-      #  Cached paths (runner home, never committed to git):
-      #    ~/.gradle/wrapper/dists   — Gradle distribution zip + unpacked (~120 MB)
-      #    ~/.gradle/caches/modules  — Maven/Gradle dependency jars   (~200 MB)
-      #    ~/.gradle/caches/build-cache-* — incremental build outputs
-      #
-      #  Cache key invalidates when any gradle config file changes.
-      #  Restore keys allow a partial hit so at least deps are reused.
+      # ── 8. Gradle 缓存 ───────────────────────────────────────────────────────
       - name: 💾 Restore Gradle caches
         uses: actions/cache@v4
         with:
@@ -128,7 +167,7 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # ── 7. Build ──────────────────────────────────────────────────────────────
+      # ── 9. 编译 Debug APK ───────────────────────────────────────────────────
       - name: 🔧 Build Debug APK
         run: |
           ./gradlew assembleDebug \
@@ -139,6 +178,7 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
+      # ── 10. 编译 Release APK ─────────────────────────────────────────────────
       - name: 🚀 Build Release APK
         run: |
           ./gradlew assembleRelease \
@@ -149,54 +189,54 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
-      # ── 8. Copy APKs ──────────────────────────────────────────────────────────
-      - name: 📂 Copy APKs to /apk folder
+      # ── 11. 计算下一个版本号（v1.001 → v1.002 …） ───────────────────────────
+      - name: 🔢 Compute next version tag
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p apk
-          cp app/build/outputs/apk/debug/app-debug.apk     apk/app-debug.apk
-          cp app/build/outputs/apk/release/app-release.apk apk/app-release.apk
+          # 取所有形如 v1.NNN 的 tag，找最大序号
+          LATEST=$(gh release list --limit 100 --json tagName \
+                    -q '.[].tagName' 2>/dev/null \
+                   | grep -E '^v1\.[0-9]+$' \
+                   | sort -t. -k2 -n \
+                   | tail -n1 || echo "")
 
-      # ── 9. Delete uploaded zip ────────────────────────────────────────────────
-      - name: 🗑️ Delete processed zip (if present)
-        run: |
-          if [ -n "$PROCESSED_ZIP" ] && [ -f "$PROCESSED_ZIP" ]; then
-            rm "$PROCESSED_ZIP"
-            echo "✅ Deleted $PROCESSED_ZIP"
+          if [ -z "$LATEST" ]; then
+            NEXT="v1.001"
           else
-            echo "ℹ️  No zip to delete"
+            SEQ=$(echo "$LATEST" | sed 's/v1\.//')
+            NEXT_SEQ=$(printf "%03d" $((10#$SEQ + 1)))
+            NEXT="v1.$NEXT_SEQ"
           fi
 
-      # ── 10. Ensure build/ and .gradle/ are gitignored going forward ───────────
-      - name: 📝 Ensure .gitignore excludes build artifacts
-        run: |
-          GITIGNORE=".gitignore"
-          touch "$GITIGNORE"
+          echo "✅ Next version: $NEXT"
+          echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
-          add_if_missing() {
-            grep -qxF "$1" "$GITIGNORE" || echo "$1" >> "$GITIGNORE"
-          }
+      # ── 12. 发布 Release ─────────────────────────────────────────────────────
+      - name: 🏷️ Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "智慧课务管理 ${{ steps.version.outputs.tag }}"
+          body: |
+            ## 📱 智慧课务管理系统 ${{ steps.version.outputs.tag }}
 
-          add_if_missing ".gradle/"
-          add_if_missing "build/"
-          add_if_missing "app/build/"
-          add_if_missing "*.zip"
-          add_if_missing "local.properties"
+            ### 📦 构建来源
+            ${{ steps.find_zip.outputs.zip_found == 'true'
+                && format('- 来源 zip：`{0}`\n- zip 文件修改时间（UTC）：`{1}`',
+                           steps.find_zip.outputs.zip_path,
+                           steps.find_zip.outputs.zip_mtime)
+                || '- 来源：仓库当前代码（无 zip）' }}
 
-          echo "✅ .gitignore up to date"
-
-      # ── 11. Commit & push (source + APKs only, no Gradle env) ────────────────
-      - name: 💾 Commit and push
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Stage everything — .gitignore now excludes build/ and .gradle/
-          git add -A
-
-          if git diff --cached --quiet; then
-            echo "ℹ️  Nothing changed — skipping commit"
-          else
-            git commit -m "ci: sync source, update APKs [skip ci]"
-            git push
-            echo "✅ Changes pushed"
-          fi
+            ### 安装说明
+            1. 下载 `app-release.apk`（正式包）或 `app-debug.apk`（调试包）
+            2. 在 Android 设备上开启「允许未知来源安装」
+            3. 安装并运行
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
