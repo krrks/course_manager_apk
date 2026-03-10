@@ -83,7 +83,7 @@ jobs:
             echo "zip_mtime="           >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 4. 对比最新 Release，避免重复编译 ───────────────────────────────────
+      # ── 4. 对比最新 Release，避免重复编译 ────────────────────────────────────
       - name: 🔎 Compare zip mtime with latest release
         id: compare_release
         if: steps.find_zip.outputs.zip_found == 'true'
@@ -131,7 +131,6 @@ jobs:
   build:
     name: 🔨 Build & Release APK
     needs: check
-    # ★ Job 级别的 if —— 这是唯一能真正跳过整个 Job 的方式
     if: needs.check.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -145,26 +144,104 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      # ── 2. 解压 zip 到根目录（覆盖，保留 .github） ──────────────────────────
+      # ── 2. 解压 zip 并严格验证目标路径 ────────────────────────────────────────
+      #
+      # ZIP 结构约定：
+      #   update.zip
+      #   └── <任意一个包装目录>/   ← 自动识别
+      #       └── app/
+      #           └── src/main/java/...  (或其他源文件)
+      #
+      # 解压流程：
+      #   a) 解压到 _zip_tmp/
+      #   b) 取 _zip_tmp/ 下唯一的第一层子目录作为 SRC（即包装目录）
+      #   c) 打印 SRC 的完整文件树（用于人工核查）
+      #   d) 验证 SRC 内不存在 .github/ —— 若存在则中止，防止篡改工作流
+      #   e) rsync 将 SRC/ 内容同步到仓库根目录（跳过 .github/）
+      #
       - name: 📂 Extract zip to repo root
         if: needs.check.outputs.zip_found == 'true'
         env:
           ZIP_PATH: ${{ needs.check.outputs.zip_path }}
         run: |
-          echo "⬇️  Extracting $ZIP_PATH ..."
+          echo "⬇️  Extracting: $ZIP_PATH"
           unzip -o "$ZIP_PATH" -d _zip_tmp
 
-          # 支持 zip 内有一层同名子目录，也支持直接解压到根
+          # ── 识别包装目录 ────────────────────────────────────────────────
           INNER=$(find _zip_tmp -mindepth 1 -maxdepth 1 -type d | head -n1)
           SRC="${INNER:-_zip_tmp}"
+          echo "📁 Source root: $SRC"
 
+          # ── 打印文件树（供日志核查） ─────────────────────────────────────
+          echo "──────────── zip 内容 ────────────"
+          find "$SRC" -type f | sort | sed "s|$SRC/||"
+          echo "──────────────────────────────────"
+
+          # ── 安全检查：zip 内不得包含 .github ────────────────────────────
+          if find "$SRC" -type d -name '.github' | grep -q '.'; then
+            echo "❌ FATAL: zip contains .github/ — aborting to protect workflow files"
+            exit 1
+          fi
+
+          # ── 同步到仓库根目录 ─────────────────────────────────────────────
           rsync -av --exclude='.github' "$SRC/" .
           rm -rf _zip_tmp
           echo "✅ Extracted to repo root (skipped .github/)"
 
-      # ── 2.5. 删除 zip_update/ 下所有 zip 并立即提交回仓库 ──────────────────
-      #   提交信息含 [skip ci]，防止本次 push 再次触发 workflow 循环。
-      - name: 🧹 Clean up zip files and push to repo
+      # ── 3. 生成文件目录清单并写入 zip_update/note.md ─────────────────────────
+      #   列出本次 zip 带来的所有变更文件，方便日后追踪每次 patch 的内容。
+      #   注意：note.md 不含 .github/ 内容。
+      - name: 📝 Generate file listing → zip_update/note.md
+        if: needs.check.outputs.zip_found == 'true'
+        env:
+          ZIP_PATH: ${{ needs.check.outputs.zip_path }}
+          ZIP_MTIME: ${{ needs.check.outputs.zip_mtime }}
+        run: |
+          mkdir -p zip_update
+          NOTE="zip_update/note.md"
+
+          # ── 重新解压一次取文件列表（源文件已同步到仓库，这里只为列表） ────
+          unzip -o "$ZIP_PATH" -d _note_tmp 2>/dev/null
+          INNER=$(find _note_tmp -mindepth 1 -maxdepth 1 -type d | head -n1)
+          SRC="${INNER:-_note_tmp}"
+
+          {
+            echo "# 📦 Patch 文件清单"
+            echo ""
+            echo "| 字段 | 值 |"
+            echo "|------|----|"
+            echo "| ZIP 文件 | \`$(basename "$ZIP_PATH")\` |"
+            echo "| 打包时间 (UTC) | \`$ZIP_MTIME\` |"
+            echo "| 生成时间 (UTC) | \`$(date -u '+%Y-%m-%dT%H:%M:%SZ')\` |"
+            echo "| 触发分支 | \`$GITHUB_REF_NAME\` |"
+            echo "| 提交 SHA | \`$GITHUB_SHA\` |"
+            echo ""
+            echo "## 📁 本次 patch 包含的文件"
+            echo ""
+            echo '```'
+            find "$SRC" -type f | sort | sed "s|$SRC/||"
+            echo '```'
+            echo ""
+            echo "## 🗂 仓库源码目录（patch 后快照，排除 build/ 和 .gradle/）"
+            echo ""
+            echo '```'
+            find . \
+              -not -path './.git/*' \
+              -not -path './.github/*' \
+              -not -path './build/*' \
+              -not -path './.gradle/*' \
+              -not -path './_note_tmp/*' \
+              -not -path './zip_update/*' \
+              -type f | sort
+            echo '```'
+          } > "$NOTE"
+
+          rm -rf _note_tmp
+          echo "✅ note.md written to $NOTE"
+          cat "$NOTE"
+
+      # ── 4. 删除 zip 文件并提交 note.md + 源码变更 ─────────────────────────
+      - name: 🧹 Clean up zip and commit changes
         if: needs.check.outputs.zip_found == 'true'
         run: |
           rm -f zip_update/*.zip
@@ -172,8 +249,6 @@ jobs:
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 暂存 zip_update/ 目录的变更（删除操作）以及解压覆盖的源码
           git add -A
 
           if git diff --cached --quiet; then
@@ -181,17 +256,17 @@ jobs:
           else
             git commit -m "🧹 apply patch & clean zip_update [skip ci]"
             git push origin HEAD
-            echo "✅ Cleanup commit pushed"
+            echo "✅ Commit pushed"
           fi
 
-      # ── 3. JDK 17 ─────────────────────────────────────────────────────────
+      # ── 5. JDK 17 ──────────────────────────────────────────────────────────
       - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 4. Gradle wrapper jar ──────────────────────────────────────────────
+      # ── 6. Gradle wrapper jar ───────────────────────────────────────────────
       - name: 📦 Ensure gradle-wrapper.jar exists
         run: |
           if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
@@ -203,7 +278,7 @@ jobs:
           fi
           chmod +x ./gradlew
 
-      # ── 5. Gradle 缓存 ─────────────────────────────────────────────────────
+      # ── 7. Gradle 缓存 ─────────────────────────────────────────────────────
       - name: 💾 Restore Gradle caches
         uses: actions/cache@v4
         with:
@@ -216,7 +291,7 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # ── 6. 编译 Debug APK ──────────────────────────────────────────────────
+      # ── 8. 编译 Debug APK ───────────────────────────────────────────────────
       - name: 🔧 Build Debug APK
         run: |
           ./gradlew assembleDebug \
@@ -227,7 +302,7 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
-      # ── 7. 编译 Release APK ────────────────────────────────────────────────
+      # ── 9. 编译 Release APK ─────────────────────────────────────────────────
       - name: 🚀 Build Release APK
         run: |
           ./gradlew assembleRelease \
@@ -238,7 +313,7 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
-      # ── 8. 计算下一个版本号（v1.001 → v1.002 …） ──────────────────────────
+      # ── 10. 计算下一个版本号（v1.001 → v1.002 …） ──────────────────────────
       - name: 🔢 Compute next version tag
         id: version
         env:
@@ -261,7 +336,7 @@ jobs:
           echo "✅ Next version: $NEXT"
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
-      # ── 9. 发布 Release ────────────────────────────────────────────────────
+      # ── 11. 发布 Release ─────────────────────────────────────────────────────
       - name: 🏷️ Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
