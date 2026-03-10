@@ -145,20 +145,6 @@ jobs:
           fetch-depth: 0
 
       # ── 2. 解压 zip 并严格验证目标路径 ────────────────────────────────────────
-      #
-      # ZIP 结构约定：
-      #   update.zip
-      #   └── <任意一个包装目录>/   ← 自动识别
-      #       └── app/
-      #           └── src/main/java/...  (或其他源文件)
-      #
-      # 解压流程：
-      #   a) 解压到 _zip_tmp/
-      #   b) 取 _zip_tmp/ 下唯一的第一层子目录作为 SRC（即包装目录）
-      #   c) 打印 SRC 的完整文件树（用于人工核查）
-      #   d) 验证 SRC 内不存在 .github/ —— 若存在则中止，防止篡改工作流
-      #   e) rsync 将 SRC/ 内容同步到仓库根目录（跳过 .github/）
-      #
       - name: 📂 Extract zip to repo root
         if: needs.check.outputs.zip_found == 'true'
         env:
@@ -189,8 +175,6 @@ jobs:
           echo "✅ Extracted to repo root (skipped .github/)"
 
       # ── 3. 生成文件目录清单并写入 zip_update/note.md ─────────────────────────
-      #   列出本次 zip 带来的所有变更文件，方便日后追踪每次 patch 的内容。
-      #   注意：note.md 不含 .github/ 内容。
       - name: 📝 Generate file listing → zip_update/note.md
         if: needs.check.outputs.zip_found == 'true'
         env:
@@ -200,7 +184,6 @@ jobs:
           mkdir -p zip_update
           NOTE="zip_update/note.md"
 
-          # ── 重新解压一次取文件列表（源文件已同步到仓库，这里只为列表） ────
           unzip -o "$ZIP_PATH" -d _note_tmp 2>/dev/null
           INNER=$(find _note_tmp -mindepth 1 -maxdepth 1 -type d | head -n1)
           SRC="${INNER:-_note_tmp}"
@@ -240,7 +223,7 @@ jobs:
           echo "✅ note.md written to $NOTE"
           cat "$NOTE"
 
-      # ── 4. 删除 zip 文件并提交 note.md + 源码变更 ─────────────────────────
+      # ── 4. 读取 release_note.md，删除 zip，提交变更 ───────────────────────────
       - name: 🧹 Clean up zip and commit changes
         if: needs.check.outputs.zip_found == 'true'
         run: |
@@ -254,12 +237,23 @@ jobs:
           if git diff --cached --quiet; then
             echo "ℹ️  Nothing to commit"
           else
-            git commit -m "🧹 apply patch & clean zip_update [skip ci]"
+            # ── 读取 release_note.md 内容（如有）─────────────────────────
+            RELEASE_NOTE_FILE="zip_update/release_note.md"
+            if [ -f "$RELEASE_NOTE_FILE" ]; then
+              RELEASE_NOTE_BODY=$(cat "$RELEASE_NOTE_FILE")
+              COMMIT_MSG="🧹 apply patch & clean zip_update [skip ci]
+
+${RELEASE_NOTE_BODY}"
+            else
+              COMMIT_MSG="🧹 apply patch & clean zip_update [skip ci]"
+            fi
+
+            git commit -m "$COMMIT_MSG"
             git push origin HEAD
             echo "✅ Commit pushed"
           fi
 
-      # ── 5. JDK 17 ──────────────────────────────────────────────────────────
+      # ── 5. Set up JDK 17 ─────────────────────────────────────────────────
       - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
         with:
