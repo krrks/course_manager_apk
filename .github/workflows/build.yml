@@ -18,53 +18,52 @@ on:
           - 'false'
           - 'true'
 
+# ════════════════════════════════════════════════════════════════════════════
+# Job 1 — 预检：决定是否需要编译
+# ════════════════════════════════════════════════════════════════════════════
 jobs:
-  build:
-    name: Build & Release APK
+  check:
+    name: 🔍 Pre-flight checks
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      should_build: ${{ steps.decision.outputs.should_build }}
+      zip_found:    ${{ steps.find_zip.outputs.zip_found }}
+      zip_path:     ${{ steps.find_zip.outputs.zip_path }}
+      zip_mtime:    ${{ steps.find_zip.outputs.zip_mtime }}
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      # ── 1. Checkout ────────────────────────────────────────────────────────
       - name: 📥 Checkout code
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      # ── 2. 跳过：本次提交仅改动 .github 目录 ────────────────────────────────
+      # ── 2. 检查本次提交是否只改动 .github/ ──────────────────────────────────
       - name: 🔍 Check if only .github files changed
-        id: check_github_only
+        id: github_only
         if: github.event_name == 'push'
         run: |
           CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
-
           if [ -z "$CHANGED" ]; then
-            echo "⚠️  Could not determine changed files (possibly first commit)"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "only_github=false" >> "$GITHUB_OUTPUT"
           else
             NON_GITHUB=$(echo "$CHANGED" | grep -v '^\.github/' || true)
             if [ -z "$NON_GITHUB" ]; then
-              echo "ℹ️  Only .github/ files changed — skipping build"
-              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "ℹ️  Only .github/ files changed"
+              echo "only_github=true" >> "$GITHUB_OUTPUT"
             else
-              echo "✅ Non-.github changes detected — proceeding with build"
-              echo "skip=false" >> "$GITHUB_OUTPUT"
+              echo "only_github=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
-      - name: ⏭️ Exit early (only .github changed)
-        if: steps.check_github_only.outputs.skip == 'true'
-        run: |
-          echo "Nothing to build — all changes are inside .github/"
-          exit 0
-
-      # ── 3. 检查 zip_update/ 文件夹，获取最新 zip ────────────────────────────
+      # ── 3. 找 zip_update/ 里最新的 zip ──────────────────────────────────────
       - name: 📦 Find latest zip in zip_update/
         id: find_zip
         run: |
           ZIP_DIR="zip_update"
+          LATEST_ZIP=""
           if [ -d "$ZIP_DIR" ]; then
             LATEST_ZIP=$(find "$ZIP_DIR" -maxdepth 1 -name "*.zip" \
                           -printf '%T@ %p\n' 2>/dev/null \
@@ -72,18 +71,19 @@ jobs:
           fi
 
           if [ -n "$LATEST_ZIP" ] && [ -f "$LATEST_ZIP" ]; then
-            # 取文件修改时间（UTC ISO-8601）
             ZIP_MTIME=$(date -u -r "$LATEST_ZIP" '+%Y-%m-%dT%H:%M:%SZ')
             echo "✅ Latest zip: $LATEST_ZIP  (mtime: $ZIP_MTIME)"
-            echo "zip_path=$LATEST_ZIP"   >> "$GITHUB_OUTPUT"
-            echo "zip_mtime=$ZIP_MTIME"   >> "$GITHUB_OUTPUT"
-            echo "zip_found=true"         >> "$GITHUB_OUTPUT"
+            echo "zip_found=true"       >> "$GITHUB_OUTPUT"
+            echo "zip_path=$LATEST_ZIP" >> "$GITHUB_OUTPUT"
+            echo "zip_mtime=$ZIP_MTIME" >> "$GITHUB_OUTPUT"
           else
-            echo "ℹ️  No zip found in $ZIP_DIR/ — skipping zip steps"
-            echo "zip_found=false"        >> "$GITHUB_OUTPUT"
+            echo "ℹ️  No zip found"
+            echo "zip_found=false"      >> "$GITHUB_OUTPUT"
+            echo "zip_path="            >> "$GITHUB_OUTPUT"
+            echo "zip_mtime="           >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 4. 对比最新 Release 的 zip mtime，避免重复编译 ──────────────────────
+      # ── 4. 对比最新 Release，避免重复编译 ───────────────────────────────────
       - name: 🔎 Compare zip mtime with latest release
         id: compare_release
         if: steps.find_zip.outputs.zip_found == 'true'
@@ -94,35 +94,62 @@ jobs:
         run: |
           if [ "$FORCE" = "true" ]; then
             echo "ℹ️  force_build=true — skipping mtime comparison"
-            echo "skip_build=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # 获取最新 release 的 body
-          RELEASE_BODY=$(gh release list --limit 1 --json tagName,body \
-                          -q '.[0].body' 2>/dev/null || echo "")
-
-          if echo "$RELEASE_BODY" | grep -qF "$ZIP_MTIME"; then
-            echo "⏭️  Latest release already built from zip mtime=$ZIP_MTIME — skipping"
-            echo "skip_build=true" >> "$GITHUB_OUTPUT"
+            echo "already_released=false" >> "$GITHUB_OUTPUT"
           else
-            echo "✅ mtime mismatch — will build"
-            echo "skip_build=false" >> "$GITHUB_OUTPUT"
+            RELEASE_BODY=$(gh release list --limit 1 --json body \
+                            -q '.[0].body' 2>/dev/null || echo "")
+            if echo "$RELEASE_BODY" | grep -qF "$ZIP_MTIME"; then
+              echo "⏭️  zip mtime=$ZIP_MTIME already in latest release"
+              echo "already_released=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "✅ mtime not found in latest release — will build"
+              echo "already_released=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
-      - name: ⏭️ Exit early (zip already released)
-        if: >
-          steps.find_zip.outputs.zip_found == 'true' &&
-          steps.compare_release.outputs.skip_build == 'true'
-        run: |
-          echo "This zip has already been released. Nothing to do."
-          exit 0
-
-      # ── 5. 解压 zip 到根目录（覆盖，保留 .github） ──────────────────────────
-      - name: 📂 Extract zip to repo root
-        if: steps.find_zip.outputs.zip_found == 'true'
+      # ── 5. 汇总决策，输出统一的 should_build ────────────────────────────────
+      - name: 📋 Final decision
+        id: decision
         env:
-          ZIP_PATH: ${{ steps.find_zip.outputs.zip_path }}
+          ONLY_GITHUB:      ${{ steps.github_only.outputs.only_github }}
+          ALREADY_RELEASED: ${{ steps.compare_release.outputs.already_released }}
+        run: |
+          if [ "$ONLY_GITHUB" = "true" ]; then
+            echo "⏭️  SKIP — only .github/ files changed"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          elif [ "$ALREADY_RELEASED" = "true" ]; then
+            echo "⏭️  SKIP — zip already released"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "✅ GO — will build"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+# ════════════════════════════════════════════════════════════════════════════
+# Job 2 — 编译 & 发布（仅当 check.should_build == 'true' 时运行）
+# ════════════════════════════════════════════════════════════════════════════
+  build:
+    name: 🔨 Build & Release APK
+    needs: check
+    # ★ Job 级别的 if —— 这是唯一能真正跳过整个 Job 的方式
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      # ── 2. 解压 zip 到根目录（覆盖，保留 .github） ──────────────────────────
+      - name: 📂 Extract zip to repo root
+        if: needs.check.outputs.zip_found == 'true'
+        env:
+          ZIP_PATH: ${{ needs.check.outputs.zip_path }}
         run: |
           echo "⬇️  Extracting $ZIP_PATH ..."
           unzip -o "$ZIP_PATH" -d _zip_tmp
@@ -135,14 +162,14 @@ jobs:
           rm -rf _zip_tmp
           echo "✅ Extracted to repo root (skipped .github/)"
 
-      # ── 6. JDK 17 ───────────────────────────────────────────────────────────
+      # ── 3. JDK 17 ─────────────────────────────────────────────────────────
       - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 7. Gradle wrapper jar ────────────────────────────────────────────────
+      # ── 4. Gradle wrapper jar ──────────────────────────────────────────────
       - name: 📦 Ensure gradle-wrapper.jar exists
         run: |
           if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
@@ -154,7 +181,7 @@ jobs:
           fi
           chmod +x ./gradlew
 
-      # ── 8. Gradle 缓存 ───────────────────────────────────────────────────────
+      # ── 5. Gradle 缓存 ─────────────────────────────────────────────────────
       - name: 💾 Restore Gradle caches
         uses: actions/cache@v4
         with:
@@ -167,7 +194,7 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # ── 9. 编译 Debug APK ───────────────────────────────────────────────────
+      # ── 6. 编译 Debug APK ──────────────────────────────────────────────────
       - name: 🔧 Build Debug APK
         run: |
           ./gradlew assembleDebug \
@@ -178,7 +205,7 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
-      # ── 10. 编译 Release APK ─────────────────────────────────────────────────
+      # ── 7. 编译 Release APK ────────────────────────────────────────────────
       - name: 🚀 Build Release APK
         run: |
           ./gradlew assembleRelease \
@@ -189,13 +216,12 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
 
-      # ── 11. 计算下一个版本号（v1.001 → v1.002 …） ───────────────────────────
+      # ── 8. 计算下一个版本号（v1.001 → v1.002 …） ──────────────────────────
       - name: 🔢 Compute next version tag
         id: version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 取所有形如 v1.NNN 的 tag，找最大序号
           LATEST=$(gh release list --limit 100 --json tagName \
                     -q '.[].tagName' 2>/dev/null \
                    | grep -E '^v1\.[0-9]+$' \
@@ -213,7 +239,7 @@ jobs:
           echo "✅ Next version: $NEXT"
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
-      # ── 12. 发布 Release ─────────────────────────────────────────────────────
+      # ── 9. 发布 Release ────────────────────────────────────────────────────
       - name: 🏷️ Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -223,10 +249,10 @@ jobs:
             ## 📱 智慧课务管理系统 ${{ steps.version.outputs.tag }}
 
             ### 📦 构建来源
-            ${{ steps.find_zip.outputs.zip_found == 'true'
+            ${{ needs.check.outputs.zip_found == 'true'
                 && format('- 来源 zip：`{0}`\n- zip 文件修改时间（UTC）：`{1}`',
-                           steps.find_zip.outputs.zip_path,
-                           steps.find_zip.outputs.zip_mtime)
+                           needs.check.outputs.zip_path,
+                           needs.check.outputs.zip_mtime)
                 || '- 来源：仓库当前代码（无 zip）' }}
 
             ### 安装说明
