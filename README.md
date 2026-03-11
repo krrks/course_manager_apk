@@ -85,6 +85,6 @@ Go to **Actions → Build & Release APK → Run workflow**
 - **Build**: Gradle 8.7 + AGP 8.5
 
 ## AI instructions: 
-- do not pack build.yml into update.zip file, give it to user as a single file.
-- include changes description zip_update/release_note.md into update.zip
-- update.zip will apply during github workflow with build.yml. make sure it has right structure.
+- do not pack build.yml into update_[timestamp].zip file, give it to user as a single file.
+- include changes description zip_update/release_note.md into update_[timestamp].zip
+- update_[timestamp].zip will apply during github workflow with build.yml. make sure it has right structure.
