@@ -1,12 +1,12 @@
-# 🗂 仓库完整文件列表
+# 🗂 仓库完整文件列表（patch 后快照）
 
-> This file is auto-updated by `build.yml` after every patch zip is applied.
-> It includes **all** files in the repo with no exclusions (except `.git/` internals and build outputs).
+> 生成时间 (UTC): `2026-03-11T03:02:06Z`
+> 提交 SHA: `8b080501b056e32fc944965f1ef8d8a9bff4683f`
 
 ```
-./.gitignore
 ./.github/workflows/build.yml
 ./.github/workflows/release.yml
+./.gitignore
 ./README.md
 ./app/build.gradle.kts
 ./app/proguard-rules.pro
@@ -15,6 +15,7 @@
 ./app/src/main/java/com/school/manager/Navigation.kt
 ./app/src/main/java/com/school/manager/data/Models.kt
 ./app/src/main/java/com/school/manager/ui/components/CommonComponents.kt
+./app/src/main/java/com/school/manager/ui/components/FluentComponentAliases.kt
 ./app/src/main/java/com/school/manager/ui/screens/AttendanceScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
@@ -43,12 +44,8 @@
 ./gradlew.bat
 ./settings.gradle.kts
 ./zip_update/file_list.md
+./zip_update/file_list_befor_update.md
 ./zip_update/note.md
+./zip_update/release_note.md
+./zip_update/update_1773198044.zip
 ```
-
-## 📋 Notes
-
-- `build/` and `.gradle/` (build outputs & Gradle cache) are excluded — they are never committed
-- `.git/` internals are excluded
-- `zip_update/*.zip` patch files are deleted by the workflow after being applied and are not listed here
-- `build.yml` auto-regenerates this file on every successful patch apply

@@ -10,7 +10,12 @@ import com.google.gson.reflect.TypeToken
 import com.school.manager.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 private fun genCode(prefix: String) =
     "$prefix${System.currentTimeMillis().toString().takeLast(6)}"
@@ -47,6 +52,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, "课表")
 
+    fun clearScheduleFilter() {
+        scheduleFilterMode.value = "all"
+        scheduleFilterId.value   = null
+    }
+
     init { load() }
 
     // ─── Lookups ─────────────────────────────────────────────────────────────
@@ -71,7 +81,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
-    // Teacher(id, name, gender, phone, subjectIds, avatarUri, code)
     fun addTeacher(
         name: String,
         gender: String,
@@ -95,7 +104,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ─── Classes ──────────────────────────────────────────────────────────────
-    // SchoolClass(id, name, grade, count, headTeacherId, subject, code)
     fun addSchoolClass(
         name: String,
         grade: String,
@@ -220,6 +228,68 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return gson.toJson(rows)
     }
 
+    // ─── ZIP full backup export ───────────────────────────────────────────────
+    fun exportFullBackupZip(context: Context): ByteArray? {
+        return try {
+            val baos = ByteArrayOutputStream()
+            ZipOutputStream(baos).use { zip ->
+                // Write state.json
+                val stateJson = gson.toJson(_state.value).toByteArray(Charsets.UTF_8)
+                zip.putNextEntry(ZipEntry("state.json"))
+                zip.write(stateJson)
+                zip.closeEntry()
+
+                // Write avatar images
+                val avatarDir = File(context.filesDir, "avatars")
+                if (avatarDir.exists()) {
+                    avatarDir.listFiles()?.forEach { f ->
+                        zip.putNextEntry(ZipEntry("avatars/${f.name}"))
+                        f.inputStream().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+            baos.toByteArray()
+        } catch (_: Exception) { null }
+    }
+
+    // ─── ZIP full backup import ───────────────────────────────────────────────
+    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean {
+        return try {
+            var stateJson: String? = null
+            val avatarEntries = mutableMapOf<String, ByteArray>()
+
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    when {
+                        entry.name == "state.json" -> {
+                            stateJson = zip.readBytes().toString(Charsets.UTF_8)
+                        }
+                        entry.name.startsWith("avatars/") && !entry.isDirectory -> {
+                            avatarEntries[File(entry.name).name] = zip.readBytes()
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+
+            val json = stateJson ?: return false
+
+            // Save avatar files and build path remap
+            val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
+            val pathRemap = mutableMapOf<String, String>()
+            avatarEntries.forEach { (name, data) ->
+                val dest = File(avatarDir, name)
+                dest.writeBytes(data)
+                pathRemap[name] = dest.absolutePath
+            }
+
+            importMerge(json, pathRemap)
+        } catch (_: Exception) { false }
+    }
+
     // ─── Persistence ─────────────────────────────────────────────────────────
     private fun save() {
         viewModelScope.launch {
@@ -237,35 +307,50 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ─── Import / merge ───────────────────────────────────────────────────────
-    fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean = try {
-        if (json.isBlank()) return false
-        val raw  = gson.fromJson(json, GsonState::class.java)
+    // FIX: Changed from expression body (= try { ... }) to block body { return try { ... } }
+    // to allow early `return false` inside the function.
+    fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
+        return try {
+            if (json.isBlank()) return false
+            val raw = gson.fromJson(json, GsonState::class.java)
 
-        fun remapPath(old: String?): String? {
-            if (old == null) return null
-            val name = File(old).name
-            return pathRemap[name] ?: old
-        }
-
-        _state.update { cur ->
-            fun <T : Any> merge(current: List<T>, incoming: List<T>?, getId: (T) -> Long): List<T> {
-                if (incoming.isNullOrEmpty()) return current
-                val map = current.associateBy(getId).toMutableMap()
-                incoming.forEach { map[getId(it)] = it }
-                return map.values.toList()
+            fun remapPath(old: String?): String? {
+                if (old == null) return null
+                val name = File(old).name
+                return pathRemap[name] ?: old
             }
-            val teachers = raw.teachers?.map { it.copy(avatarUri = remapPath(it.avatarUri)) }
-            val students = raw.students?.map { it.copy(avatarUri = remapPath(it.avatarUri)) }
-            cur.copy(
-                subjects   = merge(cur.subjects,   raw.subjects)   { it.id },
-                teachers   = merge(cur.teachers,   teachers)       { it.id },
-                classes    = merge(cur.classes,    raw.classes)    { it.id },
-                students   = merge(cur.students,   students)       { it.id },
-                schedule   = merge(cur.schedule,   raw.schedule)   { it.id },
-                attendance = merge(cur.attendance, raw.attendance) { it.id }
-            )
-        }
-        save()
-        true
-    } catch (_: Exception) { false }
+
+            _state.update { cur ->
+                fun <T : Any> merge(existing: List<T>, incoming: List<T>?, getId: (T) -> Long): List<T> {
+                    if (incoming.isNullOrEmpty()) return existing
+                    val map = existing.associateBy(getId).toMutableMap()
+                    incoming.forEach { map[getId(it)] = it }
+                    return map.values.toList()
+                }
+
+                val newTeachers = merge(cur.teachers, raw.teachers?.map { t ->
+                    t.copy(avatarUri = remapPath(t.avatarUri))
+                }, Teacher::id)
+
+                val newStudents = merge(cur.students, raw.students?.map { s ->
+                    s.copy(avatarUri = remapPath(s.avatarUri))
+                }, Student::id)
+
+                cur.copy(
+                    subjects   = merge(cur.subjects,   raw.subjects,   Subject::id),
+                    teachers   = newTeachers,
+                    classes    = merge(cur.classes,    raw.classes,    SchoolClass::id),
+                    students   = newStudents,
+                    schedule   = merge(cur.schedule,   raw.schedule,   Schedule::id),
+                    attendance = merge(cur.attendance, raw.attendance, Attendance::id)
+                )
+            }
+            save()
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /** Alias used by ExportScreen */
+    fun mergeImport(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean =
+        importMerge(json, pathRemap)
 }
