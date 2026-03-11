@@ -87,4 +87,4 @@ Go to **Actions → Build & Release APK → Run workflow**
 ## AI instructions: 
 - do not pack build.yml into update_[timestamp].zip file, give it to user as a single file.
 - include changes description zip_update/release_note.md into update_[timestamp].zip
-- update_[timestamp].zip will apply during github workflow with build.yml. make sure it has right structure.
+- update_[timestamp].zip will apply during github workflow with build.yml. make sure it has right structure. sometimes the zip file lost some dir and files coppied to  wrong places. 

@@ -3,10 +3,15 @@ package com.school.manager.viewmodel
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.school.manager.data.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -50,6 +55,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putString("state", gson.toJson(_state.value)).apply()
     }
 
+    // ─── Schedule screen filter state (lifted for TopAppBar) ──────────────────
+    val scheduleFilterMode = MutableStateFlow("all")
+    val scheduleFilterId   = MutableStateFlow(0L)
+    fun clearScheduleFilter() { scheduleFilterMode.value = "all"; scheduleFilterId.value = 0L }
+
+    /** Resolved display title shown in the TopAppBar when a filter is active. */
+    val scheduleFilterTitle: StateFlow<String> = combine(
+        scheduleFilterMode, scheduleFilterId, _state
+    ) { mode, id, st ->
+        when (mode) {
+            "teacher" -> st.teachers.firstOrNull { it.id == id }?.let { "${it.name}的课表" } ?: "课表"
+            "student" -> st.students.firstOrNull { it.id == id }?.let { "${it.name}的课表" } ?: "课表"
+            else      -> "课表"
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, "课表")
+
     // ─── Lookups ─────────────────────────────────────────────────────────────
     fun subject(id: Long?)     = _state.value.subjects.find  { it.id == id }
     fun teacher(id: Long?)     = _state.value.teachers.find  { it.id == id }
@@ -58,7 +79,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ─── Subjects ─────────────────────────────────────────────────────────────
     fun addSubject(name: String, color: Long, teacherId: Long?) {
-        _state.update { it.copy(subjects = it.subjects + Subject(System.currentTimeMillis(), name, color, teacherId)) }
+        _state.update { it.copy(subjects = it.subjects +
+            Subject(System.currentTimeMillis(), name, color, teacherId)) }
         save()
     }
     fun updateSubject(s: Subject) {
@@ -71,11 +93,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
-    fun addTeacher(name: String, gender: String, phone: String,
-                   subjectIds: List<Long> = emptyList(), avatarUri: String? = null, code: String = "") {
-        val c = code.ifBlank { genCode("T") }
+    fun addTeacher(name: String, subject: String, phone: String = "", avatarUri: String? = null) {
         _state.update { it.copy(teachers = it.teachers +
-            Teacher(System.currentTimeMillis(), name, gender, phone, subjectIds, avatarUri, c)) }
+            Teacher(System.currentTimeMillis(), name, subject, phone, avatarUri)) }
         save()
     }
     fun updateTeacher(t: Teacher) {
@@ -88,18 +108,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Classes ──────────────────────────────────────────────────────────────
-    fun addClass(name: String, grade: String, count: Int, headTeacherId: Long?,
-                 subject: String = "", code: String = "") {
-        val c = code.ifBlank { genCode("C") }
+    fun addSchoolClass(name: String, grade: String, subject: String, headTeacherId: Long?) {
         _state.update { it.copy(classes = it.classes +
-            SchoolClass(System.currentTimeMillis(), name, grade, count, headTeacherId, subject, c)) }
+            SchoolClass(System.currentTimeMillis(), name, grade, subject, headTeacherId)) }
         save()
     }
-    fun updateClass(cl: SchoolClass) {
-        _state.update { st -> st.copy(classes = st.classes.map { if (it.id == cl.id) cl else it }) }
+    fun updateSchoolClass(c: SchoolClass) {
+        _state.update { st -> st.copy(classes = st.classes.map { if (it.id == c.id) c else it }) }
         save()
     }
-    fun deleteClass(id: Long) {
+    fun deleteSchoolClass(id: Long) {
         _state.update { it.copy(classes = it.classes.filter { c -> c.id != id }) }
         save()
     }
@@ -167,34 +185,35 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun exportFullStateJson(): String = gson.toJson(_state.value)
 
     /** Schedule records with resolved names */
-    fun exportScheduleJson(teacherId: Long? = null): String {
-        data class Row(val code: String, val day: String, val startTime: String, val endTime: String,
-                       val subject: String, val className: String, val teacher: String)
-        val src = if (teacherId != null) _state.value.schedule.filter { it.teacherId == teacherId }
-                  else _state.value.schedule
-        return gson.toJson(src.map { s ->
-            Row(s.code, DAYS.getOrElse(s.day - 1) { "?" },
-                s.resolvedStart(), s.resolvedEnd(),
-                s.resolvedSubjectName(_state.value.subjects, _state.value.classes),
-                schoolClass(s.classId)?.name ?: "?",
-                teacher(s.teacherId)?.name ?: "─")
+    fun exportScheduleJson(teacherId: Long?): String {
+        val records = if (teacherId != null)
+            _state.value.schedule.filter { it.teacherId == teacherId }
+        else _state.value.schedule
+        return gson.toJson(records.map { s ->
+            mapOf(
+                "id" to s.id, "code" to s.code,
+                "class"   to (schoolClass(s.classId)?.name ?: "?"),
+                "subject" to (subject(s.subjectId)?.name ?: "?"),
+                "teacher" to (teacher(s.teacherId)?.name ?: "─"),
+                "day" to s.day, "start" to s.startTime, "end" to s.endTime
+            )
         })
     }
 
     /** Attendance records with resolved names */
-    fun exportAttendanceJson(teacherId: Long? = null): String {
-        data class Row(val code: String, val date: String, val startTime: String, val endTime: String,
-                       val subject: String, val className: String, val teacher: String,
-                       val topic: String, val status: String, val attendeeCount: Int, val notes: String)
-        val src = if (teacherId != null) _state.value.attendance.filter { it.teacherId == teacherId }
-                  else _state.value.attendance
-        return gson.toJson(src.map { a ->
-            Row(a.code, a.date, a.resolvedStart(), a.resolvedEnd(),
-                subject(a.subjectId)?.name
-                    ?: schoolClass(a.classId)?.subject?.takeIf { it.isNotBlank() } ?: "?",
-                schoolClass(a.classId)?.name ?: "?",
-                teacher(a.teacherId)?.name ?: "─",
-                a.topic, a.status, a.attendees.size, a.notes)
+    fun exportAttendanceJson(teacherId: Long?): String {
+        val records = if (teacherId != null)
+            _state.value.attendance.filter { it.teacherId == teacherId }
+        else _state.value.attendance
+        return gson.toJson(records.map { a ->
+            mapOf(
+                "id" to a.id, "code" to a.code,
+                "subject" to (schoolClass(a.classId)?.subject?.takeIf { it.isNotBlank() } ?: "?"),
+                "class"   to (schoolClass(a.classId)?.name ?: "?"),
+                "teacher" to (teacher(a.teacherId)?.name ?: "─"),
+                "topic" to a.topic, "status" to a.status,
+                "attendees" to a.attendees.size, "notes" to a.notes
+            )
         })
     }
 
@@ -228,22 +247,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ─── ZIP 完整备份（含头像图片）────────────────────────────────────────────
 
-    /**
-     * 导出完整备份 ZIP：
-     *   state.json  — 全部结构化数据
-     *   avatars/    — 教师 / 学生头像原始文件
-     *
-     * 返回 ZIP 字节数组，失败返回 null。
-     */
     fun exportFullBackupZip(context: Context): ByteArray? = try {
         val baos = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zos ->
-            // ── 1. state.json ──────────────────────────────────────────────
             zos.putNextEntry(ZipEntry("state.json"))
             zos.write(gson.toJson(_state.value).toByteArray(Charsets.UTF_8))
             zos.closeEntry()
-
-            // ── 2. avatars/ ────────────────────────────────────────────────
             val avatarDir = File(context.filesDir, "avatars")
             if (avatarDir.exists()) {
                 avatarDir.listFiles()?.forEach { file ->
@@ -256,13 +265,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         baos.toByteArray()
     } catch (_: Exception) { null }
 
-    /**
-     * 导入完整备份 ZIP（由 [exportFullBackupZip] 生成）：
-     *   1. 提取头像图片到 app 私有目录，并重建路径映射
-     *   2. 按 ID 合并导入 state.json（与 [mergeImport] 逻辑相同）
-     *
-     * 返回 true 表示成功。
-     */
     fun importFullBackupZip(context: Context, zipBytes: ByteArray): Boolean = try {
         val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
         var stateJson: String? = null
@@ -274,7 +276,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 when {
                     entry.name == "state.json" ->
                         stateJson = zis.readBytes().toString(Charsets.UTF_8)
-
                     entry.name.startsWith("avatars/") && !entry.isDirectory -> {
                         val name = entry.name.removePrefix("avatars/")
                         val dest = File(avatarDir, name)

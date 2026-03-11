@@ -47,6 +47,11 @@ fun SchoolManagerApp() {
     val currentRoute    = navBackStack?.destination?.route ?: Screen.Schedule.route
     val currentScreen   = ALL_SCREENS.find { it.route == currentRoute } ?: Screen.Schedule
 
+    // ── Schedule filter state (for dynamic TopAppBar title) ────────────────────
+    val scheduleFilterMode  by vm.scheduleFilterMode.collectAsState()
+    val scheduleFilterTitle by vm.scheduleFilterTitle.collectAsState()
+    val scheduleFilterActive = currentScreen == Screen.Schedule && scheduleFilterMode != "all"
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -116,10 +121,29 @@ fun SchoolManagerApp() {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title  = { Text(currentScreen.title, fontWeight = FontWeight.Bold) },
+                    title = {
+                        // 当课表有筛选时，直接在标题栏展示"李老师的课表"
+                        Text(
+                            text = if (scheduleFilterActive) scheduleFilterTitle else currentScreen.title,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "菜单")
+                        }
+                    },
+                    // 筛选激活时显示"× 清除筛选"按钮
+                    actions = {
+                        if (scheduleFilterActive) {
+                            TextButton(onClick = { vm.clearScheduleFilter() }) {
+                                Text(
+                                    "× 清除",
+                                    color = FluentBlue,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
