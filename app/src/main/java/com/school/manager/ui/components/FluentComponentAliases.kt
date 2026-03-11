@@ -9,8 +9,6 @@ import androidx.compose.ui.unit.dp
 import com.school.manager.ui.theme.*
 
 // ─── Aliases used by ClassesScreen (and others) ───────────────────────────────
-// These are thin wrappers around the existing FormTextField / FormDropdown
-// composables so that call-sites using the "Fluent*" / bare names compile.
 
 @Composable
 fun FluentTextField(
@@ -29,6 +27,7 @@ fun DropdownField(
     onSelect: (String) -> Unit
 ) = FormDropdown(label, selected, options, onSelect)
 
+@Suppress("DEPRECATION")
 @Composable
 fun AutocompleteTextField(
     label: String,
@@ -48,8 +47,7 @@ fun AutocompleteTextField(
             onValueChange = { onValueChange(it); expanded = true },
             label         = { Text(label) },
             shape         = RoundedCornerShape(12.dp),
-            // FIX: replaced deprecated menuAnchor() with typed overload (editable field)
-            modifier      = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+            modifier      = Modifier.fillMaxWidth().menuAnchor(),
             singleLine    = true,
             colors        = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor   = FluentBlue,

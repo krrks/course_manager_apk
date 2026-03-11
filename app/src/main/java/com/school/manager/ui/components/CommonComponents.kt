@@ -230,6 +230,7 @@ fun FormTextField(label: String, value: String, onValueChange: (String) -> Unit,
     )
 }
 
+@Suppress("DEPRECATION")
 @Composable
 fun FormDropdown(
     label: String,
@@ -246,8 +247,7 @@ fun FormDropdown(
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             shape = RoundedCornerShape(12.dp),
-            // FIX: replaced deprecated menuAnchor() with typed overload
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+            modifier = Modifier.fillMaxWidth().menuAnchor(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor   = FluentBlue,
                 unfocusedBorderColor = FluentBorder
