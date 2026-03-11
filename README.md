@@ -128,88 +128,73 @@ zip -r zip_update/update_$(date +%s).zip \
 ## 🗂️ Project Structure
 
 ```
-app/src/main/java/com/school/manager/
-├── data/
-│   └── Models.kt
-├── ui/
-│   ├── components/
-│   │   └── CommonComponents.kt
-│   ├── screens/
-│   │   ├── AttendanceScreen.kt
-│   │   ├── ClassesScreen.kt
-│   │   ├── ExportScreen.kt
-│   │   ├── ScheduleScreen.kt
-│   │   ├── StatsScreen.kt
-│   │   ├── StudentsScreen.kt
-│   │   ├── SubjectsScreen.kt
-│   │   └── TeachersScreen.kt
-│   └── theme/
-│       ├── Color.kt
-│       ├── Theme.kt
-│       └── Type.kt
-├── util/
-│   └── AvatarUtil.kt
-├── viewmodel/
-│   └── AppViewModel.kt
-├── MainActivity.kt
-└── Navigation.kt
-zip_update/
-├── file_list.md    ← full repo file list, auto-updated by workflow
-├── note.md         ← last patch summary, auto-updated by workflow
-└── release_note.md ← human-written change description, included in zip
+course_manager_apk/
+├── .github/
+│   └── workflows/
+│       ├── build.yml
+│       └── release.yml
+├── app/
+│   ├── build.gradle.kts
+│   ├── proguard-rules.pro
+│   └── src/
+│       └── main/
+│           ├── AndroidManifest.xml
+│           ├── java/
+│           │   └── com/school/manager/
+│           │       ├── MainActivity.kt
+│           │       ├── Navigation.kt
+│           │       ├── data/
+│           │       │   └── Models.kt
+│           │       ├── ui/
+│           │       │   ├── components/
+│           │       │   │   ├── CommonComponents.kt
+│           │       │   │   └── FluentComponentAliases.kt
+│           │       │   ├── screens/
+│           │       │   │   ├── AttendanceScreen.kt
+│           │       │   │   ├── ClassesScreen.kt
+│           │       │   │   ├── ExportScreen.kt
+│           │       │   │   ├── ScheduleScreen.kt
+│           │       │   │   ├── StatsScreen.kt
+│           │       │   │   ├── StudentsScreen.kt
+│           │       │   │   ├── SubjectsScreen.kt
+│           │       │   │   └── TeachersScreen.kt
+│           │       │   └── theme/
+│           │       │       ├── Color.kt
+│           │       │       ├── Theme.kt
+│           │       │       └── Type.kt
+│           │       ├── util/
+│           │       │   └── AvatarUtil.kt
+│           │       └── viewmodel/
+│           │           └── AppViewModel.kt
+│           └── res/
+│               ├── drawable/
+│               │   └── ic_launcher_foreground.xml
+│               ├── mipmap-anydpi-v26/
+│               │   ├── ic_launcher.xml
+│               │   └── ic_launcher_round.xml
+│               └── values/
+│                   ├── colors.xml ← dir in zip: ./app/src/main/res/values/colors.xml
+│                   ├── strings.xml
+│                   └── themes.xml
+├── gradle/
+│   ├── libs.versions.toml
+│   └── wrapper/
+│       ├── gradle-wrapper.jar
+│       └── gradle-wrapper.properties
+├── zip_update/
+│   ├── file_list.md               ← full repo file list, auto-updated by workflow
+│   ├── file_list_befor_update.md
+│   ├── note.md                    ← last patch summary, auto-updated by workflow
+│   ├── release_note.md            ← human-written change description, included in zip
+│   └── update_1773220799.zip      ← uploaded zip file
+├── .gitignore
+├── README.md                      ← dir in zip: ./README.md
+├── build.gradle.kts
+├── gradle.properties
+├── gradlew
+├── gradlew.bat
+└── settings.gradle.kts
 ```
 
 ---
-
-# 🗂 仓库完整文件列表
-
-> 生成时间 (UTC): `2026-03-11T09:22:23Z`
-> 提交 SHA: `fad8cf47904767273d35c0a2e4946ccf70b86317`
-
-```
-./.github/workflows/build.yml
-./.github/workflows/release.yml
-./.gitignore
-./README.md
-./app/build.gradle.kts
-./app/proguard-rules.pro
-./app/src/main/AndroidManifest.xml
-./app/src/main/java/com/school/manager/MainActivity.kt
-./app/src/main/java/com/school/manager/Navigation.kt
-./app/src/main/java/com/school/manager/data/Models.kt
-./app/src/main/java/com/school/manager/ui/components/CommonComponents.kt
-./app/src/main/java/com/school/manager/ui/components/FluentComponentAliases.kt
-./app/src/main/java/com/school/manager/ui/screens/AttendanceScreen.kt
-./app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
-./app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
-./app/src/main/java/com/school/manager/ui/screens/ScheduleScreen.kt
-./app/src/main/java/com/school/manager/ui/screens/StatsScreen.kt
-./app/src/main/java/com/school/manager/ui/screens/StudentsScreen.kt
-./app/src/main/java/com/school/manager/ui/screens/SubjectsScreen.kt
-./app/src/main/java/com/school/manager/ui/screens/TeachersScreen.kt
-./app/src/main/java/com/school/manager/ui/theme/Color.kt
-./app/src/main/java/com/school/manager/ui/theme/Theme.kt
-./app/src/main/java/com/school/manager/ui/theme/Type.kt
-./app/src/main/java/com/school/manager/util/AvatarUtil.kt
-./app/src/main/java/com/school/manager/viewmodel/AppViewModel.kt
-./app/src/main/res/drawable/ic_launcher_foreground.xml
-./app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
-./app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
-./app/src/main/res/values/colors.xml
-./app/src/main/res/values/strings.xml
-./app/src/main/res/values/themes.xml
-./build.gradle.kts
-./gradle.properties
-./gradle/libs.versions.toml
-./gradle/wrapper/gradle-wrapper.jar
-./gradle/wrapper/gradle-wrapper.properties
-./gradlew
-./gradlew.bat
-./settings.gradle.kts
-./zip_update/file_list.md
-./zip_update/file_list_befor_update.md
-./zip_update/note.md
-./zip_update/release_note.md
-./zip_update/update_1773220799.zip
-```
 
