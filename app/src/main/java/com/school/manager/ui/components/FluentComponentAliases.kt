@@ -48,7 +48,8 @@ fun AutocompleteTextField(
             onValueChange = { onValueChange(it); expanded = true },
             label         = { Text(label) },
             shape         = RoundedCornerShape(12.dp),
-            modifier      = Modifier.fillMaxWidth().menuAnchor(),
+            // FIX: replaced deprecated menuAnchor() with typed overload (editable field)
+            modifier      = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
             singleLine    = true,
             colors        = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor   = FluentBlue,

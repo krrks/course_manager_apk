@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.EventNote
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -78,7 +79,7 @@ fun ExportScreen(vm: AppViewModel) {
     }
 
     // ── ZIP Import ─────────────────────────────────────────────────────────────
-    var importZipBuffer     by remember { mutableStateOf<ByteArray?>(null) }
+    var importZipBuffer      by remember { mutableStateOf<ByteArray?>(null) }
     var showZipImportConfirm by remember { mutableStateOf(false) }
     val openZipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -174,7 +175,6 @@ fun ExportScreen(vm: AppViewModel) {
         Text("将课表、记录、教师、学生及所有头像图片打包成一个 ZIP 文件，可在新设备还原。",
             style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
 
-        // 文件名输入
         FilenameField("备份文件名", zipFilename, "school_backup.zip") { zipFilename = it.trim().ifBlank { "school_backup.zip" } }
 
         IoCard(
@@ -208,7 +208,6 @@ fun ExportScreen(vm: AppViewModel) {
             subtitle = "全部科目、教师、班级、学生、课表、记录"
         ) { exportWith(vm.exportFullStateJson(), jsonFilename) }
 
-        // 按教师筛选
         if (state.teachers.isNotEmpty()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -229,8 +228,9 @@ fun ExportScreen(vm: AppViewModel) {
             subtitle = if (selectedTeacher != null) "筛选：${selectedTeacher.name}" else "全部课表"
         ) { exportWith(vm.exportScheduleJson(selectedTeacherId.takeIf { it != 0L }), jsonFilename.replace(".json","_schedule.json")) }
 
+        // FIX: replaced deprecated Icons.Outlined.EventNote with AutoMirrored version
         IoCard(
-            icon = Icons.Outlined.EventNote, title = "导出上课记录（JSON）", color = FluentPurple,
+            icon = Icons.AutoMirrored.Outlined.EventNote, title = "导出上课记录（JSON）", color = FluentPurple,
             subtitle = if (selectedTeacher != null) "筛选：${selectedTeacher.name}" else "全部记录"
         ) { exportWith(vm.exportAttendanceJson(selectedTeacherId.takeIf { it != 0L }), jsonFilename.replace(".json","_attendance.json")) }
 
@@ -239,7 +239,6 @@ fun ExportScreen(vm: AppViewModel) {
             subtitle = "选择本应用导出的 JSON 文件，按 ID 合并"
         ) { openFileLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }
 
-        // toast banner
         toast?.let { msg ->
             Surface(
                 shape = RoundedCornerShape(12.dp),
@@ -291,8 +290,8 @@ private fun IoCard(
         modifier        = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier             = Modifier.padding(16.dp),
-            verticalAlignment    = Alignment.CenterVertically,
+            modifier              = Modifier.padding(16.dp),
+            verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Surface(shape = RoundedCornerShape(12.dp), color = color.copy(alpha = 0.12f)) {
@@ -322,7 +321,6 @@ private fun DropdownFilterChipLong(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val label = items.firstOrNull { it.first == selected }?.second ?: allLabel
-    // FIX: was androidx.compose.material3.Box which doesn't exist; Box is in foundation.layout
     Box {
         FilterChip(selected = selected != 0L, onClick = { expanded = true }, label = { Text(label) },
             trailingIcon = { Icon(Icons.Default.ArrowDropDown, null, Modifier.size(16.dp)) })

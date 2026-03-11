@@ -130,7 +130,6 @@ fun AvatarWithImage(
     if (!imageUri.isNullOrBlank()) {
         var error by remember(imageUri) { mutableStateOf(false) }
         if (!error) {
-            // Support both absolute file paths and content:// URIs
             val model = if (imageUri.startsWith("/")) java.io.File(imageUri) else imageUri
             AsyncImage(
                 model           = model,
@@ -247,7 +246,8 @@ fun FormDropdown(
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            // FIX: replaced deprecated menuAnchor() with typed overload
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor   = FluentBlue,
                 unfocusedBorderColor = FluentBorder

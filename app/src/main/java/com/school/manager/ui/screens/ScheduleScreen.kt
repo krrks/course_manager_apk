@@ -12,6 +12,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -61,7 +62,7 @@ private val TIME_TICKS: List<Pair<String, Float>> = buildList {
 }
 
 @Composable
-fun ScheduleScreen(vm: AppViewModel) {
+fun ScheduleScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val state by vm.state.collectAsState()
     var showAdd              by remember { mutableStateOf(false) }
     var viewSlot             by remember { mutableStateOf<Schedule?>(null) }
@@ -132,9 +133,10 @@ fun ScheduleScreen(vm: AppViewModel) {
                             .verticalScroll(rememberScrollState())
                             .padding(bottom = 4.dp)
                     ) {
+                        // FIX: replaced deprecated Icons.Filled.ViewList with AutoMirrored version
                         SpeedDialItem(
                             if (viewMode == "calendar") "切换列表视图" else "切换日历视图",
-                            if (viewMode == "calendar") Icons.Default.ViewList else Icons.Default.CalendarViewMonth,
+                            if (viewMode == "calendar") Icons.AutoMirrored.Filled.ViewList else Icons.Default.CalendarViewMonth,
                             FluentBlue
                         ) { viewMode = if (viewMode == "calendar") "list" else "calendar" }
 
@@ -186,6 +188,11 @@ fun ScheduleScreen(vm: AppViewModel) {
 
                         SpeedDialItem("导出为 JPG", Icons.Default.Image, FluentAmber) { exportJpg(); menuOpen = false }
                         SpeedDialItem("添加课程", Icons.Default.Add, FluentBlue) { showAdd = true; menuOpen = false }
+
+                        HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f))
+
+                        // Navigation drawer entry merged into FAB per design requirement
+                        SpeedDialItem("导航菜单", Icons.Default.Menu, FluentMuted) { onOpenDrawer(); menuOpen = false }
                     }
                 }
 
@@ -273,6 +280,7 @@ private fun CalendarGrid(
     val scrollV = rememberScrollState()
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Day header row — now sits at the very top of the screen (no TopAppBar above it)
         Row(modifier = Modifier.horizontalScroll(scrollH)) {
             Box(
                 Modifier.width(TIME_COL_W.dp).height(HEADER_H.dp)
@@ -317,7 +325,8 @@ private fun CalendarGrid(
                     Box(Modifier.width(DAY_COL_W.dp).height(CAL_BOX_HEIGHT_DP.dp)) {
                         TIME_TICKS.forEach { (label, yDp) ->
                             val isHour = label.endsWith(":00")
-                            Divider(
+                            // FIX: replaced deprecated Divider with HorizontalDivider
+                            HorizontalDivider(
                                 color     = if (isHour) FluentBorder else FluentBorder.copy(alpha = 0.4f),
                                 thickness = if (isHour) 0.8.dp else 0.4.dp,
                                 modifier  = Modifier.offset(y = (yDp + CAL_V_PAD).dp)
@@ -336,27 +345,20 @@ private fun CalendarGrid(
                             val colorIdx = state.subjects.indexOf(sub).takeIf { it >= 0 }
                                 ?: (slot.subjectId % SUBJECT_COLORS.size).toInt()
                             val color    = subjectColor(colorIdx)
-
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.TopStart)
                                     .offset(y = yDp.dp)
-                                    .fillMaxWidth()
+                                    .width(DAY_COL_W.dp)
                                     .height(hDp.dp)
                                     .padding(horizontal = 2.dp, vertical = 1.dp)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(color.copy(alpha = 0.18f))
-                                    .border(1.dp, color.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
+                                    .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                                     .clickable { onSlotClick(slot) }
-                                    .padding(horizontal = 4.dp, vertical = 3.dp)
+                                    .padding(4.dp)
                             ) {
                                 Column {
-                                    Text("${slot.resolvedStart()} – ${slot.resolvedEnd()}",
-                                        style      = MaterialTheme.typography.labelSmall,
-                                        color      = color.copy(alpha = 0.85f),
-                                        maxLines   = 1,
-                                        overflow   = TextOverflow.Ellipsis)
-                                    Text(sub?.name ?: "?",
+                                    Text(sub?.name ?: cl?.subject ?: "?",
                                         style      = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color      = color,
@@ -400,7 +402,7 @@ private fun ScheduleListView(
     vm: AppViewModel,
     onClick: (Schedule) -> Unit
 ) {
-    androidx.compose.foundation.lazy.LazyColumn(
+    LazyColumn(
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()
@@ -428,20 +430,15 @@ private fun ScheduleListView(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(DAYS.getOrElse(slot.day - 1) { "?" },
-                            style      = MaterialTheme.typography.labelLarge,
-                            color = color, fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold, color = color)
                     }
                     Column(Modifier.weight(1f)) {
                         Text(sub?.name ?: cl?.subject ?: "?",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold, color = color)
+                            style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                         Text("${cl?.name ?: "?"} · ${te?.name ?: "─"}",
                             style = MaterialTheme.typography.bodySmall, color = FluentMuted)
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(slot.resolvedStart(),
-                            style = MaterialTheme.typography.labelMedium, color = color, fontWeight = FontWeight.Bold)
-                        Text("↓ ${slot.resolvedEnd()}",
+                        Text("${slot.resolvedStart()} – ${slot.resolvedEnd()}",
                             style = MaterialTheme.typography.labelSmall, color = FluentMuted)
                     }
                 }
@@ -450,7 +447,7 @@ private fun ScheduleListView(
     }
 }
 
-// ── Dialogs ────────────────────────────────────────────────────────────────────
+// ── Detail / Edit dialogs ──────────────────────────────────────────────────────
 
 @Composable
 private fun ScheduleDetailDialog(
@@ -465,9 +462,8 @@ private fun ScheduleDetailDialog(
     val sub = state.subjects.find { it.id == slot.subjectId }
     val cl  = state.classes.find  { it.id == slot.classId }
     val te  = state.teachers.find { it.id == slot.teacherId }
-    // FIX: was confirmLabel (non-existent param), correct param name is confirmText
     FluentDialog(title = "课程详情", onDismiss = onDismiss, onConfirm = onEdit, confirmText = "编辑") {
-        DetailRow("编号",   slot.code)
+        DetailRow("编号",   slot.code.ifBlank { "─" })
         DetailRow("班级",   cl?.name  ?: "?")
         DetailRow("科目",   sub?.name ?: cl?.subject ?: "?")
         DetailRow("教师",   te?.name  ?: "─")
@@ -610,153 +606,147 @@ private fun SpeedDialItem(
 internal fun DatePickerField(label: String, value: String, onChange: (String) -> Unit) {
     var showPicker by remember { mutableStateOf(false) }
 
-    val epochMs: Long? = remember(value) {
-        runCatching {
-            val ld = java.time.LocalDate.parse(value)
-            ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
-        }.getOrNull()
-    }
+    val epochMs: Long? = runCatching {
+        val parts = value.split("-")
+        val y = parts[0].toInt(); val m = parts[1].toInt(); val d = parts[2].toInt()
+        java.util.Calendar.getInstance().apply { set(y, m - 1, d) }.timeInMillis
+    }.getOrNull()
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        OutlinedTextField(
-            value         = value,
-            onValueChange = onChange,
-            label         = { Text(label) },
-            placeholder   = { Text("yyyy-MM-dd", color = FluentMuted) },
-            shape         = RoundedCornerShape(12.dp),
-            modifier      = Modifier.weight(1f),
-            singleLine    = true,
-            colors        = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor   = FluentBlue,
-                unfocusedBorderColor = FluentBorder)
+    val pickerState = rememberDatePickerState(initialSelectedDateMillis = epochMs)
+
+    OutlinedTextField(
+        value         = value,
+        onValueChange = onChange,
+        label         = { Text(label) },
+        shape         = RoundedCornerShape(12.dp),
+        modifier      = Modifier.fillMaxWidth(),
+        singleLine    = true,
+        trailingIcon  = { IconButton(onClick = { showPicker = true }) {
+            Icon(Icons.Default.DateRange, null, tint = FluentBlue) } },
+        colors        = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor   = FluentBlue,
+            unfocusedBorderColor = FluentBorder
         )
-        IconButton(onClick = { showPicker = true }) {
-            Icon(Icons.Default.CalendarMonth, "选择日期", tint = FluentBlue)
-        }
-    }
+    )
 
     if (showPicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = epochMs)
         DatePickerDialog(
             onDismissRequest = { showPicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    showPicker = false
-                    state.selectedDateMillis?.let { ms ->
-                        val ld = java.time.Instant.ofEpochMilli(ms)
-                            .atZone(java.time.ZoneOffset.UTC).toLocalDate()
-                        onChange(ld.toString())
+                    val ms = pickerState.selectedDateMillis
+                    if (ms != null) {
+                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+                        onChange("%04d-%02d-%02d".format(
+                            cal.get(java.util.Calendar.YEAR),
+                            cal.get(java.util.Calendar.MONTH) + 1,
+                            cal.get(java.util.Calendar.DAY_OF_MONTH)))
                     }
+                    showPicker = false
                 }) { Text("确定") }
             },
-            dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("取消") }
-            }
-        ) {
-            DatePicker(state = state)
-        }
+            dismissButton = { TextButton(onClick = { showPicker = false }) { Text("取消") } }
+        ) { DatePicker(state = pickerState) }
     }
 }
 
-/** Scroll-wheel time picker row (HH:mm, 24h) */
+/** Time range row with wheel picker */
 @Composable
 internal fun TimeRangeRow(
-    startTime:     String,
-    endTime:       String,
+    startTime: String,
+    endTime: String,
     onStartChange: (String) -> Unit,
-    onEndChange:   (String) -> Unit
+    onEndChange: (String) -> Unit
 ) {
-    Row(
-        modifier              = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment     = Alignment.Top
-    ) {
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
-               verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("开始时间", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
-            TimeWheelPicker(startTime, onStartChange)
-        }
-        Text("─", color = FluentMuted, modifier = Modifier.padding(top = 32.dp))
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
-               verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("结束时间", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
-            TimeWheelPicker(endTime, onEndChange)
-        }
+    var showStart by remember { mutableStateOf(false) }
+    var showEnd   by remember { mutableStateOf(false) }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = startTime, onValueChange = onStartChange,
+            label = { Text("开始") }, singleLine = true, shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.weight(1f),
+            trailingIcon = { IconButton(onClick = { showStart = true }) {
+                Icon(Icons.Default.Schedule, null, tint = FluentBlue) } },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
+        )
+        OutlinedTextField(
+            value = endTime, onValueChange = onEndChange,
+            label = { Text("结束") }, singleLine = true, shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.weight(1f),
+            trailingIcon = { IconButton(onClick = { showEnd = true }) {
+                Icon(Icons.Default.Schedule, null, tint = FluentBlue) } },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
+        )
     }
+
+    if (showStart) TimePickerDialog(startTime, { onStartChange(it); showStart = false }) { showStart = false }
+    if (showEnd)   TimePickerDialog(endTime,   { onEndChange(it);   showEnd   = false }) { showEnd   = false }
 }
 
-/**
- * Single time wheel picker showing HH and mm columns with snap-scroll.
- *
- * FIX: contentPadding = PaddingValues(vertical = itemH) pushes item[N] to the
- * vertical centre of the viewport when the LazyColumn is snapped to index N.
- * Therefore the centred item == firstVisibleItemIndex (not +1), and we must
- * initialise / animate-scroll to `selected` (not `selected - 1`).
- */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimeWheelPicker(value: String, onChange: (String) -> Unit) {
-    val parts   = value.split(":").mapNotNull { it.toIntOrNull() }
-    var selHour = remember(value) { mutableIntStateOf(parts.getOrElse(0) { 8 }.coerceIn(0, 23)) }
-    var selMin  = remember(value) { mutableIntStateOf(parts.getOrElse(1) { 0 }.coerceIn(0, 59)) }
+private fun TimePickerDialog(
+    initial: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val parts   = initial.split(":").mapNotNull { it.toIntOrNull() }
+    val selHour = remember { mutableIntStateOf(parts.getOrElse(0) { 8 }) }
+    val selMin  = remember { mutableIntStateOf(parts.getOrElse(1) { 0 }) }
 
-    LaunchedEffect(selHour.intValue, selMin.intValue) {
-        onChange("%02d:%02d".format(selHour.intValue, selMin.intValue))
-    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape  = RoundedCornerShape(20.dp),
+        title  = { Text("选择时间", fontWeight = FontWeight.Bold) },
+        text   = {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TimeWheelPicker(selHour, selMin)
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm("%02d:%02d".format(selHour.intValue, selMin.intValue)) },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = FluentBlue)) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = FluentMuted) } }
+    )
+}
 
-    val itemH    = 36.dp
-    val visItems = 3
+@Composable
+private fun TimeWheelPicker(selHour: MutableIntState, selMin: MutableIntState) {
+    val itemH = 40.dp
 
     @Composable
     fun WheelColumn(count: Int, selected: Int, label: (Int) -> String, onSelect: (Int) -> Unit) {
-        val listState     = rememberLazyListState(initialFirstVisibleItemIndex = selected.coerceAtLeast(0))
-        val flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(listState)
-
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selected - 2).coerceAtLeast(0))
         LaunchedEffect(selected) {
-            listState.animateScrollToItem(selected.coerceAtLeast(0))
+            val target = (selected - 2).coerceAtLeast(0)
+            listState.animateScrollToItem(target)
         }
-
-        LaunchedEffect(listState.isScrollInProgress) {
-            if (!listState.isScrollInProgress) {
-                onSelect(listState.firstVisibleItemIndex.coerceIn(0, count - 1))
-            }
-        }
-
-        Box(
-            Modifier
-                .width(48.dp)
-                .height(itemH * visItems)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            LazyColumn(
-                state         = listState,
-                flingBehavior = flingBehavior,
-                modifier      = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = itemH)
-            ) {
-                items(count) { i ->
+        Box(Modifier.height(itemH * 5).width(64.dp)) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                items(count + 4) { i ->
+                    val idx = i - 2
                     Box(
-                        Modifier.fillMaxWidth().height(itemH),
+                        Modifier.fillMaxWidth().height(itemH).clickable {
+                            if (idx in 0 until count) onSelect(idx)
+                        },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            label(i),
-                            style      = if (i == selected) MaterialTheme.typography.titleMedium
+                            if (idx in 0 until count) label(idx) else "",
+                            style      = if (idx == selected) MaterialTheme.typography.titleMedium
                                          else MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal,
-                            color      = if (i == selected) FluentBlue
+                            fontWeight = if (idx == selected) FontWeight.Bold else FontWeight.Normal,
+                            color      = if (idx == selected) FluentBlue
                                          else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                         )
                     }
                 }
             }
-            // Highlight band for the centre slot
             Box(
                 Modifier.align(Alignment.Center)
                     .fillMaxWidth().height(itemH)
@@ -788,84 +778,108 @@ private fun renderScheduleBitmap(
     val timeColPx = dp(TIME_COL_W.toFloat()).toInt()
     val dayColPx  = dp(DAY_COL_W.toFloat()).toInt()
     val headerPx  = dp(HEADER_H.toFloat()).toInt()
-    val titleH    = dp(32f).toInt()
-    val vPadPx    = dp(CAL_V_PAD.toFloat()).toInt()
+    val titleH    = dp(48f).toInt()
     val hourPx    = dp(DP_PER_HOUR.toFloat()).toInt()
-    val totalH    = titleH + headerPx + (CAL_END_HOUR - CAL_START_HOUR) * hourPx + vPadPx * 2
-    val totalW    = timeColPx + DAYS.size * dayColPx
+    val totalH    = CAL_TOTAL_HOURS * hourPx
+    val bmpW      = timeColPx + DAYS.size * dayColPx
+    val bmpH      = titleH + headerPx + totalH + dp(CAL_V_PAD.toFloat()).toInt() * 2
 
-    val bmp    = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+    val bmp    = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     canvas.drawColor(android.graphics.Color.WHITE)
 
-    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color     = 0xFF1A56DB.toInt()
-        textSize  = dp(14f)
-        typeface  = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
-    }
-    canvas.drawText(title, totalW / 2f, titleH / 2f + titlePaint.textSize * 0.35f, titlePaint)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    val hdrPaint = Paint().apply { color = 0xFF1A56DB.toInt() }
-    val hdrTop = titleH.toFloat(); val hdrBot = (titleH + headerPx).toFloat()
-    canvas.drawRect(0f, hdrTop, totalW.toFloat(), hdrBot, hdrPaint)
+    // Title
+    paint.color = android.graphics.Color.parseColor("#1A56DB")
+    canvas.drawRect(0f, 0f, bmpW.toFloat(), titleH.toFloat(), paint)
+    paint.color = android.graphics.Color.WHITE
+    paint.textSize = dp(16f)
+    paint.typeface = Typeface.DEFAULT_BOLD
+    canvas.drawText(title, dp(16f), titleH * 0.65f, paint)
 
-    val dayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE; textSize = dp(12f)
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); textAlign = Paint.Align.CENTER
-    }
-    DAYS.forEachIndexed { di, name ->
-        val cx = (timeColPx + di * dayColPx + dayColPx / 2).toFloat()
-        canvas.drawText(name, cx, hdrTop + headerPx / 2f + dp(5f), dayPaint)
-    }
-
-    canvas.drawRect(0f, hdrBot, timeColPx.toFloat(), totalH.toFloat(),
-        Paint().apply { color = 0xFFF0F4FF.toInt() })
-
-    val hourLinePaint = Paint().apply { color = 0xFFE5E7EB.toInt(); strokeWidth = dp(0.8f) }
-    val halfLinePaint = Paint().apply { color = 0xFFE5E7EB.toInt(); alpha = 100; strokeWidth = dp(0.5f) }
-    val timePaint     = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF6B7280.toInt(); textSize = dp(9f); textAlign = Paint.Align.RIGHT
+    // Header row
+    paint.color = android.graphics.Color.parseColor("#EBF5FF")
+    canvas.drawRect(0f, titleH.toFloat(), bmpW.toFloat(), (titleH + headerPx).toFloat(), paint)
+    paint.color = android.graphics.Color.parseColor("#1A56DB")
+    paint.textSize = dp(11f)
+    paint.typeface = Typeface.DEFAULT_BOLD
+    DAYS.forEachIndexed { i, d ->
+        val x = timeColPx + i * dayColPx + dayColPx / 2f
+        val y = titleH + headerPx * 0.65f
+        paint.textAlign = android.graphics.Paint.Align.CENTER
+        canvas.drawText(d, x, y, paint)
     }
 
+    val bodyTop = titleH + headerPx + dp(CAL_V_PAD.toFloat()).toInt()
+
+    // Hour lines
+    paint.color = android.graphics.Color.parseColor("#E5E7EB")
+    paint.strokeWidth = dp(0.5f)
+    for (h in 0..CAL_TOTAL_HOURS) {
+        val y = bodyTop + h * hourPx
+        canvas.drawLine(0f, y.toFloat(), bmpW.toFloat(), y.toFloat(), paint)
+    }
+
+    // Time labels
+    paint.color = android.graphics.Color.parseColor("#6B7280")
+    paint.textSize = dp(9f)
+    paint.typeface = Typeface.DEFAULT
+    paint.textAlign = android.graphics.Paint.Align.RIGHT
     for (h in CAL_START_HOUR..CAL_END_HOUR) {
-        val y = (hdrBot + vPadPx + (h - CAL_START_HOUR) * hourPx).toFloat()
-        canvas.drawLine(timeColPx.toFloat(), y, totalW.toFloat(), y, hourLinePaint)
-        canvas.drawText("%02d:00".format(h), (timeColPx - dp(4f)), y + dp(3f), timePaint)
-        if (h < CAL_END_HOUR) {
-            val yh = y + hourPx / 2f
-            canvas.drawLine(timeColPx.toFloat(), yh, totalW.toFloat(), yh, halfLinePaint)
-        }
+        val y = bodyTop + (h - CAL_START_HOUR) * hourPx
+        canvas.drawText("%02d:00".format(h), timeColPx - dp(4f), y + dp(4f), paint)
     }
 
-    val bgPaints = SUBJECT_COLORS.map { c -> Paint().apply { color = (c.toInt() and 0x00FFFFFF) or 0x30000000 } }
-    val txtPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = dp(9f); color = android.graphics.Color.BLACK }
-
+    // Slot blocks
     slots.forEach { slot ->
-        val di    = slot.day - 1
-        val start = slot.resolvedStart(); val end = slot.resolvedEnd()
-        val startMin = timeToMinutes(start) - CAL_START_HOUR * 60
-        val endMin   = timeToMinutes(end)   - CAL_START_HOUR * 60
-        val top      = hdrBot + vPadPx + startMin * hourPx / 60f
-        val bot      = hdrBot + vPadPx + endMin   * hourPx / 60f
-        val left     = (timeColPx + di * dayColPx + dp(2f))
-        val right    = (timeColPx + (di + 1) * dayColPx - dp(2f))
+        val startStr = slot.resolvedStart()
+        val endStr   = slot.resolvedEnd()
+        if (startStr.isBlank()) return@forEach
 
         val sub      = state.subjects.find { it.id == slot.subjectId }
-        val colorIdx = state.subjects.indexOf(sub).coerceAtLeast(0) % SUBJECT_COLORS.size
-        canvas.drawRoundRect(RectF(left, top, right, bot), dp(4f), dp(4f), bgPaints[colorIdx])
+        val cl       = state.classes.find  { it.id == slot.classId }
+        val colorIdx = state.subjects.indexOf(sub).coerceAtLeast(0)
+        val argb     = SUBJECT_COLORS[colorIdx % SUBJECT_COLORS.size]
+        val r = ((argb shr 16) and 0xFF).toInt()
+        val g = ((argb shr 8)  and 0xFF).toInt()
+        val b = (argb           and 0xFF).toInt()
 
-        txtPaint.color = when (colorIdx) {
-            0 -> 0xFF1A56DB.toInt(); 1 -> 0xFF0E9F6E.toInt(); 2 -> 0xFF7E3AF2.toInt()
-            3 -> 0xFFFF5A1F.toInt(); 4 -> 0xFFE3A008.toInt(); 5 -> 0xFFE11D48.toInt()
-            6 -> 0xFF0891B2.toInt(); else -> 0xFF65A30D.toInt()
+        val yStart = bodyTop + minuteOffsetDp(startStr) * dp(1f) / (DP_PER_HOUR / 60f) * (hourPx.toFloat() / DP_PER_HOUR)
+        val yEnd   = bodyTop + minuteOffsetDp(endStr)   * dp(1f) / (DP_PER_HOUR / 60f) * (hourPx.toFloat() / DP_PER_HOUR)
+        val x      = timeColPx + (slot.day - 1) * dayColPx
+
+        paint.color = android.graphics.Color.argb(46, r, g, b)
+        canvas.drawRoundRect(RectF(x + dp(2f), yStart + dp(1f), x + dayColPx - dp(2f), yEnd - dp(1f)), dp(4f), dp(4f), paint)
+        paint.color = android.graphics.Color.argb(180, r, g, b)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = dp(1f)
+        canvas.drawRoundRect(RectF(x + dp(2f), yStart + dp(1f), x + dayColPx - dp(2f), yEnd - dp(1f)), dp(4f), dp(4f), paint)
+        paint.style = Paint.Style.FILL
+
+        paint.color = android.graphics.Color.argb(255, r, g, b)
+        paint.textSize = dp(9f)
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.textAlign = android.graphics.Paint.Align.LEFT
+        canvas.drawText(sub?.name ?: cl?.subject ?: "?", x + dp(4f), yStart + dp(12f), paint)
+        if (yEnd - yStart > dp(26f)) {
+            paint.color = android.graphics.Color.parseColor("#6B7280")
+            paint.textSize = dp(8f)
+            paint.typeface = Typeface.DEFAULT
+            canvas.drawText(cl?.name ?: "", x + dp(4f), yStart + dp(22f), paint)
         }
-        val subName = sub?.name ?: state.classes.find { it.id == slot.classId }?.subject ?: "?"
-        canvas.drawText(subName, left + dp(3f), top + dp(10f), txtPaint)
-        val cl = state.classes.find { it.id == slot.classId }
-        if ((bot - top) > dp(20f))
-            canvas.drawText(cl?.name ?: "?", left + dp(3f), top + dp(20f), Paint(txtPaint).apply { color = 0xFF6B7280.toInt() })
     }
 
     return bmp
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+private fun subjectColor(idx: Int): Color = packedToColor(SUBJECT_COLORS[idx % SUBJECT_COLORS.size])
+
+fun packedToColor(packed: Long): Color {
+    val r = ((packed shr 16) and 0xFF).toFloat() / 255f
+    val g = ((packed shr 8)  and 0xFF).toFloat() / 255f
+    val b = (packed           and 0xFF).toFloat() / 255f
+    return Color(r, g, b, 1f)
 }

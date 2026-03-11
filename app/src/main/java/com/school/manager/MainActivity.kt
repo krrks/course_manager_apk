@@ -47,11 +47,6 @@ fun SchoolManagerApp() {
     val currentRoute    = navBackStack?.destination?.route ?: Screen.Schedule.route
     val currentScreen   = ALL_SCREENS.find { it.route == currentRoute } ?: Screen.Schedule
 
-    // ── Schedule filter state (for dynamic TopAppBar title) ────────────────────
-    val scheduleFilterMode  by vm.scheduleFilterMode.collectAsState()
-    val scheduleFilterTitle by vm.scheduleFilterTitle.collectAsState()
-    val scheduleFilterActive = currentScreen == Screen.Schedule && scheduleFilterMode != "all"
-
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -118,60 +113,55 @@ fun SchoolManagerApp() {
             }
         }
     ) {
+        // No TopAppBar — content fills the full screen from the top.
+        // The ScheduleScreen's CalendarGrid day-header row is now visible at the very top.
+        // Navigation drawer is accessible via the "导航菜单" entry in the ScheduleScreen speed-dial FAB,
+        // and via a persistent menu FAB shown on every non-schedule screen.
         Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        // 当课表有筛选时，直接在标题栏展示"李老师的课表"
-                        Text(
-                            text = if (scheduleFilterActive) scheduleFilterTitle else currentScreen.title,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "菜单")
-                        }
-                    },
-                    // 筛选激活时显示"× 清除筛选"按钮
-                    actions = {
-                        if (scheduleFilterActive) {
-                            TextButton(onClick = { vm.clearScheduleFilter() }) {
-                                Text(
-                                    "× 清除",
-                                    color = FluentBlue,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor     = MaterialTheme.colorScheme.surface,
-                        titleContentColor  = MaterialTheme.colorScheme.onSurface,
-                    ),
-                )
-            },
             containerColor = MaterialTheme.colorScheme.background
         ) { inner ->
-            NavHost(
-                navController    = navController,
-                startDestination = Screen.Schedule.route,
-                modifier         = Modifier.padding(inner)
-                    .fillMaxSize()
-                    .animateContentSize(),
-                enterTransition  = { slideInHorizontally { it / 6 } + fadeIn() },
-                exitTransition   = { slideOutHorizontally { -it / 6 } + fadeOut() },
-                popEnterTransition  = { slideInHorizontally { -it / 6 } + fadeIn() },
-                popExitTransition   = { slideOutHorizontally { it / 6 } + fadeOut() },
-            ) {
-                composable(Screen.Schedule.route)   { ScheduleScreen(vm) }
-                composable(Screen.Attendance.route) { AttendanceScreen(vm) }
-                composable(Screen.Classes.route)    { ClassesScreen(vm) }
-                composable(Screen.Teachers.route)   { TeachersScreen(vm) }
-                composable(Screen.Students.route)   { StudentsScreen(vm) }
-                composable(Screen.Stats.route)      { StatsScreen(vm) }
-                composable(Screen.Export.route)     { ExportScreen(vm) }
+            Box(modifier = Modifier.fillMaxSize()) {
+                NavHost(
+                    navController    = navController,
+                    startDestination = Screen.Schedule.route,
+                    modifier         = Modifier
+                        .fillMaxSize()
+                        .animateContentSize(),
+                    enterTransition  = { slideInHorizontally { it / 6 } + fadeIn() },
+                    exitTransition   = { slideOutHorizontally { -it / 6 } + fadeOut() },
+                    popEnterTransition  = { slideInHorizontally { -it / 6 } + fadeIn() },
+                    popExitTransition   = { slideOutHorizontally { it / 6 } + fadeOut() },
+                ) {
+                    composable(Screen.Schedule.route)   {
+                        // Pass drawer-open callback so ScheduleScreen's speed-dial FAB can open it
+                        ScheduleScreen(vm, onOpenDrawer = { scope.launch { drawerState.open() } })
+                    }
+                    composable(Screen.Attendance.route) { AttendanceScreen(vm) }
+                    composable(Screen.Classes.route)    { ClassesScreen(vm) }
+                    composable(Screen.Teachers.route)   { TeachersScreen(vm) }
+                    composable(Screen.Students.route)   { StudentsScreen(vm) }
+                    composable(Screen.Stats.route)      { StatsScreen(vm) }
+                    composable(Screen.Export.route)     { ExportScreen(vm) }
+                }
+
+                // Persistent menu FAB shown on every screen except Schedule
+                // (Schedule has its own speed-dial FAB that already includes "导航菜单").
+                if (currentScreen != Screen.Schedule) {
+                    FloatingActionButton(
+                        onClick        = { scope.launch { drawerState.open() } },
+                        modifier       = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(
+                                start  = 16.dp,
+                                bottom = inner.calculateBottomPadding() + 88.dp  // above screen's own FAB
+                            ),
+                        containerColor = FluentBlue,
+                        contentColor   = Color.White,
+                        shape          = androidx.compose.foundation.shape.CircleShape
+                    ) {
+                        Icon(Icons.Default.Menu, contentDescription = "导航菜单")
+                    }
+                }
             }
         }
     }
