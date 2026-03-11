@@ -2,17 +2,16 @@
 
 | 字段 | 值 |
 |------|----|
-| ZIP 文件 | `update.zip` |
-| 打包时间 (UTC) | `2026-03-11T00:52:31Z` |
-| 生成时间 (UTC) | `2026-03-11T00:53:32Z` |
+| ZIP 文件 | `update_1773193539.zip` |
+| 打包时间 (UTC) | `2026-03-11T01:50:46Z` |
+| 生成时间 (UTC) | `2026-03-11T01:51:03Z` |
 | 触发分支 | `main` |
-| 提交 SHA | `f5968ef32699ceef7e397d63063b597f8dcec2f6` |
+| 提交 SHA | `9786d07228073b1e02c0e47ea5d73717cea45987` |
 
 ## 📁 本次 patch 包含的文件
 
 ```
-src/main/java/com/school/manager/MainActivity.kt
-src/main/java/com/school/manager/Navigation.kt
+src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
 src/main/java/com/school/manager/viewmodel/AppViewModel.kt
 ```
 
@@ -55,7 +54,6 @@ src/main/java/com/school/manager/viewmodel/AppViewModel.kt
 ./gradlew
 ./gradlew.bat
 ./settings.gradle.kts
-./src/main/java/com/school/manager/MainActivity.kt
-./src/main/java/com/school/manager/Navigation.kt
+./src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
 ./src/main/java/com/school/manager/viewmodel/AppViewModel.kt
 ```
