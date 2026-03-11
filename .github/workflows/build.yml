@@ -153,23 +153,19 @@ jobs:
           echo "⬇️  Extracting: $ZIP_PATH"
           unzip -o "$ZIP_PATH" -d _zip_tmp
 
-          # ── 识别包装目录 ────────────────────────────────────────────────
           INNER=$(find _zip_tmp -mindepth 1 -maxdepth 1 -type d | head -n1)
           SRC="${INNER:-_zip_tmp}"
           echo "📁 Source root: $SRC"
 
-          # ── 打印文件树（供日志核查） ─────────────────────────────────────
           echo "──────────── zip 内容 ────────────"
           find "$SRC" -type f | sort | sed "s|$SRC/||"
           echo "──────────────────────────────────"
 
-          # ── 安全检查：zip 内不得包含 .github ────────────────────────────
           if find "$SRC" -type d -name '.github' | grep -q '.'; then
             echo "❌ FATAL: zip contains .github/ — aborting to protect workflow files"
             exit 1
           fi
 
-          # ── 同步到仓库根目录 ─────────────────────────────────────────────
           rsync -av --exclude='.github' "$SRC/" .
           rm -rf _zip_tmp
           echo "✅ Extracted to repo root (skipped .github/)"
@@ -237,7 +233,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "ℹ️  Nothing to commit"
           else
-            # ── 读取 release_note.md 内容（如有）─────────────────────────
             RELEASE_NOTE_FILE="zip_update/release_note.md"
             if [ -f "$RELEASE_NOTE_FILE" ]; then
               RELEASE_NOTE_BODY=$(cat "$RELEASE_NOTE_FILE")
@@ -270,7 +265,10 @@ jobs:
           fi
           chmod +x ./gradlew
 
-      # ── 7. Gradle 缓存 ─────────────────────────────────────────────────────
+      # ── 7. Gradle 缓存（含 configuration-cache）──────────────────────────────
+      # FIX: 新增 .gradle/configuration-cache 路径，缓存任务图计算结果，
+      # 解决每次编译都出现 "Calculating task graph as no cached configuration
+      # is available" 并耗时等待的问题。
       - name: 💾 Restore Gradle caches
         uses: actions/cache@v4
         with:
@@ -279,8 +277,10 @@ jobs:
             ~/.gradle/caches/modules-*
             ~/.gradle/caches/jars-*
             ~/.gradle/caches/build-cache-*
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties','**/libs.versions.toml') }}
+            .gradle/configuration-cache
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties','**/libs.versions.toml','**/*.kt') }}
           restore-keys: |
+            gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties','**/libs.versions.toml') }}-
             gradle-${{ runner.os }}-
 
       # ── 8. 编译 Debug APK ───────────────────────────────────────────────────
