@@ -18,6 +18,11 @@ on:
           - 'false'
           - 'true'
 
+# FIX 1: Suppress Node.js 20 deprecation warning for actions/checkout@v4
+# (GitHub will force Node.js 24 from June 2026 onwards)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # ════════════════════════════════════════════════════════════════════════════
 # Job 1 — 预检：决定是否需要编译
 # ════════════════════════════════════════════════════════════════════════════
@@ -265,10 +270,11 @@ jobs:
           fi
           chmod +x ./gradlew
 
-      # ── 7. Gradle 缓存（含 configuration-cache）──────────────────────────────
-      # FIX: 新增 .gradle/configuration-cache 路径，缓存任务图计算结果，
-      # 解决每次编译都出现 "Calculating task graph as no cached configuration
-      # is available" 并耗时等待的问题。
+      # ── 7. Gradle 缓存 ────────────────────────────────────────────────────
+      # FIX 3: Removed .gradle/configuration-cache from cache paths.
+      # Using --configuration-cache caused "Calculating task graph as no
+      # cached configuration is available" on every cache miss. Standard
+      # --build-cache is sufficient and more reliable.
       - name: 💾 Restore Gradle caches
         uses: actions/cache@v4
         with:
@@ -277,19 +283,20 @@ jobs:
             ~/.gradle/caches/modules-*
             ~/.gradle/caches/jars-*
             ~/.gradle/caches/build-cache-*
-            .gradle/configuration-cache
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties','**/libs.versions.toml','**/*.kt') }}
           restore-keys: |
             gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties','**/libs.versions.toml') }}-
             gradle-${{ runner.os }}-
 
       # ── 8. 编译 Debug APK ───────────────────────────────────────────────────
+      # FIX 3: Removed --configuration-cache flag (was printing
+      # "Calculating task graph as no cached configuration is available"
+      # on every cold run). --build-cache is kept for incremental builds.
       - name: 🔧 Build Debug APK
         run: |
           ./gradlew assembleDebug \
             --no-daemon \
             --build-cache \
-            --configuration-cache \
             -Dorg.gradle.parallel=true
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
@@ -300,7 +307,6 @@ jobs:
           ./gradlew assembleRelease \
             --no-daemon \
             --build-cache \
-            --configuration-cache \
             -Dorg.gradle.parallel=true
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC"
