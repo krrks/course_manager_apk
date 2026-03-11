@@ -17,6 +17,14 @@ import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
 
+private fun genCode(prefix: String) =
+    "$prefix${System.currentTimeMillis().toString().takeLast(6)}"
+
+private val GRADES = listOf(
+    "初一", "初二", "初三",
+    "高一", "高二", "高三"
+)
+
 @Composable
 fun ClassesScreen(vm: AppViewModel) {
     val state   by vm.state.collectAsState()
@@ -84,21 +92,18 @@ fun ClassesScreen(vm: AppViewModel) {
         ClassDetailDialog(cls, state, vm,
             onDismiss = { viewing = null },
             onEdit    = { editing = cls; viewing = null },
-            // FIX: was vm.deleteClass → correct name is vm.deleteSchoolClass
             onDelete  = { vm.deleteSchoolClass(cls.id); viewing = null }
         )
     }
 
     editing?.let { cls ->
         ClassFormDialog("编辑班级", cls, state, vm, onDismiss = { editing = null }) { updated ->
-            // FIX: was vm.updateClass → correct name is vm.updateSchoolClass
             vm.updateSchoolClass(updated); editing = null
         }
     }
 
     if (showAdd) {
         ClassFormDialog("添加班级", null, state, vm, onDismiss = { showAdd = false }) { c ->
-            // FIX: was vm.addClass → correct name is vm.addSchoolClass
             vm.addSchoolClass(c.name, c.grade, c.count, c.headTeacherId, c.subject, c.code)
             showAdd = false
         }
@@ -146,7 +151,6 @@ private fun ClassFormDialog(
     state: AppState, vm: AppViewModel,
     onDismiss: () -> Unit, onSave: (SchoolClass) -> Unit
 ) {
-    // Collect all existing subject names for autocomplete
     val existingSubjects = remember(state) {
         (state.subjects.map { it.name } +
          state.classes.map { it.subject }.filter { it.isNotBlank() })
@@ -171,31 +175,16 @@ private fun ClassFormDialog(
                 count         = count.toIntOrNull() ?: 0,
                 headTeacherId = tId,
                 subject       = subject.trim(),
-                code          = code.trim().ifBlank { genCode("C") }
+                code          = code.trim()
             ))
         }
     }) {
-        FormTextField("编号", code, { code = it }, "自动生成，可修改")
-        FormTextField("班级名称", name, { name = it }, "如: 高一(1)班")
-        FormDropdown("年级", grade, GRADES) { grade = it }
-        FormTextField("编制人数", count, { count = it }, "人数")
-        FormDropdown("班主任", teacher, state.teachers.map { it.name }) { teacher = it }
-
-        // Subject: free-text + existing quick-pick chips
-        FormTextField("科目", subject, { subject = it }, "输入科目名称")
-        if (existingSubjects.isNotEmpty()) {
-            FlowRow(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                existingSubjects.forEach { s ->
-                    FilterChip(
-                        selected = subject == s,
-                        onClick  = { subject = s },
-                        label    = { Text(s, style = MaterialTheme.typography.labelSmall) }
-                    )
-                }
-            }
-        }
+        FluentTextField("班级名称", name, { name = it })
+        DropdownField("年级", grade, GRADES) { grade = it }
+        FluentTextField("编制人数", count, { count = it })
+        DropdownField("班主任", teacher,
+            listOf("") + state.teachers.map { it.name }) { teacher = it }
+        AutocompleteTextField("科目", subject, existingSubjects) { subject = it }
+        FluentTextField("班级编号", code, { code = it })
     }
 }
