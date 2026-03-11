@@ -5,62 +5,38 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.reflect.TypeToken
 import com.school.manager.data.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import java.io.File
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
+private fun genCode(prefix: String) =
+    "$prefix${System.currentTimeMillis().toString().takeLast(6)}"
+
+// Gson-friendly snapshot (all fields nullable for safe deserialization)
 private data class GsonState(
-    val subjects:   List<Subject>?,
-    val teachers:   List<Teacher>?,
-    val classes:    List<SchoolClass>?,
-    val students:   List<Student>?,
-    val schedule:   List<Schedule>?,
-    val attendance: List<Attendance>?
+    val subjects:   List<Subject>?    = null,
+    val teachers:   List<Teacher>?    = null,
+    val classes:    List<SchoolClass>? = null,
+    val students:   List<Student>?    = null,
+    val schedule:   List<Schedule>?   = null,
+    val attendance: List<Attendance>? = null
 )
 
-class AppViewModel(application: Application) : AndroidViewModel(application) {
+class AppViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val prefs = application.getSharedPreferences("school_state_v2", Context.MODE_PRIVATE)
-    private val gson  = Gson()
+    private val prefs = app.getSharedPreferences("app_data", Context.MODE_PRIVATE)
+    private val gson: Gson = GsonBuilder().create()
 
-    private fun loadState(): AppState {
-        val json = prefs.getString("state", null) ?: return AppState()
-        return try {
-            val raw = gson.fromJson(json, GsonState::class.java)
-            AppState(
-                subjects   = raw.subjects   ?: sampleSubjects,
-                teachers   = raw.teachers   ?: sampleTeachers,
-                classes    = raw.classes    ?: sampleClasses,
-                students   = raw.students   ?: sampleStudents,
-                schedule   = raw.schedule   ?: sampleSchedule,
-                attendance = raw.attendance ?: sampleAttendance
-            )
-        } catch (_: Exception) { AppState() }
-    }
+    private val _state = MutableStateFlow(AppState())
+    val state: StateFlow<AppState> = _state.asStateFlow()
 
-    private val _state = MutableStateFlow(loadState())
-    val state = _state.asStateFlow()
+    // ─── Schedule filter ──────────────────────────────────────────────────────
+    val scheduleFilterMode = MutableStateFlow("all")   // "all" | "teacher" | "student"
+    val scheduleFilterId   = MutableStateFlow<Long?>(null)
 
-    private fun save() {
-        prefs.edit().putString("state", gson.toJson(_state.value)).apply()
-    }
-
-    // ─── Schedule screen filter state (lifted for TopAppBar) ──────────────────
-    val scheduleFilterMode = MutableStateFlow("all")
-    val scheduleFilterId   = MutableStateFlow(0L)
-    fun clearScheduleFilter() { scheduleFilterMode.value = "all"; scheduleFilterId.value = 0L }
-
-    /** Resolved display title shown in the TopAppBar when a filter is active. */
     val scheduleFilterTitle: StateFlow<String> = combine(
         scheduleFilterMode, scheduleFilterId, _state
     ) { mode, id, st ->
@@ -70,6 +46,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             else      -> "课表"
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, "课表")
+
+    init { load() }
 
     // ─── Lookups ─────────────────────────────────────────────────────────────
     fun subject(id: Long?)     = _state.value.subjects.find  { it.id == id }
@@ -93,9 +71,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
-    fun addTeacher(name: String, subject: String, phone: String = "", avatarUri: String? = null) {
+    // Teacher(id, name, gender, phone, subjectIds, avatarUri, code)
+    fun addTeacher(
+        name: String,
+        gender: String,
+        phone: String = "",
+        subjectIds: List<Long> = emptyList(),
+        avatarUri: String? = null,
+        code: String = ""
+    ) {
+        val c = code.ifBlank { genCode("T") }
         _state.update { it.copy(teachers = it.teachers +
-            Teacher(System.currentTimeMillis(), name, subject, phone, avatarUri)) }
+            Teacher(System.currentTimeMillis(), name, gender, phone, subjectIds, avatarUri, c)) }
         save()
     }
     fun updateTeacher(t: Teacher) {
@@ -108,9 +95,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ─── Classes ──────────────────────────────────────────────────────────────
-    fun addSchoolClass(name: String, grade: String, subject: String, headTeacherId: Long?) {
+    // SchoolClass(id, name, grade, count, headTeacherId, subject, code)
+    fun addSchoolClass(
+        name: String,
+        grade: String,
+        count: Int,
+        headTeacherId: Long?,
+        subject: String = "",
+        code: String = ""
+    ) {
+        val c = code.ifBlank { genCode("C") }
         _state.update { it.copy(classes = it.classes +
-            SchoolClass(System.currentTimeMillis(), name, grade, subject, headTeacherId)) }
+            SchoolClass(System.currentTimeMillis(), name, grade, count, headTeacherId, subject, c)) }
         save()
     }
     fun updateSchoolClass(c: SchoolClass) {
@@ -185,110 +181,64 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun exportFullStateJson(): String = gson.toJson(_state.value)
 
     /** Schedule records with resolved names */
-    fun exportScheduleJson(teacherId: Long?): String {
-        val records = if (teacherId != null)
-            _state.value.schedule.filter { it.teacherId == teacherId }
-        else _state.value.schedule
-        return gson.toJson(records.map { s ->
-            mapOf(
-                "id" to s.id, "code" to s.code,
-                "class"   to (schoolClass(s.classId)?.name ?: "?"),
-                "subject" to (subject(s.subjectId)?.name ?: "?"),
-                "teacher" to (teacher(s.teacherId)?.name ?: "─"),
-                "day" to s.day, "start" to s.startTime, "end" to s.endTime
-            )
-        })
+    fun exportScheduleJson(teacherId: Long? = null): String {
+        val st = _state.value
+        val rows = st.schedule
+            .filter { teacherId == null || it.teacherId == teacherId }
+            .map { s ->
+                mapOf(
+                    "id"        to s.id,
+                    "class"     to (st.classes.find { it.id == s.classId }?.name ?: ""),
+                    "subject"   to (st.subjects.find { it.id == s.subjectId }?.name ?: ""),
+                    "teacher"   to (st.teachers.find { it.id == s.teacherId }?.name ?: ""),
+                    "day"       to s.day,
+                    "startTime" to s.startTime,
+                    "endTime"   to s.endTime
+                )
+            }
+        return gson.toJson(rows)
     }
 
     /** Attendance records with resolved names */
-    fun exportAttendanceJson(teacherId: Long?): String {
-        val records = if (teacherId != null)
-            _state.value.attendance.filter { it.teacherId == teacherId }
-        else _state.value.attendance
-        return gson.toJson(records.map { a ->
-            mapOf(
-                "id" to a.id, "code" to a.code,
-                "subject" to (schoolClass(a.classId)?.subject?.takeIf { it.isNotBlank() } ?: "?"),
-                "class"   to (schoolClass(a.classId)?.name ?: "?"),
-                "teacher" to (teacher(a.teacherId)?.name ?: "─"),
-                "topic" to a.topic, "status" to a.status,
-                "attendees" to a.attendees.size, "notes" to a.notes
-            )
-        })
-    }
-
-    /**
-     * Merge-import JSON: existing records with the same [id] are updated,
-     * new records (id not present) are appended. Nothing is deleted.
-     */
-    fun mergeImport(json: String): Boolean {
-        return try {
-            val raw = gson.fromJson(json, GsonState::class.java)
-            _state.update { cur ->
-                fun <T : Any> merge(current: List<T>, incoming: List<T>?, getId: (T) -> Long): List<T> {
-                    if (incoming.isNullOrEmpty()) return current
-                    val map = current.associateBy(getId).toMutableMap()
-                    incoming.forEach { item -> map[getId(item)] = item }
-                    return map.values.toList()
-                }
-                cur.copy(
-                    subjects   = merge(cur.subjects,   raw.subjects)   { it.id },
-                    teachers   = merge(cur.teachers,   raw.teachers)   { it.id },
-                    classes    = merge(cur.classes,    raw.classes)    { it.id },
-                    students   = merge(cur.students,   raw.students)   { it.id },
-                    schedule   = merge(cur.schedule,   raw.schedule)   { it.id },
-                    attendance = merge(cur.attendance, raw.attendance) { it.id }
+    fun exportAttendanceJson(teacherId: Long? = null): String {
+        val st = _state.value
+        val rows = st.attendance
+            .filter { teacherId == null || it.teacherId == teacherId }
+            .map { a ->
+                mapOf(
+                    "id"        to a.id,
+                    "date"      to a.date,
+                    "class"     to (st.classes.find { it.id == a.classId }?.name ?: ""),
+                    "subject"   to (st.subjects.find { it.id == a.subjectId }?.name ?: ""),
+                    "teacher"   to (st.teachers.find { it.id == a.teacherId }?.name ?: ""),
+                    "topic"     to a.topic,
+                    "status"    to a.status,
+                    "notes"     to a.notes,
+                    "attendees" to a.attendees.size
                 )
             }
-            save()
-            true
-        } catch (_: Exception) { false }
+        return gson.toJson(rows)
     }
 
-    // ─── ZIP 完整备份（含头像图片）────────────────────────────────────────────
-
-    fun exportFullBackupZip(context: Context): ByteArray? = try {
-        val baos = ByteArrayOutputStream()
-        ZipOutputStream(baos).use { zos ->
-            zos.putNextEntry(ZipEntry("state.json"))
-            zos.write(gson.toJson(_state.value).toByteArray(Charsets.UTF_8))
-            zos.closeEntry()
-            val avatarDir = File(context.filesDir, "avatars")
-            if (avatarDir.exists()) {
-                avatarDir.listFiles()?.forEach { file ->
-                    zos.putNextEntry(ZipEntry("avatars/${file.name}"))
-                    file.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
-                }
-            }
+    // ─── Persistence ─────────────────────────────────────────────────────────
+    private fun save() {
+        viewModelScope.launch {
+            prefs.edit().putString("state", gson.toJson(_state.value)).apply()
         }
-        baos.toByteArray()
-    } catch (_: Exception) { null }
+    }
 
-    fun importFullBackupZip(context: Context, zipBytes: ByteArray): Boolean = try {
-        val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
-        var stateJson: String? = null
-        val pathRemap = mutableMapOf<String, String>()
+    private fun load() {
+        val json = prefs.getString("state", null) ?: return
+        try {
+            val type = object : TypeToken<AppState>() {}.type
+            val loaded: AppState = gson.fromJson(json, type)
+            _state.value = loaded
+        } catch (_: Exception) { /* ignore corrupt data */ }
+    }
 
-        ZipInputStream(zipBytes.inputStream()).use { zis ->
-            var entry = zis.nextEntry
-            while (entry != null) {
-                when {
-                    entry.name == "state.json" ->
-                        stateJson = zis.readBytes().toString(Charsets.UTF_8)
-                    entry.name.startsWith("avatars/") && !entry.isDirectory -> {
-                        val name = entry.name.removePrefix("avatars/")
-                        val dest = File(avatarDir, name)
-                        dest.outputStream().use { out -> zis.copyTo(out) }
-                        pathRemap[name] = dest.absolutePath
-                    }
-                }
-                zis.closeEntry()
-                entry = zis.nextEntry
-            }
-        }
-
-        val json = stateJson ?: return false
+    // ─── Import / merge ───────────────────────────────────────────────────────
+    fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean = try {
+        if (json.isBlank()) return false
         val raw  = gson.fromJson(json, GsonState::class.java)
 
         fun remapPath(old: String?): String? {

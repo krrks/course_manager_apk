@@ -59,37 +59,48 @@ chmod +x gradlew
 
 ### Auto build (`build.yml`)
 
-Triggers on every push. Detects a `update_<timestamp>.zip` in the repo root and applies it before building, so you can ship source patches without committing individual files.
+Triggers on every push. Detects `update_<timestamp>.zip` inside `zip_update/` and applies it to the repo before building.
 
-- Uploads the debug APK as a workflow artifact on every successful build
-- Skips the build if only `.github/` files changed
+- APKs are uploaded as workflow artifacts and attached to a GitHub Release on every successful build
+- Skips the build if only `.github/` files changed or the zip was already released
 
 ### Manual release (`release.yml`)
 
 Trigger manually with a version tag (e.g. `v1.2.0`) to build both debug and release APKs and publish a GitHub Release.
 
-```bash
-# Trigger via git tag
-git tag v1.2.0
-git push origin v1.2.0
-
-# Or trigger manually in GitHub → Actions → Manual Release APK
-```
-
 ---
 
 ## 📦 Applying a Patch ZIP
 
-The `build.yml` workflow automatically detects `update_<timestamp>.zip` files in the repo root and unpacks them into the source tree before compiling. The zip must preserve the full relative path from the repo root, e.g.:
+The workflow looks for `zip_update/update_<timestamp>.zip`. The zip **must use paths relative to the repo root** — there must be **no wrapper/outer directory** inside the zip. The workflow always extracts directly from the zip root to the repo root.
+
+### ✅ Correct zip structure
 
 ```
-/app/src/main/java/com/school/manager/viewmodel/AppViewModel.kt
-/app/src/main/res/values/themes.xml
-/zip_update/release_note.md
-/README.md
+app/src/main/java/com/school/manager/viewmodel/AppViewModel.kt
+app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
+zip_update/release_note.md
+README.md
 ```
 
-> **Do not include `build.yml` inside the zip** — deliver it as a standalone file if it needs updating.
+When you run `unzip -l update_xxx.zip` you should see paths starting with `app/`, `zip_update/`, etc. — **not** a single top-level folder wrapping everything.
+
+### ❌ Wrong zip structure (causes files to land in wrong place)
+
+```
+some_folder/app/src/main/java/...   ← extra wrapper dir = broken
+```
+
+### How to create a correct zip (run from repo root)
+
+```bash
+zip -r zip_update/update_$(date +%s).zip \
+  app/src/main/java/com/school/manager/viewmodel/AppViewModel.kt \
+  app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt \
+  zip_update/release_note.md
+```
+
+> **Do not include `.github/build.yml` inside the zip** — deliver it as a standalone file if it needs updating.
 
 ---
 
@@ -119,7 +130,7 @@ The `build.yml` workflow automatically detects `update_<timestamp>.zip` files in
 ```
 app/src/main/java/com/school/manager/
 ├── data/
-│   └── Models.kt              # Domain models: Teacher, SchoolClass, Student, …
+│   └── Models.kt
 ├── ui/
 │   ├── components/
 │   │   └── CommonComponents.kt
@@ -139,9 +150,13 @@ app/src/main/java/com/school/manager/
 ├── util/
 │   └── AvatarUtil.kt
 ├── viewmodel/
-│   └── AppViewModel.kt        # All CRUD + state persistence
+│   └── AppViewModel.kt
 ├── MainActivity.kt
 └── Navigation.kt
+zip_update/
+├── file_list.md    ← full repo file list, auto-updated by workflow
+├── note.md         ← last patch summary, auto-updated by workflow
+└── release_note.md ← human-written change description, included in zip
 ```
 
 ---
