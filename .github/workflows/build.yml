@@ -12,11 +12,8 @@ on:
       force_build:
         description: '强制编译（忽略 zip 时间戳比对）'
         required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
+        default: true
+        type: boolean
       build_debug:
         description: '编译 Debug APK'
         required: false
