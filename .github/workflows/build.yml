@@ -17,6 +17,16 @@ on:
         options:
           - 'false'
           - 'true'
+      build_debug:
+        description: '编译 Debug APK'
+        required: false
+        default: false
+        type: boolean
+      build_release:
+        description: '编译 Release APK'
+        required: false
+        default: true
+        type: boolean
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -35,6 +45,8 @@ jobs:
       zip_found:    ${{ steps.find_zip.outputs.zip_found }}
       zip_path:     ${{ steps.find_zip.outputs.zip_path }}
       zip_mtime:    ${{ steps.find_zip.outputs.zip_mtime }}
+      do_debug:     ${{ steps.variants.outputs.do_debug }}
+      do_release:   ${{ steps.variants.outputs.do_release }}
 
     steps:
       # ── 1. Checkout ────────────────────────────────────────────────────────
@@ -86,7 +98,7 @@ jobs:
             echo "zip_mtime="           >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 4. 对比最新 Release，避免重复编译 ────────────────────────────────────
+      # ── 4. 对比最新 Release，避免重复编译 ──────────────────────────────────
       - name: 🔎 Compare zip mtime with latest release
         id: compare_release
         if: steps.find_zip.outputs.zip_found == 'true'
@@ -128,6 +140,33 @@ jobs:
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # ── 6. 决定编译哪些 variant ──────────────────────────────────────────────
+      # 自动触发（push / PR）：仅 release
+      # 手动触发：读取用户勾选；若两者均未勾选则默认仅 release
+      - name: 🎛️ Resolve build variants
+        id: variants
+        env:
+          EVENT:         ${{ github.event_name }}
+          INPUT_DEBUG:   ${{ github.event.inputs.build_debug }}
+          INPUT_RELEASE: ${{ github.event.inputs.build_release }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            DO_DEBUG="${INPUT_DEBUG}"
+            DO_RELEASE="${INPUT_RELEASE}"
+            # 两者都未勾选时回退到仅 release
+            if [ "$DO_DEBUG" != "true" ] && [ "$DO_RELEASE" != "true" ]; then
+              echo "⚠️  Neither variant selected — defaulting to release only"
+              DO_RELEASE="true"
+            fi
+          else
+            # 自动触发：只编 release
+            DO_DEBUG="false"
+            DO_RELEASE="true"
+          fi
+          echo "do_debug=$DO_DEBUG"     >> "$GITHUB_OUTPUT"
+          echo "do_release=$DO_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "📦 Variants → debug=$DO_DEBUG  release=$DO_RELEASE"
+
 # ════════════════════════════════════════════════════════════════════════════
 # Job 2 — 编译 & 发布（仅当 check.should_build == 'true' 时运行）
 # ════════════════════════════════════════════════════════════════════════════
@@ -148,11 +187,6 @@ jobs:
           fetch-depth: 0
 
       # ── 2. 解压 zip 到仓库根目录 ──────────────────────────────────────────────
-      # FIX: Removed the "INNER dir detection" logic that was stripping a valid
-      # top-level path prefix (e.g. treating "app/" as a wrapper dir and rsync-ing
-      # its contents one level too high).  The zip must always be structured with
-      # paths relative to the repo root (e.g. app/src/…), so we always rsync
-      # directly from _zip_tmp/ with no inner-dir indirection.
       - name: 📂 Extract zip to repo root
         if: needs.check.outputs.zip_found == 'true'
         env:
@@ -171,7 +205,6 @@ jobs:
             exit 1
           fi
 
-          # Always rsync from _zip_tmp root — zip paths are repo-root-relative
           rsync -av --exclude='.github' _zip_tmp/ .
           rm -rf _zip_tmp
           echo "✅ Extracted to repo root"
@@ -185,10 +218,7 @@ jobs:
         run: |
           mkdir -p zip_update
 
-          # ── note.md (patch summary) ──────────────────────────────────────
           NOTE="zip_update/note.md"
-
-          # List zip contents directly (no inner-dir detection)
           mkdir -p _note_tmp
           unzip -o "$ZIP_PATH" -d _note_tmp 2>/dev/null
           ZIP_FILES=$(find _note_tmp -type f | sort | sed "s|_note_tmp/||")
@@ -213,7 +243,6 @@ jobs:
           } > "$NOTE"
           echo "✅ note.md written"
 
-          # ── file_list.md (full repo snapshot, NO exclusions) ─────────────
           FILE_LIST="zip_update/file_list.md"
           {
             echo "# 🗂 仓库完整文件列表（patch 后快照）"
@@ -291,26 +320,30 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # ── 8. Build Debug APK ────────────────────────────────────────────────
+      # ── 8. Build Debug APK（仅当 do_debug == 'true'）────────────────────────
       - name: 🔧 Build Debug APK
+        if: needs.check.outputs.do_debug == 'true'
         run: ./gradlew assembleDebug --no-daemon --build-cache
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
-      # ── 9. Build Release APK ──────────────────────────────────────────────
+      # ── 9. Build Release APK（仅当 do_release == 'true'）───────────────────
       - name: 🚀 Build Release APK
+        if: needs.check.outputs.do_release == 'true'
         run: ./gradlew assembleRelease --no-daemon --build-cache
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
       # ── 10. Upload APK artifacts ──────────────────────────────────────────
       - name: 📤 Upload Debug APK
+        if: needs.check.outputs.do_debug == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: 📤 Upload Release APK
+        if: needs.check.outputs.do_release == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release
@@ -339,7 +372,22 @@ jobs:
           echo "✅ Next version: $NEXT"
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
-      # ── 12. 发布 Release ─────────────────────────────────────────────────
+      # ── 12. 收集本次实际产出的 APK 路径 ──────────────────────────────────────
+      - name: 📋 Collect APK paths for release
+        id: apk_paths
+        env:
+          DO_DEBUG:   ${{ needs.check.outputs.do_debug }}
+          DO_RELEASE: ${{ needs.check.outputs.do_release }}
+        run: |
+          FILES=""
+          if [ "$DO_DEBUG"   = "true" ]; then FILES="$FILES app/build/outputs/apk/debug/app-debug.apk"; fi
+          if [ "$DO_RELEASE" = "true" ]; then FILES="$FILES app/build/outputs/apk/release/app-release.apk"; fi
+          # trim leading space
+          FILES="${FILES# }"
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+          echo "📦 Release files: $FILES"
+
+      # ── 13. 发布 Release ─────────────────────────────────────────────────
       - name: 🏷️ Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -355,13 +403,15 @@ jobs:
                            needs.check.outputs.zip_mtime)
                 || '- 来源：仓库当前代码（无 zip）' }}
 
+            ### 🛠️ 编译变体
+            - Debug：${{ needs.check.outputs.do_debug == 'true' && '✅' || '—' }}
+            - Release：${{ needs.check.outputs.do_release == 'true' && '✅' || '—' }}
+
             ### 安装说明
-            1. 下载 `app-release.apk`（正式包）或 `app-debug.apk`（调试包）
+            1. 下载 `app-release.apk`（正式包）或 `app-debug.apk`（调试包，如有）
             2. 在 Android 设备上开启「允许未知来源安装」
             3. 安装并运行
-          files: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release.apk
+          files: ${{ steps.apk_paths.outputs.files }}
           draft: false
           prerelease: false
         env:
