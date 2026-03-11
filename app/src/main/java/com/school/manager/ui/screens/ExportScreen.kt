@@ -322,7 +322,8 @@ private fun DropdownFilterChipLong(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val label = items.firstOrNull { it.first == selected }?.second ?: allLabel
-    androidx.compose.material3.Box {
+    // FIX: was androidx.compose.material3.Box which doesn't exist; Box is in foundation.layout
+    Box {
         FilterChip(selected = selected != 0L, onClick = { expanded = true }, label = { Text(label) },
             trailingIcon = { Icon(Icons.Default.ArrowDropDown, null, Modifier.size(16.dp)) })
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
