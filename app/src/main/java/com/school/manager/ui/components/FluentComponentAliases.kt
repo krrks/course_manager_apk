@@ -70,6 +70,3 @@ fun AutocompleteTextField(
     }
 }
 
-/** Convenience code generator used in form dialogs. */
-fun genCode(prefix: String): String =
-    "$prefix${System.currentTimeMillis().toString().takeLast(6)}"

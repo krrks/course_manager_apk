@@ -18,6 +18,8 @@ import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
 
+private val GRADES = listOf("初一","初二","初三","高一","高二","高三")
+
 @Composable
 fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val state   by vm.state.collectAsState()

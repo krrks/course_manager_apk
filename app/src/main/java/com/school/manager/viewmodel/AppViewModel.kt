@@ -344,10 +344,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Alias used by ExportScreen */
     fun mergeImport(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean =
         importMerge(json, pathRemap)
-}
 
     // ─── Reset to factory sample data ────────────────────────────────────────
     fun resetToSampleData() {
         _state.value = AppState()
         save()
     }
+}
