@@ -233,13 +233,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return try {
             val baos = ByteArrayOutputStream()
             ZipOutputStream(baos).use { zip ->
-                // Write state.json
                 val stateJson = gson.toJson(_state.value).toByteArray(Charsets.UTF_8)
                 zip.putNextEntry(ZipEntry("state.json"))
                 zip.write(stateJson)
                 zip.closeEntry()
-
-                // Write avatar images
                 val avatarDir = File(context.filesDir, "avatars")
                 if (avatarDir.exists()) {
                     avatarDir.listFiles()?.forEach { f ->
@@ -258,7 +255,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return try {
             var stateJson: String? = null
             val avatarEntries = mutableMapOf<String, ByteArray>()
-
             ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
@@ -274,10 +270,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     entry = zip.nextEntry
                 }
             }
-
             val json = stateJson ?: return false
-
-            // Save avatar files and build path remap
             val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
             val pathRemap = mutableMapOf<String, String>()
             avatarEntries.forEach { (name, data) ->
@@ -285,16 +278,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 dest.writeBytes(data)
                 pathRemap[name] = dest.absolutePath
             }
-
             importMerge(json, pathRemap)
         } catch (_: Exception) { false }
     }
 
     // ─── Persistence ─────────────────────────────────────────────────────────
+    // FIX: removed viewModelScope.launch wrapper — apply() is already async,
+    // and wrapping in a coroutine meant data could be lost if the process was
+    // killed before the coroutine had a chance to run.
     private fun save() {
-        viewModelScope.launch {
-            prefs.edit().putString("state", gson.toJson(_state.value)).apply()
-        }
+        prefs.edit().putString("state", gson.toJson(_state.value)).apply()
     }
 
     private fun load() {
@@ -307,8 +300,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ─── Import / merge ───────────────────────────────────────────────────────
-    // FIX: Changed from expression body (= try { ... }) to block body { return try { ... } }
-    // to allow early `return false` inside the function.
     fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
         return try {
             if (json.isBlank()) return false
@@ -354,3 +345,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun mergeImport(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean =
         importMerge(json, pathRemap)
 }
+
+    // ─── Reset to factory sample data ────────────────────────────────────────
+    fun resetToSampleData() {
+        _state.value = AppState()
+        save()
+    }

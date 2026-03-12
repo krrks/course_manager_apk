@@ -6,7 +6,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -24,7 +23,7 @@ import com.school.manager.util.copyImageToAppStorage
 import com.school.manager.viewmodel.AppViewModel
 
 @Composable
-fun TeachersScreen(vm: AppViewModel) {
+fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val state   by vm.state.collectAsState()
     var showAdd  by remember { mutableStateOf(false) }
     var viewing  by remember { mutableStateOf<Teacher?>(null) }
@@ -32,17 +31,20 @@ fun TeachersScreen(vm: AppViewModel) {
 
     Scaffold(
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showAdd = true },
-                icon    = { Icon(Icons.Default.Add, "") },
-                text    = { Text("添加教师") },
-                containerColor = FluentBlue, contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp)
+            ScreenSpeedDialFab(
+                addLabel     = "添加教师",
+                addIcon      = Icons.Default.Add,
+                onAdd        = { showAdd = true },
+                onOpenDrawer = onOpenDrawer
             )
         }
     ) { inner ->
         LazyColumn(
-            contentPadding = PaddingValues(inner.calculateTopPadding() + 12.dp, 12.dp, 12.dp, 80.dp),
+            contentPadding      = PaddingValues(
+                start  = 12.dp, end = 12.dp,
+                top    = inner.calculateTopPadding() + 8.dp,
+                bottom = inner.calculateBottomPadding() + 80.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
         ) {
@@ -50,20 +52,17 @@ fun TeachersScreen(vm: AppViewModel) {
                 item { EmptyState("👩‍🏫", "暂无教师") }
             } else {
                 items(state.teachers) { t ->
-                    // Derive classes this teacher teaches
                     val teacherClasses = state.classes.filter { c ->
                         state.schedule.any { s -> s.teacherId == t.id && s.classId == c.id }
                     }
                     FluentCard(modifier = Modifier.fillMaxWidth(), onClick = { viewing = t }) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
+                        Row(modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             AvatarWithImage(
                                 name     = t.name,
                                 color    = if (t.gender == "男") FluentBlue else FluentPurple,
-                                size     = 48.dp,
+                                size     = 52.dp,
                                 imageUri = t.avatarUri
                             )
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -71,15 +70,14 @@ fun TeachersScreen(vm: AppViewModel) {
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(t.name, style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold)
-                                    ColorChip(t.gender, if (t.gender == "男") FluentBlue else FluentPurple)
-                                    if (t.code.isNotBlank()) {
-                                        Text(t.code, style = MaterialTheme.typography.labelSmall,
-                                            color = FluentMuted)
-                                    }
+                                    ColorChip(t.gender,
+                                        if (t.gender == "男") FluentBlue else FluentPurple)
                                 }
-                                Text(t.phone, style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
+                                if (t.phone.isNotBlank())
+                                    Text(t.phone, style = MaterialTheme.typography.bodySmall, color = FluentMuted)
                                 if (teacherClasses.isNotEmpty()) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    androidx.compose.foundation.layout.FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         teacherClasses.take(3).forEach { c ->
                                             ColorChip(c.subject.ifBlank { c.name }, FluentGreen)
                                         }
@@ -126,12 +124,9 @@ private fun TeacherDetailDialog(
     }
     FluentDialog(title = "教师详情", onDismiss = onDismiss) {
         Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {
-            AvatarWithImage(
-                name     = t.name,
+            AvatarWithImage(name = t.name,
                 color    = if (t.gender == "男") FluentBlue else FluentPurple,
-                size     = 72.dp,
-                imageUri = t.avatarUri
-            )
+                size     = 72.dp, imageUri = t.avatarUri)
         }
         if (t.code.isNotBlank()) DetailRow("编号", t.code)
         DetailRow("姓名",     t.name)
@@ -140,13 +135,10 @@ private fun TeacherDetailDialog(
         DetailRow("完成课次", "$lessonCount 节")
         if (teacherClasses.isNotEmpty()) {
             SectionHeader("任课班级")
-            FlowRow(Modifier.padding(horizontal = 16.dp),
+            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 teacherClasses.forEach { c ->
-                    ColorChip(
-                        if (c.subject.isNotBlank()) "${c.name}·${c.subject}" else c.name,
-                        FluentGreen
-                    )
+                    ColorChip(if (c.subject.isNotBlank()) "${c.name}·${c.subject}" else c.name, FluentGreen)
                 }
             }
         }
@@ -189,35 +181,26 @@ private fun TeacherFormDialog(
                 phone      = phone.trim(),
                 subjectIds = initial?.subjectIds ?: emptyList(),
                 avatarUri  = avatarUri,
-                code       = code.trim().ifBlank { genCode("T") }
+                code       = code.trim()
             ))
         }
     }) {
-        // Avatar
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
             Box {
                 AvatarWithImage(name = name.ifBlank { "?" },
-                    color = if (gender == "男") FluentBlue else FluentPurple,
-                    size = 72.dp, imageUri = avatarUri)
-                Surface(shape = CircleShape, color = FluentBlue,
-                    modifier = Modifier.size(24.dp).align(Alignment.BottomEnd)) {
-                    IconButton(onClick = { launcher.launch("image/*") },
-                        modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.CameraAlt, "选择头像",
-                            tint = Color.White, modifier = Modifier.size(14.dp))
-                    }
+                    color    = if (gender == "男") FluentBlue else FluentPurple,
+                    size     = 72.dp, imageUri = avatarUri)
+                SmallFloatingActionButton(onClick = { launcher.launch("image/*") },
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    containerColor = FluentBlue, contentColor = Color.White,
+                    shape = androidx.compose.foundation.shape.CircleShape) {
+                    Icon(Icons.Default.Edit, null, Modifier.size(14.dp))
                 }
             }
         }
-        if (avatarUri != null) {
-            TextButton(onClick = { avatarUri = null }, modifier = Modifier.fillMaxWidth()) {
-                Text("移除头像", color = FluentRed)
-            }
-        }
-        FormTextField("编号", code, { code = it }, "自动生成，可修改")
-        FormTextField("姓名", name, { name = it }, "教师姓名")
+        FormTextField("姓名", name,  { name  = it })
         FormDropdown("性别", gender, listOf("男", "女")) { gender = it }
-        FormTextField("手机号", phone, { phone = it }, "联系方式")
+        FormTextField("手机", phone, { phone = it })
+        FormTextField("教师编号", code, { code = it })
     }
 }

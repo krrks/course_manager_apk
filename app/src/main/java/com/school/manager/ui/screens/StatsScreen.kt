@@ -19,7 +19,7 @@ import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
 
 @Composable
-fun StatsScreen(vm: AppViewModel) {
+fun StatsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val state by vm.state.collectAsState()
 
     var dim        by remember { mutableStateOf("teacher") }
@@ -39,7 +39,6 @@ fun StatsScreen(vm: AppViewModel) {
 
     val completed = state.attendance.filter { it.status == "completed" }
 
-    // Filtered scope for summary cards
     val scopedRecs = completed.filter { r ->
         (fTeachers.isEmpty() || fTeachers.contains(r.teacherId)) &&
         (fGrades.isEmpty() || vm.schoolClass(r.classId)?.grade?.let { fGrades.contains(it) } == true) &&
@@ -50,7 +49,6 @@ fun StatsScreen(vm: AppViewModel) {
     val activeTeachers = scopedRecs.mapNotNull { it.teacherId }.toSet().size
     val activeStudents = scopedRecs.flatMap { it.attendees }.toSet().size
 
-    // Teacher rows
     val teacherRows = state.teachers
         .filter { t -> fTeachers.isEmpty() || fTeachers.contains(t.id) }
         .map { t ->
@@ -60,176 +58,130 @@ fun StatsScreen(vm: AppViewModel) {
                 classPassCount(r.classId)
             }
             Triple(t, recs.size, (recs.size * PERIOD_HOURS))
-        }
-        .sortedByDescending { it.second }
+        }.sortedByDescending { it.second }
     val maxTeacher = teacherRows.maxOfOrNull { it.second } ?: 1
 
-    data class GradeRowData(val grade: String, val classCount: Int, val studentCount: Int, val enrollCount: Int, val lessonCount: Int, val hours: Float)
-    // Grade rows
-    val gradeRows: List<GradeRowData> = GRADES
-        .filter { g -> fGrades.isEmpty() || fGrades.contains(g) }
-        .mapNotNull { g ->
-            val classes = state.classes.filter { c -> c.grade == g && c.count >= minC && c.count <= maxC &&
-                (fTeachers.isEmpty() || state.schedule.any { sc -> sc.classId == c.id && fTeachers.contains(sc.teacherId) }) }
-            if (classes.isEmpty()) return@mapNotNull null
-            val recs = completed.filter { r ->
-                classes.any { it.id == r.classId } &&
-                (fTeachers.isEmpty() || fTeachers.contains(r.teacherId))
-            }
-            val studentCount = state.students.filter { it.grade == g }.size
-            GradeRowData(g, classes.size, studentCount, classes.sumOf { it.count }, recs.size, recs.size * PERIOD_HOURS)
+    val gradeRows = GRADES.map { g ->
+        val recs = completed.filter { r ->
+            vm.schoolClass(r.classId)?.grade == g &&
+            (fTeachers.isEmpty() || fTeachers.contains(r.teacherId)) &&
+            classPassCount(r.classId)
         }
-    val maxGrade = gradeRows.maxOfOrNull { it.lessonCount } ?: 1
+        Triple(g, recs.size, (recs.size * PERIOD_HOURS))
+    }.filter { it.second > 0 }.sortedByDescending { it.second }
+    val maxGrade = gradeRows.maxOfOrNull { it.second } ?: 1
 
-    // Student rows
-    val studentRows = state.students
-        .filter { s ->
-            (fGrades.isEmpty() || fGrades.contains(s.grade)) &&
-            (fCountMin.isBlank() && fCountMax.isBlank() || s.classIds.any { classPassCount(it) })
+    val studentRows = state.students.map { s ->
+        val cnt = completed.count { r ->
+            r.attendees.contains(s.id) &&
+            (fTeachers.isEmpty() || fTeachers.contains(r.teacherId)) &&
+            (fGrades.isEmpty() || vm.schoolClass(r.classId)?.grade?.let { fGrades.contains(it) } == true) &&
+            classPassCount(r.classId)
         }
-        .map { s ->
-            val recs = completed.filter { r ->
-                r.attendees.contains(s.id) &&
-                (fTeachers.isEmpty() || fTeachers.contains(r.teacherId)) &&
-                classPassCount(r.classId) &&
-                (fGrades.isEmpty() || vm.schoolClass(r.classId)?.grade?.let { fGrades.contains(it) } == true)
-            }
-            val subjects = recs.mapNotNull { vm.subject(it.subjectId) }.distinctBy { it.id }
-            Pair(s, Triple(recs.size, recs.size * PERIOD_HOURS, subjects))
-        }
-        .sortedByDescending { it.second.first }
-    val maxStudent = studentRows.maxOfOrNull { it.second.first } ?: 1
+        s to cnt
+    }.filter { it.second > 0 }.sortedByDescending { it.second }
+    val maxStudent = studentRows.maxOfOrNull { it.second } ?: 1
 
-    val hasFilter = fTeachers.isNotEmpty() || fGrades.isNotEmpty() || fCountMin.isNotBlank() || fCountMax.isNotBlank()
-
-    LazyColumn(
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Summary cards
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryCard("📋", "完成课次", "$totalLessons 节", FluentBlue, Modifier.weight(1f))
-                SummaryCard("⏱️", "总课时", "$totalHours h", FluentGreen, Modifier.weight(1f))
-            }
+    Scaffold(
+        floatingActionButton = {
+            // Stats screen has no add action — FAB opens nav only
+            ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer)
         }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryCard("👩‍🏫", "参与教师", "$activeTeachers 位", FluentPurple, Modifier.weight(1f))
-                SummaryCard("🎒", "参与学生", "$activeStudents 人", FluentOrange, Modifier.weight(1f))
+    ) { inner ->
+        LazyColumn(
+            contentPadding      = PaddingValues(
+                start  = 12.dp, end = 12.dp,
+                top    = inner.calculateTopPadding() + 8.dp,
+                bottom = inner.calculateBottomPadding() + 80.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Summary cards
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryCard("📚", "$totalLessons", "课次", FluentBlue,  Modifier.weight(1f))
+                    SummaryCard("⏱️", totalHours,      "课时", FluentGreen, Modifier.weight(1f))
+                    SummaryCard("👩‍🏫", "$activeTeachers","教师", FluentPurple,Modifier.weight(1f))
+                    SummaryCard("👥", "$activeStudents","学生", FluentAmber, Modifier.weight(1f))
+                }
             }
-        }
 
-        // Filter panel
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("🔍 筛选条件（同时生效）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Row {
-                            if (hasFilter) TextButton(onClick = { fTeachers = emptySet(); fGrades = emptySet(); fCountMin = ""; fCountMax = "" }) {
-                                Text("清除", color = FluentRed, style = MaterialTheme.typography.labelMedium)
-                            }
-                            IconButton(onClick = { showFilters = !showFilters }) {
-                                Icon(if (showFilters) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
-                            }
-                        }
-                    }
-                    if (showFilters) {
-                        // Teacher chips
-                        Text("教师", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+            // Filters toggle
+            item {
+                TextButton(onClick = { showFilters = !showFilters }) {
+                    Text(if (showFilters) "▲ 收起筛选" else "▼ 展开筛选",
+                        style = MaterialTheme.typography.labelMedium, color = FluentBlue)
+                }
+            }
+
+            if (showFilters) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("教师筛选", style = MaterialTheme.typography.labelSmall, color = FluentMuted,
+                            modifier = Modifier.padding(horizontal = 4.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             state.teachers.forEach { t ->
-                                val on = fTeachers.contains(t.id)
-                                FilterChip(selected = on, onClick = { fTeachers = if (on) fTeachers - t.id else fTeachers + t.id }, label = { Text(t.name) })
+                                FilterChip(selected = fTeachers.contains(t.id), onClick = {
+                                    fTeachers = if (fTeachers.contains(t.id)) fTeachers - t.id else fTeachers + t.id
+                                }, label = { Text(t.name) })
                             }
                         }
-                        // Grade chips
-                        Text("年级", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+                        Text("年级筛选", style = MaterialTheme.typography.labelSmall, color = FluentMuted,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             GRADES.forEach { g ->
-                                val on = fGrades.contains(g)
-                                FilterChip(selected = on, onClick = { fGrades = if (on) fGrades - g else fGrades + g }, label = { Text(g) })
+                                FilterChip(selected = fGrades.contains(g), onClick = {
+                                    fGrades = if (fGrades.contains(g)) fGrades - g else fGrades + g
+                                }, label = { Text(g) })
                             }
-                        }
-                        // Count range
-                        Text("班级编制人数范围", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(value = fCountMin, onValueChange = { fCountMin = it }, label = { Text("最小") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
-                            Text("─", color = FluentMuted)
-                            OutlinedTextField(value = fCountMax, onValueChange = { fCountMax = it }, label = { Text("最大") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
                         }
                     }
                 }
             }
-        }
 
-        // Dimension tabs
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("teacher" to "按教师", "grade" to "按年级", "student" to "按学生").forEach { (key, label) ->
-                    FilterChip(selected = dim == key, onClick = { dim = key }, label = { Text(label) }, modifier = Modifier.weight(1f))
+            // Dimension tabs
+            item {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("teacher" to "按教师", "grade" to "按年级", "student" to "按学生").forEach { (d, label) ->
+                        FilterChip(selected = dim == d, onClick = { dim = d }, label = { Text(label) })
+                    }
                 }
             }
-        }
 
-        // Teacher table
-        if (dim == "teacher") {
-            if (teacherRows.isEmpty()) {
-                item { EmptyState("👩‍🏫", "无符合条件的数据") }
-            } else {
-                items(teacherRows) { (t, lessons, hours) ->
+            when (dim) {
+                "teacher" -> items(teacherRows) { (t, cnt, hrs) ->
                     StatCard(
-                        avatar = { AvatarCircle(t.name, FluentGreen, 40.dp) },
-                        title  = t.name,
-                        sub1   = "完成 $lessons 节 · ${String.format("%.1f", hours)} 小时",
-                        progress = lessons.toFloat() / maxTeacher.coerceAtLeast(1),
-                        color    = FluentGreen,
-                        chips    = t.subjectIds.mapNotNull { vm.subject(it) }.map { it.name to packedToColor(it.color) }
-                    )
-                }
-            }
-        }
-
-        // Grade table
-        if (dim == "grade") {
-            if (gradeRows.isEmpty()) {
-                item { EmptyState("🏫", "无符合条件的数据") }
-            } else {
-                items(gradeRows) { r ->
-                    StatCard(
-                        avatar = { Box(Modifier.size(40.dp).background(FluentPurple.copy(alpha = 0.15f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) { Text(r.grade, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FluentPurple) } },
-                        title  = r.grade,
-                        sub1   = "${r.classCount}班 · 在籍${r.studentCount}人 · 编制${r.enrollCount}人",
-                        sub2   = "完成 ${r.lessonCount} 节 · ${String.format("%.1f", r.hours)} 小时",
-                        progress = r.lessonCount.toFloat() / maxGrade.coerceAtLeast(1),
-                        color    = FluentPurple,
+                        avatar   = { AvatarWithImage(t.name,
+                            if (t.gender == "男") FluentBlue else FluentPurple, 40.dp, t.avatarUri) },
+                        title    = t.name,
+                        sub1     = "${String.format("%.1f", hrs)} 课时",
+                        sub2     = "$cnt 节课",
+                        progress = cnt.toFloat() / maxTeacher,
+                        color    = if (t.gender == "男") FluentBlue else FluentPurple,
                         chips    = emptyList()
                     )
                 }
-            }
-        }
-
-        // Student table
-        if (dim == "student") {
-            if (studentRows.isEmpty()) {
-                item { EmptyState("🎒", "无符合条件的数据") }
-            } else {
-                items(studentRows) { (s, stats) ->
-                    val (lessons, hours, subjects) = stats
+                "grade"   -> items(gradeRows) { (g, cnt, hrs) ->
                     StatCard(
-                        avatar = { AvatarCircle(s.name, if (s.gender == "男") FluentBlue else FluentPurple, 40.dp) },
-                        title  = "${s.name}  ${s.grade}",
-                        sub1   = "出勤 $lessons 节 · ${String.format("%.1f", hours)} 小时",
-                        progress = lessons.toFloat() / maxStudent.coerceAtLeast(1),
-                        color    = FluentOrange,
-                        chips    = subjects.map { it.name to packedToColor(it.color) }
+                        avatar   = { AvatarCircle(g.take(1), FluentGreen, 40.dp) },
+                        title    = g,
+                        sub1     = "${String.format("%.1f", hrs)} 课时",
+                        sub2     = "$cnt 节课",
+                        progress = cnt.toFloat() / maxGrade,
+                        color    = FluentGreen,
+                        chips    = emptyList()
+                    )
+                }
+                "student" -> items(studentRows) { (s, cnt) ->
+                    StatCard(
+                        avatar   = { AvatarWithImage(s.name,
+                            if (s.gender == "男") FluentBlue else FluentPurple, 40.dp, s.avatarUri) },
+                        title    = s.name,
+                        sub1     = s.grade,
+                        sub2     = "$cnt 节课",
+                        progress = cnt.toFloat() / maxStudent,
+                        color    = if (s.gender == "男") FluentBlue else FluentPurple,
+                        chips    = s.classIds.mapNotNull { vm.schoolClass(it) }.map { it.name to FluentBlue }
                     )
                 }
             }
@@ -238,14 +190,15 @@ fun StatsScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun SummaryCard(icon: String, label: String, value: String, color: Color, modifier: Modifier = Modifier) {
-    Card(modifier = modifier, shape = RoundedCornerShape(14.dp), elevation = CardDefaults.cardElevation(2.dp),
+private fun SummaryCard(icon: String, value: String, label: String, color: Color, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, elevation = CardDefaults.cardElevation(2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(icon, fontSize = 22.sp)
             Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = color)
             Text(label, style = MaterialTheme.typography.labelSmall, color = FluentMuted)
-            Box(Modifier.fillMaxWidth().height(3.dp).background(color.copy(0.2f), RoundedCornerShape(2.dp))) {
+            Box(Modifier.fillMaxWidth().height(3.dp)
+                .background(color.copy(0.2f), RoundedCornerShape(2.dp))) {
                 Box(Modifier.fillMaxWidth(0.6f).height(3.dp).background(color, RoundedCornerShape(2.dp)))
             }
         }
@@ -260,12 +213,15 @@ private fun StatCard(
     chips: List<Pair<String, Color>>
 ) {
     FluentCard(modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
             avatar()
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(sub1, style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-                if (sub2.isNotBlank()) Text(sub2, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = FontWeight.SemiBold)
+                if (sub2.isNotBlank())
+                    Text(sub2, style = MaterialTheme.typography.bodyMedium, color = color,
+                        fontWeight = FontWeight.SemiBold)
                 FluentProgressBar(progress, color, Modifier.fillMaxWidth())
                 if (chips.isNotEmpty()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

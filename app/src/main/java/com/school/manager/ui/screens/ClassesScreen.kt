@@ -1,11 +1,12 @@
 package com.school.manager.ui.screens
 
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -17,61 +18,63 @@ import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
 
-private fun genCode(prefix: String) =
-    "$prefix${System.currentTimeMillis().toString().takeLast(6)}"
-
-private val GRADES = listOf(
-    "初一", "初二", "初三",
-    "高一", "高二", "高三"
-)
-
 @Composable
-fun ClassesScreen(vm: AppViewModel) {
+fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val state   by vm.state.collectAsState()
-    var showAdd  by remember { mutableStateOf(false) }
     var viewing  by remember { mutableStateOf<SchoolClass?>(null) }
     var editing  by remember { mutableStateOf<SchoolClass?>(null) }
+    var showAdd  by remember { mutableStateOf(false) }
 
     Scaffold(
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showAdd = true },
-                icon    = { Icon(Icons.Default.Add, "") },
-                text    = { Text("添加班级") },
-                containerColor = FluentBlue, contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp)
+            ScreenSpeedDialFab(
+                addLabel    = "添加班级",
+                addIcon     = Icons.Default.Add,
+                onAdd       = { showAdd = true },
+                onOpenDrawer = onOpenDrawer
             )
         }
     ) { inner ->
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(160.dp),
-            contentPadding = PaddingValues(inner.calculateTopPadding() + 12.dp, 12.dp, 12.dp, 80.dp),
-            verticalArrangement   = Arrangement.spacedBy(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxSize()
+        LazyColumn(
+            contentPadding = PaddingValues(
+                start  = 12.dp, end = 12.dp,
+                top    = inner.calculateTopPadding() + 8.dp,
+                bottom = inner.calculateBottomPadding() + 80.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (state.classes.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) { EmptyState("🏫", "暂无班级") }
-            } else {
-                items(state.classes) { cls ->
-                    val ht       = vm.teacher(cls.headTeacherId)
-                    val sts      = state.students.filter { s -> s.classIds.contains(cls.id) }
-                    val gradeCol = gradeColor(cls.grade)
+                item {
+                    Box(Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.Center) {
+                        Text("暂无班级，点击右下角按钮添加", color = FluentMuted,
+                            style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+            items(state.classes) { cls ->
+                val ht      = vm.teacher(cls.headTeacherId)
+                val sts     = state.students.filter { s -> s.classIds.contains(cls.id) }
+                val gradeCol = gradeColor(cls.grade)
 
-                    FluentCard(modifier = Modifier.fillMaxWidth(), onClick = { viewing = cls }) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()) {
-                                ColorChip(cls.grade, gradeCol)
-                                Text("${sts.size}/${cls.count}人",
-                                    style = MaterialTheme.typography.labelSmall, color = FluentMuted)
-                            }
-                            Text(cls.name, style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold)
-                            if (cls.subject.isNotBlank()) {
-                                Text("科目：${cls.subject}",
-                                    style = MaterialTheme.typography.bodySmall, color = FluentPurple)
+                Surface(
+                    shape           = RoundedCornerShape(16.dp),
+                    color           = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 3.dp,
+                    modifier        = Modifier.fillMaxWidth().clickable { viewing = cls }
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Surface(shape = RoundedCornerShape(12.dp), color = gradeCol.copy(alpha = 0.12f)) {
+                            Text(cls.grade.take(2), modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold, color = gradeCol)
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text(cls.name, style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold)
+                                if (cls.subject.isNotBlank()) ColorChip(cls.subject, FluentPurple)
                             }
                             Text("班主任：${ht?.name ?: "未设置"}",
                                 style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
@@ -81,6 +84,8 @@ fun ClassesScreen(vm: AppViewModel) {
                                 color     = gradeCol,
                                 trackColor = gradeCol.copy(alpha = 0.15f),
                             )
+                            Text("${sts.size} / ${cls.count} 人",
+                                style = MaterialTheme.typography.labelSmall, color = FluentMuted)
                         }
                     }
                 }
@@ -134,6 +139,13 @@ private fun ClassDetailDialog(
         DetailRow("班主任",   ht?.name ?: "未设置")
         DetailRow("编制人数", "${cls.count} 人")
         DetailRow("在籍学生", "${sts.size} 人")
+        if (sts.isNotEmpty()) {
+            SectionHeader("班级学生")
+            FlowRow(Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                sts.forEach { s -> ColorChip(s.name, FluentBlue) }
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onEdit, shape = RoundedCornerShape(12.dp),
@@ -165,10 +177,18 @@ private fun ClassFormDialog(
     var subject by remember { mutableStateOf(initial?.subject ?: "") }
     var code    by remember { mutableStateOf(initial?.code    ?: genCode("C")) }
 
+    // ── Student membership for this class ────────────────────────────────────
+    // Only shown when editing an existing class (initial != null).
+    val initialStudentIds = remember(state, initial) {
+        if (initial == null) emptySet()
+        else state.students.filter { it.classIds.contains(initial.id) }.map { it.id }.toSet()
+    }
+    var selectedStudents by remember { mutableStateOf(initialStudentIds) }
+
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         if (name.isNotBlank()) {
             val tId = state.teachers.firstOrNull { it.name == teacher }?.id
-            onSave(SchoolClass(
+            val savedClass = SchoolClass(
                 id            = initial?.id ?: System.currentTimeMillis(),
                 name          = name.trim(),
                 grade         = grade,
@@ -176,7 +196,22 @@ private fun ClassFormDialog(
                 headTeacherId = tId,
                 subject       = subject.trim(),
                 code          = code.trim()
-            ))
+            )
+            // Apply student membership changes when editing
+            if (initial != null) {
+                val classId = initial.id
+                (selectedStudents - initialStudentIds).forEach { sId ->
+                    val s = state.students.find { it.id == sId }
+                    if (s != null && !s.classIds.contains(classId))
+                        vm.updateStudent(s.copy(classIds = s.classIds + classId))
+                }
+                (initialStudentIds - selectedStudents).forEach { sId ->
+                    val s = state.students.find { it.id == sId }
+                    if (s != null)
+                        vm.updateStudent(s.copy(classIds = s.classIds.filter { it != classId }))
+                }
+            }
+            onSave(savedClass)
         }
     }) {
         FluentTextField("班级名称", name, { name = it })
@@ -186,5 +221,35 @@ private fun ClassFormDialog(
             listOf("") + state.teachers.map { it.name }) { teacher = it }
         AutocompleteTextField("科目", subject, existingSubjects) { subject = it }
         FluentTextField("班级编号", code, { code = it })
+
+        // Student section (edit mode only)
+        if (initial != null && state.students.isNotEmpty()) {
+            SectionHeader("班级学生")
+            Text(
+                "勾选属于此班级的学生",
+                style    = MaterialTheme.typography.bodySmall,
+                color    = FluentMuted,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            FlowRow(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement   = Arrangement.spacedBy(4.dp)
+            ) {
+                state.students.forEach { s ->
+                    val isSelected = s.id in selectedStudents
+                    FilterChip(
+                        selected = isSelected,
+                        onClick  = {
+                            selectedStudents = if (isSelected)
+                                selectedStudents - s.id
+                            else
+                                selectedStudents + s.id
+                        },
+                        label = { Text(s.name) }
+                    )
+                }
+            }
+        }
     }
 }

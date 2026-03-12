@@ -1,5 +1,32 @@
-## Hotfix: menuAnchor unresolved reference
+# 更新说明 — v1.4.0
 
-`ExposedDropdownMenuAnchorType` is `@ExperimentalMaterial3Api` in the project's current BOM (`2024.10.00`) and requires an opt-in that was missing, causing a compile error.
+## 修复内容
 
-Changed approach: use `@Suppress("DEPRECATION")` on `FormDropdown` (CommonComponents.kt) and `AutocompleteTextField` (FluentComponentAliases.kt) to silence the deprecation warning without touching the experimental API. All other fixes from the previous patch (AutoMirrored icons, HorizontalDivider, UI changes) remain intact.
+### 1. 课表日历视图 — 时间列固定 + 捏合缩放
+- 时间列（左侧）现在始终固定在屏幕左边缘，左右滑动时不会随日列一起移动
+- 星期表头（上方）同样保持固定，与之前行为一致
+- 支持双指捏合缩放（0.5×–3×），缩放时日列宽度和行高同步变化
+
+### 2. 日历视图事件块显示起止时间
+- 课表日历视图的每个课程卡片上新增显示"开始时间–结束时间"
+- 上课记录的周视图、日视图事件块同样显示起止时间
+
+### 3. 退出后数据不丢失
+- 修复 `save()` 中 `viewModelScope.launch` 包裹导致进程结束前协程未执行的问题
+- 现在 `prefs.edit().apply()` 在主线程同步调度，退出即保存
+
+### 4. 所有页面导航菜单与添加按钮合并
+- 上课记录、班级、教师、学生、课时统计、设置页面全部替换为速拨 FAB
+- 点击 FAB 展开菜单，包含"添加"和"导航菜单"两个操作，与课表页面风格完全一致
+- 移除了之前悬浮在左下角的独立导航 FAB
+
+### 5. 时间滚轮修复
+- 滚动停止时自动吸附并选中最近的时间项，无需再点击一次才能确认
+- 点击列表项也可直接选中
+
+### 6. 班级编辑页添加学生管理
+- 编辑班级时，对话框底部新增"班级学生"多选区域
+- 可以直接在班级编辑界面勾选/取消学生的班级归属，保存后自动同步
+
+### 其他
+- 设置页新增"清除所有数据，恢复示例数据"按钮（附二次确认）
