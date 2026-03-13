@@ -180,7 +180,9 @@ fun FormDropdown(label: String, selected: String, options: List<String>, onSelec
             shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().menuAnchor(),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { opt -> DropdownMenuItem(text = { Text(opt) }, onClick = { onSelect(opt); expanded = false }) }
+            options.forEach { opt ->
+                DropdownMenuItem(text = { Text(opt) }, onClick = { onSelect(opt); expanded = false })
+            }
         }
     }
 }
@@ -233,6 +235,11 @@ fun SpeedDialItem(
 /**
  * Speed-dial FAB that merges the add action and navigation drawer into one button.
  * Matches the ScheduleScreen FAB pattern.
+ *
+ * FIX: wrap the full-screen backdrop and the speed-dial Column in a single Box
+ * so the Column is always pinned to Alignment.BottomEnd.  Previously the backdrop
+ * Box and the Column were siblings at the Scaffold-FAB-slot root; the backdrop's
+ * fillMaxSize caused the Column to be laid out at the top of the screen.
  */
 @Composable
 fun ScreenSpeedDialFab(
@@ -244,29 +251,55 @@ fun ScreenSpeedDialFab(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    if (expanded) {
-        Box(Modifier.fillMaxSize().clickable(
-            indication = null,
-            interactionSource = remember { MutableInteractionSource() }) { expanded = false })
-    }
-
-    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // When expanded the outer Box grows to fill the screen so the transparent
+    // backdrop can intercept outside taps; the Column is anchored to BottomEnd.
+    // When collapsed the outer Box just wraps the FAB button itself.
+    Box(
+        modifier = if (expanded) Modifier.fillMaxSize() else Modifier.wrapContentSize(),
+        contentAlignment = Alignment.BottomEnd
+    ) {
+        // Transparent full-screen backdrop — dismiss on outside tap
         if (expanded) {
-            extraItems?.invoke(this)
-
-            if (addLabel != null && onAdd != null) {
-                SpeedDialItem(addLabel, addIcon, FluentBlue) { onAdd(); expanded = false }
-            }
-
-            HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f), modifier = Modifier.width(200.dp))
-
-            SpeedDialItem("导航菜单", Icons.Default.Menu, FluentMuted) { onOpenDrawer(); expanded = false }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        indication        = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { expanded = false }
+            )
         }
 
-        FloatingActionButton(onClick = { expanded = !expanded },
-            containerColor = FluentBlue, contentColor = Color.White, shape = CircleShape) {
-            Icon(if (expanded) Icons.Default.Close else Icons.Default.Add,
-                contentDescription = if (expanded) "关闭" else "菜单")
+        // Speed-dial items + main FAB, always pinned bottom-right
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (expanded) {
+                extraItems?.invoke(this)
+
+                if (addLabel != null && onAdd != null) {
+                    SpeedDialItem(addLabel, addIcon, FluentBlue) { onAdd(); expanded = false }
+                }
+
+                HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f), modifier = Modifier.width(200.dp))
+
+                SpeedDialItem("导航菜单", Icons.Default.Menu, FluentMuted) {
+                    onOpenDrawer(); expanded = false
+                }
+            }
+
+            FloatingActionButton(
+                onClick        = { expanded = !expanded },
+                containerColor = FluentBlue,
+                contentColor   = Color.White,
+                shape          = CircleShape
+            ) {
+                Icon(
+                    if (expanded) Icons.Default.Close else Icons.Default.Add,
+                    contentDescription = if (expanded) "关闭" else "菜单"
+                )
+            }
         }
     }
 }

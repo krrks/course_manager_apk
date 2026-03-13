@@ -25,7 +25,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -41,8 +40,6 @@ import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
 import java.time.LocalDate
 import kotlin.math.roundToInt
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 
 // ── Calendar layout constants ──────────────────────────────────────────────────
 private const val DP_PER_HOUR        = 80
@@ -245,7 +242,7 @@ fun ScheduleScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     }
 
     addAttendanceForSlot?.let { slot ->
-        val cls = state.classes.find { it.id == slot.classId }
+        val cls   = state.classes.find { it.id == slot.classId }
         val subId = state.subjects.find { it.name == cls?.subject }?.id ?: slot.subjectId
         AddAttendanceFromScheduleDialog(
             slot    = slot.copy(subjectId = subId),
@@ -303,7 +300,7 @@ private fun CalendarGrid(
             .fillMaxSize()
             .transformable(state = transformState)
     ) {
-        // ── Day-header row ────────────────────────────────────────────────────
+        // ── Day-header row ─────────────────────────────────────────────────────
         Row(Modifier.fillMaxWidth().height(HEADER_H.dp)) {
             Box(
                 Modifier
@@ -394,57 +391,42 @@ private fun CalendarGrid(
                                 val colorIdx = state.subjects.indexOf(sub).takeIf { it >= 0 }
                                     ?: (slot.classId % SUBJECT_COLORS.size).toInt()
                                 val subColor = Color(SUBJECT_COLORS[colorIdx % SUBJECT_COLORS.size])
+                                val te       = state.teachers.find { it.id == slot.teacherId }
 
                                 Box(
                                     Modifier
                                         .offset(y = yDp.dp)
-                                        .height(hDp.dp)
+                                        .padding(horizontal = 2.dp)
                                         .fillMaxWidth()
-                                        .padding(horizontal = 2.dp, vertical = 1.dp)
+                                        .height(hDp.dp)
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(subColor.copy(alpha = 0.15f))
-                                        .border(0.5.dp, subColor.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
                                         .clickable { onSlotClick(slot) }
-                                        .padding(4.dp)
                                 ) {
-                                    val subjectName = sub?.name
-                                        ?: cl?.subject?.takeIf { it.isNotBlank() }
-                                        ?: "?"
-                                    val te = state.teachers.find { it.id == slot.teacherId }
-                                    Column {
+                                    Column(Modifier.padding(4.dp)) {
                                         Text(
-                                            subjectName,
-                                            style      = MaterialTheme.typography.labelMedium,
+                                            sub?.name ?: cl?.subject ?: "?",
+                                            style    = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color      = subColor,
-                                            maxLines   = 1,
-                                            overflow   = TextOverflow.Ellipsis
+                                            color    = subColor,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
-                                        if (cl != null) {
-                                            Text(
-                                                cl.name,
-                                                style   = MaterialTheme.typography.labelSmall,
-                                                color   = FluentMuted,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
                                         if (te != null) {
                                             Text(
                                                 te.name,
-                                                style   = MaterialTheme.typography.labelSmall,
-                                                color   = FluentMuted,
+                                                style    = MaterialTheme.typography.labelSmall,
+                                                color    = FluentMuted,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
-                                        // FIX: show start/end time on the event card
-                                        // 修复：在课程块上显示具体起止时间
+                                        // show start/end time on the event card
                                         if (startStr.isNotBlank() && endStr.isNotBlank()) {
                                             Text(
                                                 "$startStr-$endStr",
-                                                style   = MaterialTheme.typography.labelSmall,
-                                                color   = subColor.copy(alpha = 0.8f),
+                                                style    = MaterialTheme.typography.labelSmall,
+                                                color    = subColor.copy(alpha = 0.8f),
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
@@ -612,9 +594,9 @@ private fun EditScheduleDialog(
 
         if (!confirmDel) {
             OutlinedButton(
-                onClick = { confirmDel = true },
-                colors  = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed),
-                shape   = RoundedCornerShape(12.dp),
+                onClick  = { confirmDel = true },
+                colors   = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed),
+                shape    = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) { Text("删除课程") }
         } else {
@@ -623,8 +605,9 @@ private fun EditScheduleDialog(
                 OutlinedButton(onClick = { confirmDel = false }, modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)) { Text("取消") }
                 Button(onClick = { vm.deleteSchedule(slot.id); onDismiss() },
-                    colors = ButtonDefaults.buttonColors(containerColor = FluentRed),
-                    shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) { Text("确认") }
+                    colors  = ButtonDefaults.buttonColors(containerColor = FluentRed),
+                    shape   = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)) { Text("确认") }
             }
         }
     }
@@ -646,43 +629,47 @@ private fun AddAttendanceFromScheduleDialog(
     val allStudents = state.students.filter { s ->
         state.classes.find { it.id == slot.classId }?.let { s.classIds.contains(it.id) } == true
     }
-    val checkedIds  = remember { mutableStateListOf<Long>().also { it.addAll(allStudents.map { s -> s.id }) } }
+    val checkedIds = remember { mutableStateListOf<Long>().also { it.addAll(allStudents.map { s -> s.id }) } }
 
     FluentDialog(title = "添加上课记录", onDismiss = onDismiss, onConfirm = {
         val tId = state.teachers.firstOrNull { it.name == teacherName }?.id ?: slot.teacherId
-        onSave(Attendance(0, slot.classId, slot.subjectId, tId, date, 0,
-            startTime, endTime, topic, status, notes, checkedIds.toList()))
+        val cls = state.classes.find { it.id == slot.classId } ?: return@FluentDialog
+        onSave(Attendance(
+            id        = System.currentTimeMillis(),
+            classId   = cls.id,
+            subjectId = slot.subjectId,
+            teacherId = tId,
+            date      = date,
+            startTime = startTime,
+            endTime   = endTime,
+            topic     = topic,
+            status    = status,
+            notes     = notes,
+            attendees = checkedIds.toList(),
+            code      = genCode("ATT")
+        ))
     }) {
+        FormDropdown("教师", teacherName,
+            listOf("") + state.teachers.map { it.name }) { teacherName = it }
         DatePickerField("日期", date) { date = it }
-        FormDropdown("教师", teacherName, state.teachers.map { it.name }) { teacherName = it }
         TimeRangeRow(startTime, endTime, { startTime = it }, { endTime = it })
-        FormTextField("课题", topic, { topic = it }, "本次课程主题")
-        FormDropdown("状态", status, listOf("completed","cancelled","pending")) { status = it }
-        FormTextField("备注", notes, { notes = it })
+        FormDropdown("状态", status, listOf("completed", "cancelled", "pending")) { status = it }
+        FormTextField("课题", topic, { topic = it }, "本节课主题")
         if (allStudents.isNotEmpty()) {
-            Text("出勤学生（点击切换）",
-                style = MaterialTheme.typography.labelMedium, color = FluentMuted,
-                modifier = Modifier.padding(top = 4.dp))
+            SectionHeader("出勤学生")
             androidx.compose.foundation.layout.FlowRow(
-                modifier = Modifier.fillMaxWidth(),
+                Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 allStudents.forEach { s ->
-                    val present = checkedIds.contains(s.id)
-                    FilterChip(
-                        selected = present,
-                        onClick  = {
-                            if (present) checkedIds.remove(s.id) else checkedIds.add(s.id)
-                        },
-                        label = { Text(s.name) },
-                        leadingIcon = if (present) ({
-                            Icon(Icons.Default.Check, null,
-                                Modifier.size(FilterChipDefaults.IconSize))
-                        }) else null
-                    )
+                    val on = checkedIds.contains(s.id)
+                    FilterChip(selected = on, onClick = {
+                        if (on) checkedIds.remove(s.id) else checkedIds.add(s.id)
+                    }, label = { Text(s.name) })
                 }
             }
         }
+        FormTextField("备注", notes, { notes = it }, "可选")
     }
 }
 
@@ -723,6 +710,13 @@ internal fun TimeRangeRow(
     if (showEnd)   TimePickerDialog(endTime,   { onEndChange(it);   showEnd   = false }) { showEnd   = false }
 }
 
+/**
+ * Clock-dial time picker dialog using Material 3's built-in TimePicker.
+ *
+ * FIX: Replaces the broken LazyColumn wheel picker with the native M3 clock
+ * dial — tap the hour ring first, then the minute ring, then confirm.
+ * is24Hour = true so hours 0-23 are supported directly.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimePickerDialog(
@@ -730,123 +724,31 @@ private fun TimePickerDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val parts   = initial.split(":").mapNotNull { it.toIntOrNull() }
-    val selHour = remember { mutableIntStateOf(parts.getOrElse(0) { 8 }) }
-    val selMin  = remember { mutableIntStateOf(parts.getOrElse(1) { 0 }) }
+    val parts = initial.split(":").mapNotNull { it.toIntOrNull() }
+    val state = rememberTimePickerState(
+        initialHour   = parts.getOrElse(0) { 8 },
+        initialMinute = parts.getOrElse(1) { 0 },
+        is24Hour      = true
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape  = RoundedCornerShape(20.dp),
-        title  = { Text("选择时间", fontWeight = FontWeight.Bold) },
-        text   = {
+        shape = RoundedCornerShape(20.dp),
+        title = { Text("选择时间", fontWeight = FontWeight.Bold) },
+        text  = {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                TimeWheelPicker(selHour, selMin)
+                TimePicker(state = state)
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm("%02d:%02d".format(selHour.intValue, selMin.intValue)) },
-                shape  = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = FluentBlue)
+                onClick = { onConfirm("%02d:%02d".format(state.hour, state.minute)) },
+                shape   = RoundedCornerShape(12.dp),
+                colors  = ButtonDefaults.buttonColors(containerColor = FluentBlue)
             ) { Text("确定") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = FluentMuted) } }
     )
-}
-
-/**
- * Wheel picker for hours (0-23) and minutes (0-59).
- *
- * FIX: the selected value now updates automatically when the user stops
- * scrolling — no need to tap an item to confirm selection.
- * 修复：滚动停止时自动吸附并选中最近的时间项，无需二次点击确认。
- */
-@Composable
-private fun TimeWheelPicker(selHour: MutableIntState, selMin: MutableIntState) {
-    val itemH = 40.dp
-
-    @Composable
-    fun WheelColumn(
-        count: Int,
-        selected: Int,
-        label: (Int) -> String,
-        onSelect: (Int) -> Unit
-    ) {
-        val listState = rememberLazyListState(
-            initialFirstVisibleItemIndex = selected.coerceIn(0, maxOf(0, count - 1))
-        )
-
-        // When the user lifts their finger and scrolling stops, snap to the
-        // nearest item and notify the caller. A guard flag prevents the
-        // programmatic animateScrollToItem from triggering another select cycle.
-        // FIX: 用像素中点判断最近 item，不再依赖 offset > 20 的固定阈值。
-        // 滚动停止后，若 firstVisibleItemScrollOffset >= 半个 itemH，
-        // 则选下一个（fi+1），否则选当前（fi）。
-        val itemHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { itemH.toPx() }
-        var suppressNext by remember { mutableStateOf(false) }
-        LaunchedEffect(listState) {
-            snapshotFlow { listState.isScrollInProgress }
-                .distinctUntilChanged()
-                .filter { !it }
-                .collect {
-                    if (suppressNext) { suppressNext = false; return@collect }
-                    val fi      = listState.firstVisibleItemIndex
-                    val offset  = listState.firstVisibleItemScrollOffset
-                    val snapped = (if (offset * 2 >= itemHeightPx) fi + 1 else fi)
-                        .coerceIn(0, count - 1)
-                    onSelect(snapped)
-                    suppressNext = true
-                    listState.animateScrollToItem(snapped)
-                }
-        }
-
-        Box(Modifier.height(itemH * 5).width(64.dp)) {
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                // 2 empty padding items top + count real items + 2 empty padding bottom
-                items(count + 4) { i ->
-                    val idx = i - 2
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(itemH)
-                            .then(
-                                if (idx in 0 until count)
-                                    Modifier.clickable { onSelect(idx) }
-                                else Modifier
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            if (idx in 0 until count) label(idx) else "",
-                            style      = if (idx == selected) MaterialTheme.typography.titleMedium
-                                         else MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (idx == selected) FontWeight.Bold else FontWeight.Normal,
-                            color      = if (idx == selected) FluentBlue
-                                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                        )
-                    }
-                }
-            }
-            // Selection highlight bar
-            Box(
-                Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth()
-                    .height(itemH)
-                    .background(FluentBlue.copy(alpha = 0.08f))
-            )
-        }
-    }
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment     = Alignment.CenterVertically
-    ) {
-        WheelColumn(24, selHour.intValue, { "%02d".format(it) }) { selHour.intValue = it }
-        Text(":", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
-            color = FluentBlue)
-        WheelColumn(60, selMin.intValue,  { "%02d".format(it) }) { selMin.intValue  = it }
-    }
 }
 
 /** Date field with calendar picker dialog */
@@ -898,13 +800,6 @@ internal fun DatePickerField(label: String, value: String, onChange: (String) ->
 }
 
 // ── Bitmap export ─────────────────────────────────────────────────────────────
-//
-// FIX 1: Time axis now uses CAL_START_HOUR..CAL_END_HOUR (08:00–22:00)
-//         instead of the fixed PERIOD_TIMES list — all evening slots are visible.
-//         修复1：时间轴改为连续时间段(08:00–22:00)，19:00后的内容不再被截断。
-//
-// FIX 2: Each course block now displays the start–end time string.
-//         修复2：每个课程块上显示具体起止时间。
 
 private fun renderScheduleBitmap(
     context: Context,
@@ -918,7 +813,6 @@ private fun renderScheduleBitmap(
     val timeW   = 72f
     val days    = DAYS
 
-    // Full continuous hour range: CAL_START_HOUR (8) to CAL_END_HOUR (22)
     val totalHours = CAL_END_HOUR - CAL_START_HOUR  // 14 hours
 
     val w = (timeW + colW * days.size).toInt()
@@ -949,10 +843,10 @@ private fun renderScheduleBitmap(
 
     // Day name headers
     val dayTextP = Paint().apply {
-        color       = android.graphics.Color.parseColor("#1A56DB")
-        textSize    = 18f
+        color     = android.graphics.Color.parseColor("#1A56DB")
+        textSize  = 18f
         isAntiAlias = true
-        textAlign   = Paint.Align.CENTER
+        textAlign = Paint.Align.CENTER
     }
     days.forEachIndexed { i, d ->
         canvas.drawText(d, timeW + colW * i + colW / 2, headerH - 10f, dayTextP)
@@ -960,10 +854,10 @@ private fun renderScheduleBitmap(
 
     // Hour labels + horizontal grid lines
     val timeP = Paint().apply {
-        color       = android.graphics.Color.GRAY
-        textSize    = 14f
+        color     = android.graphics.Color.GRAY
+        textSize  = 14f
         isAntiAlias = true
-        textAlign   = Paint.Align.RIGHT
+        textAlign = Paint.Align.RIGHT
     }
     val lineP = Paint().apply {
         color       = android.graphics.Color.parseColor("#E5E7EB")
@@ -977,7 +871,6 @@ private fun renderScheduleBitmap(
         val y = headerH + rowH * (hour - CAL_START_HOUR)
         canvas.drawText("%02d:00".format(hour), timeW - 6f, y + 14f, timeP)
         canvas.drawLine(0f, y, w.toFloat(), y, lineP)
-        // Half-hour mark
         if (hour < CAL_END_HOUR) {
             val yHalf = y + rowH / 2
             canvas.drawLine(timeW, yHalf, w.toFloat(), yHalf, halfLineP)
@@ -990,58 +883,44 @@ private fun renderScheduleBitmap(
     }
 
     // Course blocks
-    val cellP    = Paint().apply { isAntiAlias = true }
-    val cellText = Paint().apply {
-        isAntiAlias = true; textSize = 14f
-        color = android.graphics.Color.WHITE
+    val blockPaint = Paint().apply { isAntiAlias = true; style = Paint.Style.FILL }
+    val textBlockP = Paint().apply {
+        color       = android.graphics.Color.WHITE
+        textSize    = 14f
+        isAntiAlias = true
     }
-    val subText = Paint().apply {
-        isAntiAlias = true; textSize = 11f
-        color = android.graphics.Color.parseColor("#CCFFFFFF")
-    }
-    val timeText = Paint().apply {
-        isAntiAlias = true; textSize = 11f
-        color = android.graphics.Color.parseColor("#EEFFFFFF")
-        typeface = Typeface.DEFAULT_BOLD
+    val timeBlockP = Paint().apply {
+        color       = android.graphics.Color.WHITE
+        textSize    = 11f
+        isAntiAlias = true
+        alpha       = 200
     }
 
-    slots.forEach { slot ->
-        val dayIdx   = slot.day - 1
-        val startStr = slot.resolvedStart()
-        val endStr   = slot.resolvedEnd()
-        if (startStr.isBlank()) return@forEach
-
-        val startMins = timeToMinutes(startStr) - CAL_START_HOUR * 60
-        val endMins   = timeToMinutes(endStr.ifBlank { startStr }).let {
-            if (endStr.isBlank()) startMins + 45 else it - CAL_START_HOUR * 60
-        }
-        if (startMins < 0) return@forEach
-
-        val topY    = headerH + (startMins / 60f) * rowH
-        val bottomY = (headerH + (endMins / 60f) * rowH).coerceAtLeast(topY + 28f)
-
-        val sub      = state.subjects.find { it.id == slot.subjectId }
-        val cl       = state.classes.find { it.id == slot.classId }
-        val colorIdx = state.subjects.indexOf(sub).takeIf { it >= 0 }
-            ?: (slot.classId % SUBJECT_COLORS.size).toInt()
-        cellP.color = (SUBJECT_COLORS[colorIdx % SUBJECT_COLORS.size] or 0xFF000000).toInt()
-
-        val left   = timeW + colW * dayIdx + 3f
-        val right  = timeW + colW * (dayIdx + 1) - 3f
-        canvas.drawRoundRect(RectF(left, topY + 2f, right, bottomY - 2f), 8f, 8f, cellP)
-
-        val subjectName = sub?.name ?: cl?.subject?.takeIf { it.isNotBlank() } ?: "?"
-        var textY = topY + 16f
-        canvas.drawText(subjectName.take(6), left + 6f, textY, cellText)
-        textY += 14f
-        cl?.let {
-            canvas.drawText(it.name.take(8), left + 6f, textY, subText)
-            textY += 13f
-        }
-        // FIX: draw start–end time on the block
-        // 修复：在课程块上绘制起止时间
-        if (endStr.isNotBlank()) {
-            canvas.drawText("$startStr–$endStr", left + 6f, textY, timeText)
+    slots.groupBy { it.day }.forEach { (day, daySlots) ->
+        val x = timeW + colW * (day - 1)
+        daySlots.forEach { slot ->
+            val startStr = slot.resolvedStart()
+            val endStr   = slot.resolvedEnd()
+            if (startStr.isBlank()) return@forEach
+            val yTop    = headerH + rowH * (timeToMinutes(startStr) - CAL_START_HOUR * 60) / 60f
+            val yBottom = if (endStr.isBlank()) yTop + rowH * 0.75f
+                          else headerH + rowH * (timeToMinutes(endStr) - CAL_START_HOUR * 60) / 60f
+            val sub      = state.subjects.find { it.id == slot.subjectId }
+                ?: state.subjects.find { s ->
+                    state.classes.find { it.id == slot.classId }?.subject == s.name
+                }
+            val cl       = state.classes.find { it.id == slot.classId }
+            val colorIdx = (state.subjects.indexOf(sub).takeIf { it >= 0 }
+                ?: (slot.classId % SUBJECT_COLORS.size).toInt())
+            blockPaint.color = SUBJECT_COLORS[colorIdx % SUBJECT_COLORS.size].toInt()
+            canvas.drawRoundRect(
+                RectF(x + 2f, yTop + 2f, x + colW - 2f, yBottom - 2f), 6f, 6f, blockPaint
+            )
+            val subName = sub?.name ?: cl?.subject ?: "?"
+            canvas.drawText(subName, x + 8f, yTop + 20f, textBlockP)
+            if (startStr.isNotBlank() && endStr.isNotBlank()) {
+                canvas.drawText("$startStr-$endStr", x + 8f, yTop + 36f, timeBlockP)
+            }
         }
     }
 
