@@ -40,6 +40,10 @@ jobs:
 
           mkdir -p keys
 
+          # 删除旧 jks，避免 keytool 用新密码打开旧文件报错
+          rm -f keys/release.jks
+          echo "🗑️  Removed old keys/release.jks (if any)"
+
           keytool -genkeypair \
             -keystore keys/release.jks \
             -alias "$KEY_ALIAS" \
@@ -47,7 +51,7 @@ jobs:
             -keysize 2048 \
             -validity $(( VALIDITY_YEARS * 365 )) \
             -storepass "$STORE_PASS" \
-            -keypass  "$KEY_PASS" \
+            -keypass "$KEY_PASS" \
             -dname "CN=SchoolManager, OU=App, O=SchoolManager, L=CN, S=CN, C=CN" \
             -storetype JKS \
             -noprompt
@@ -71,12 +75,10 @@ jobs:
           KEY_ALIAS:  ${{ steps.keygen.outputs.key_alias }}
         run: |
           set -e
-          # 写入属性文件（与 jks 同目录，build.yml 直接读取，无需 Variables/Secrets）
-          cat > keys/keystore.properties << EOF
-          KEYSTORE_STORE_PASSWORD=${STORE_PASS}
-          KEYSTORE_KEY_ALIAS=${KEY_ALIAS}
-          KEYSTORE_KEY_PASSWORD=${KEY_PASS}
-          EOF
+          # 不用 heredoc，避免缩进带入多余空格
+          printf 'KEYSTORE_STORE_PASSWORD=%s\nKEYSTORE_KEY_ALIAS=%s\nKEYSTORE_KEY_PASSWORD=%s\n' \
+            "$STORE_PASS" "$KEY_ALIAS" "$KEY_PASS" \
+            > keys/keystore.properties
           echo "✅ keys/keystore.properties written"
 
       # ── 确保 keys/ 不被 .gitignore 排除 ─────────────────────────────────────
@@ -107,7 +109,7 @@ jobs:
           echo "════════════════════════════════════════════════"
           echo "  ✅ 完成！新 keystore 与密码已同步到仓库。"
           echo "  keys/release.jks         — keystore 文件"
-          echo "  keys/keystore.properties — 对应密码（build.yml 直接读取）"
+          echo "  keys/keystore.properties — 对应密码"
           echo "  下次 push 编译的 APK 将使用此 keystore 签名。"
           echo "  ⚠️  注意：更换 keystore 后旧版 APK 无法覆盖安装，"
           echo "      用户需要卸载旧版重新安装。"
