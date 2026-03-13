@@ -72,14 +72,25 @@ data class Attendance(
 )
 
 // ─── App State ────────────────────────────────────────────────────────────────
-
+// IMPORTANT: 默认值全部使用空列表，避免 Gson 反序列化时默认值污染已保存数据。
+// 首次安装（SharedPreferences 无数据）时由 AppViewModel.load() 负责填入示例数据。
 data class AppState(
-    val subjects:   List<Subject>     = sampleSubjects,
-    val teachers:   List<Teacher>     = sampleTeachers,
-    val classes:    List<SchoolClass> = sampleClasses,
-    val students:   List<Student>     = sampleStudents,
-    val schedule:   List<Schedule>    = sampleSchedule,
-    val attendance: List<Attendance>  = sampleAttendance
+    val subjects:   List<Subject>     = emptyList(),
+    val teachers:   List<Teacher>     = emptyList(),
+    val classes:    List<SchoolClass> = emptyList(),
+    val students:   List<Student>     = emptyList(),
+    val schedule:   List<Schedule>    = emptyList(),
+    val attendance: List<Attendance>  = emptyList()
+)
+
+/** 首次安装时使用的示例状态 */
+fun sampleAppState(): AppState = AppState(
+    subjects   = sampleSubjects,
+    teachers   = sampleTeachers,
+    classes    = sampleClasses,
+    students   = sampleStudents,
+    schedule   = sampleSchedule,
+    attendance = sampleAttendance
 )
 
 // ─── Subject Colors (ARGB) ────────────────────────────────────────────────────
@@ -160,20 +171,7 @@ val sampleStudents = listOf(
     Student(5, "赵磊",   "20240301", "男", "高二", listOf(3)),
 )
 
-val sampleSchedule = listOf(
-    Schedule(1, 1, 1, 1, 1, startTime = "08:00", endTime = "08:45", code = "SCH0001"),
-    Schedule(2, 1, 2, 2, 1, startTime = "09:00", endTime = "09:45", code = "SCH0002"),
-    Schedule(3, 1, 3, 3, 2, startTime = "08:00", endTime = "08:45", code = "SCH0003"),
-    Schedule(4, 1, 4, 1, 3, startTime = "10:00", endTime = "10:45", code = "SCH0004"),
-    Schedule(5, 1, 5, 4, 4, startTime = "09:00", endTime = "09:45", code = "SCH0005"),
-    Schedule(6, 2, 1, 1, 1, startTime = "10:00", endTime = "10:45", code = "SCH0006"),
-    Schedule(7, 2, 3, 3, 2, startTime = "11:00", endTime = "11:45", code = "SCH0007"),
-    Schedule(8, 3, 2, 2, 1, startTime = "08:00", endTime = "08:45", code = "SCH0008"),
-)
-
-// ── Fix: 使用动态日期，确保预设记录始终出现在当月视图中 ──────────────────────────
-// 每次 AppState() 被调用时（首次安装 / 清空数据）重新计算日期，
-// 相对 today 偏移，使大部分记录落在本月，一条落在上月。
+// ── 使用动态日期，确保预设记录始终出现在当月视图中 ────────────────────────────────
 val sampleAttendance: List<Attendance>
     get() {
         val fmt   = DateTimeFormatter.ofPattern("yyyy-MM-dd")

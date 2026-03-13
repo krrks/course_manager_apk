@@ -22,12 +22,12 @@ private fun genCode(prefix: String) =
 
 // Gson-friendly snapshot (all fields nullable for safe deserialization)
 private data class GsonState(
-    val subjects:   List<Subject>?    = null,
-    val teachers:   List<Teacher>?    = null,
+    val subjects:   List<Subject>?     = null,
+    val teachers:   List<Teacher>?     = null,
     val classes:    List<SchoolClass>? = null,
-    val students:   List<Student>?    = null,
-    val schedule:   List<Schedule>?   = null,
-    val attendance: List<Attendance>? = null
+    val students:   List<Student>?     = null,
+    val schedule:   List<Schedule>?    = null,
+    val attendance: List<Attendance>?  = null
 )
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -35,6 +35,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("app_data", Context.MODE_PRIVATE)
     private val gson: Gson = GsonBuilder().create()
 
+    // 初始值用空 AppState，load() 里会覆盖
     private val _state = MutableStateFlow(AppState())
     val state: StateFlow<AppState> = _state.asStateFlow()
 
@@ -237,7 +238,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 zip.putNextEntry(ZipEntry("state.json"))
                 zip.write(gson.toJson(_state.value).toByteArray())
                 zip.closeEntry()
-
                 // avatars/
                 val avatarDir = File(context.filesDir, "avatars")
                 if (avatarDir.exists()) {
@@ -285,21 +285,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ─── Persistence ─────────────────────────────────────────────────────────
-    // FIX: removed viewModelScope.launch wrapper — apply() is already async,
-    // and wrapping in a coroutine meant data could be lost if the process was
-    // killed before the coroutine had a chance to run.
-    // 修复：移除 viewModelScope.launch 包裹，避免退出时协程未执行导致数据丢失。
+    // 使用 commit()（同步写入）代替 apply()（异步写入），
+    // 确保强制退出前数据已写入磁盘，彻底避免数据丢失。
     private fun save() {
-        prefs.edit().putString("state", gson.toJson(_state.value)).apply()
+        prefs.edit().putString("state", gson.toJson(_state.value)).commit()
     }
 
+    // load()：用 GsonState（全字段可空）解析，避免 AppState 默认构造函数
+    // 用 sampleData 覆盖已保存数据的问题。
+    // 若 prefs 中无数据（首次安装），填入示例数据并立即保存。
     private fun load() {
-        val json = prefs.getString("state", null) ?: return
+        val json = prefs.getString("state", null)
+        if (json == null) {
+            // 首次安装：填入示例数据
+            _state.value = sampleAppState()
+            save()
+            return
+        }
         try {
-            val type = object : TypeToken<AppState>() {}.type
-            val loaded: AppState = gson.fromJson(json, type)
-            _state.value = loaded
-        } catch (_: Exception) { /* ignore corrupt data */ }
+            val raw = gson.fromJson(json, GsonState::class.java)
+            _state.value = AppState(
+                subjects   = raw.subjects   ?: emptyList(),
+                teachers   = raw.teachers   ?: emptyList(),
+                classes    = raw.classes    ?: emptyList(),
+                students   = raw.students   ?: emptyList(),
+                schedule   = raw.schedule   ?: emptyList(),
+                attendance = raw.attendance ?: emptyList()
+            )
+        } catch (_: Exception) {
+            // JSON 损坏时 fallback 到示例数据，并重新保存
+            _state.value = sampleAppState()
+            save()
+        }
     }
 
     // ─── Import / merge ───────────────────────────────────────────────────────
@@ -350,7 +367,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── Reset to factory sample data ────────────────────────────────────────
     fun resetToSampleData() {
-        _state.value = AppState()
+        _state.value = sampleAppState()
         save()
     }
 }
