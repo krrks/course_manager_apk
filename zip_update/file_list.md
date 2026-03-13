@@ -1,10 +1,11 @@
 # 🗂 仓库完整文件列表（patch 后快照）
 
-> 生成时间 (UTC): `2026-03-13T03:22:53Z`
-> 提交 SHA: `e2ab32bdaa06b6437557fe5847f65f4ba7ef8be8`
+> 生成时间 (UTC): `2026-03-13T04:10:02Z`
+> 提交 SHA: `c33faf1cc069043dff40426cadbd43cb8ae91769`
 
 ```
 ./.github/workflows/build.yml
+./.github/workflows/update_apk_key.yml
 ./.gitignore
 ./README.md
 ./app/build.gradle.kts
@@ -41,10 +42,11 @@
 ./gradle/wrapper/gradle-wrapper.properties
 ./gradlew
 ./gradlew.bat
+./keys/release.jks
 ./settings.gradle.kts
 ./zip_update/file_list.md
 ./zip_update/file_list_befor_update.md
 ./zip_update/note.md
 ./zip_update/release_note.md
-./zip_update/update_fix_compile_final.zip
+./zip_update/update_signing_fix_1773374756.zip
 ```

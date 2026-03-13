@@ -13,14 +13,14 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 5
-        versionName = "1.5.0"
+        versionName = "1.5.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
     // ── 签名配置 ──────────────────────────────────────────────────────────────
-    // release 签名从环境变量读取（由 GitHub Actions 的 build.yml 注入）。
-    // 本地开发时若未设置环境变量，自动回退到 debug 签名，不影响本地调试。
+    // 四个环境变量全部存在 AND keys/release.jks 文件存在时，才使用正式签名。
+    // 否则自动降级到 debug 签名，确保 CI 不会因签名问题 FAILED。
     signingConfigs {
         create("release") {
             val keystorePath  = System.getenv("KEYSTORE_PATH")
@@ -28,21 +28,25 @@ android {
             val keyAlias      = System.getenv("KEYSTORE_KEY_ALIAS")
             val keyPassword   = System.getenv("KEYSTORE_KEY_PASSWORD")
 
-            if (keystorePath != null && storePassword != null &&
-                keyAlias != null    && keyPassword != null) {
-                storeFile     = file(keystorePath)
+            val ksFile = if (keystorePath != null) file(keystorePath) else null
+            val hasAll = keystorePath != null && storePassword != null &&
+                         keyAlias    != null && keyPassword   != null &&
+                         ksFile      != null && ksFile.exists()
+
+            if (hasAll) {
+                storeFile          = ksFile
                 this.storePassword = storePassword
                 this.keyAlias      = keyAlias
                 this.keyPassword   = keyPassword
-                println("✅ Release signing: using $keystorePath")
+                println("✅ Release signing: $keystorePath  alias=$keyAlias")
             } else {
-                // 本地或 CI 未配置 key 时回退 debug 签名（可正常编译，但与正式签名不同）
-                println("⚠️  KEYSTORE env vars not set — falling back to debug signing config")
-                val debugKs = signingConfigs.getByName("debug")
-                storeFile     = debugKs.storeFile
-                this.storePassword = debugKs.storePassword
-                this.keyAlias      = debugKs.keyAlias
-                this.keyPassword   = debugKs.keyPassword
+                // 降级：使用 debug keystore（保证编译成功，APK 可安装但与 debug 同证书）
+                println("⚠️  Release signing: env vars missing or jks not found — falling back to debug keystore")
+                val debug = signingConfigs.getByName("debug")
+                storeFile          = debug.storeFile
+                this.storePassword = debug.storePassword
+                this.keyAlias      = debug.keyAlias
+                this.keyPassword   = debug.keyPassword
             }
         }
     }
@@ -51,7 +55,7 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")   // ← 使用正式签名
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             applicationIdSuffix = ".debug"
