@@ -19,43 +19,42 @@ android {
     }
 
     // ── 签名配置 ──────────────────────────────────────────────────────────────
-    // 四个环境变量全部存在 AND keys/release.jks 文件存在时，才使用正式签名。
-    // 否则自动降级到 debug 签名，确保 CI 不会因签名问题 FAILED。
-    signingConfigs {
-        create("release") {
-            val keystorePath  = System.getenv("KEYSTORE_PATH")
-            val storePassword = System.getenv("KEYSTORE_STORE_PASSWORD")
-            val keyAlias      = System.getenv("KEYSTORE_KEY_ALIAS")
-            val keyPassword   = System.getenv("KEYSTORE_KEY_PASSWORD")
+    // 只有四个环境变量全齐且 jks 文件真实存在时，才创建 release signingConfig。
+    // 否则 release buildType 不指定 signingConfig（= null），Gradle 自动用 debug key。
+    // 重要：不在 signingConfigs.create 块里引用 signingConfigs.getByName("debug")，
+    //       避免 Gradle 配置阶段的循环初始化异常。
+    val keystorePath  = System.getenv("KEYSTORE_PATH")
+    val storePassword = System.getenv("KEYSTORE_STORE_PASSWORD")
+    val keyAlias      = System.getenv("KEYSTORE_KEY_ALIAS")
+    val keyPassword   = System.getenv("KEYSTORE_KEY_PASSWORD")
+    val ksFile        = if (keystorePath != null) file(keystorePath) else null
+    val useReleaseKey = keystorePath  != null && storePassword != null &&
+                        keyAlias      != null && keyPassword   != null &&
+                        ksFile        != null && ksFile.exists()
 
-            val ksFile = if (keystorePath != null) file(keystorePath) else null
-            val hasAll = keystorePath != null && storePassword != null &&
-                         keyAlias    != null && keyPassword   != null &&
-                         ksFile      != null && ksFile.exists()
-
-            if (hasAll) {
+    if (useReleaseKey) {
+        signingConfigs {
+            create("release") {
                 storeFile          = ksFile
                 this.storePassword = storePassword
                 this.keyAlias      = keyAlias
                 this.keyPassword   = keyPassword
-                println("✅ Release signing: $keystorePath  alias=$keyAlias")
-            } else {
-                // 降级：使用 debug keystore（保证编译成功，APK 可安装但与 debug 同证书）
-                println("⚠️  Release signing: env vars missing or jks not found — falling back to debug keystore")
-                val debug = signingConfigs.getByName("debug")
-                storeFile          = debug.storeFile
-                this.storePassword = debug.storePassword
-                this.keyAlias      = debug.keyAlias
-                this.keyPassword   = debug.keyPassword
             }
         }
+        println("✅ Release signing: using $keystorePath (alias=$keyAlias)")
+    } else {
+        println("⚠️  Release signing: env vars missing or jks not found — APK will be signed with debug key")
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            // 有 release key 就用，没有就让 Gradle 用默认的 debug key（不会 FAILED）
+            signingConfig = if (useReleaseKey)
+                signingConfigs.getByName("release")
+            else
+                signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"

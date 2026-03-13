@@ -1,7 +1,7 @@
 # 🗂 仓库完整文件列表（patch 后快照）
 
-> 生成时间 (UTC): `2026-03-13T04:10:02Z`
-> 提交 SHA: `c33faf1cc069043dff40426cadbd43cb8ae91769`
+> 生成时间 (UTC): `2026-03-13T04:17:27Z`
+> 提交 SHA: `01c00209dbcb40b2c733744d5f4d0552664b2740`
 
 ```
 ./.github/workflows/build.yml
@@ -48,5 +48,5 @@
 ./zip_update/file_list_befor_update.md
 ./zip_update/note.md
 ./zip_update/release_note.md
-./zip_update/update_signing_fix_1773374756.zip
+./zip_update/update_fix2_1773375374.zip
 ```

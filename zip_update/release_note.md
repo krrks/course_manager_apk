@@ -1,16 +1,17 @@
-# v1.5.2 — 修复签名失败 + UI 优化
+# v1.5.2 — 彻底修复签名崩溃
 
-## 🔧 修复签名失败（FATAL 问题）
-**错误**：`KeytoolException: Keystore was tampered with, or password was incorrect`
-**原因**：`keys/release.jks` 与 Variables 里存储的密码不是同一次生成的，两者不匹配。
-**修复**：
-- `app/build.gradle.kts`：增加兜底逻辑——jks 不存在或密码未设置时自动降级到 debug 签名，CI 不再 FAILED
-- `update_apk_key.yml`：优化密码写入流程，确保 jks 与 Variables 始终同步生成
+## 问题根因
+上一个 patch 的 build.gradle.kts 在 `signingConfigs.create("release")` 块内部
+调用了 `signingConfigs.getByName("debug")`，触发 Gradle 配置阶段循环初始化异常，
+导致签名配置本身就失败，进而 packageRelease FAILED。
 
-**修复后操作（重新生成匹配的 key）**：
-1. 到 Actions → "🔑 Generate & Update Release Keystore" → Run workflow
-2. 等待完成，新 jks 和密码会自动同步
+## 本次修复
+将"是否使用 release key"的判断提到 `android {}` 顶层：
+- 四个环境变量全部存在 AND jks 文件真实存在 → 创建 release signingConfig 并使用
+- 任何一个缺失 → `signingConfig = signingConfigs.getByName("debug")`（debug key，不会崩溃）
+- `signingConfigs.create("release")` 块内再也不引用 debug config，避免循环依赖
 
-## ✅ UI 修复（已在上传文件中）
-- 时间滚轮：滚动释放后立即吸附选中中央值
-- 出勤学生：点击名字 FilterChip 切换出勤状态（课表页快速添加记录）
+## 后续：让 release APK 使用正式签名
+1. 手动提交 `.github/workflows/update_apk_key.yml`（上次已提供）
+2. 到 Actions → 🔑 Generate & Update Release Keystore → Run workflow
+3. 之后编译自动使用匹配的 jks 签名
