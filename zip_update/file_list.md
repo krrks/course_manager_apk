@@ -1,11 +1,10 @@
 # 🗂 仓库完整文件列表（patch 后快照）
 
-> 生成时间 (UTC): `2026-03-13T03:16:35Z`
-> 提交 SHA: `b91db38d5a074c1d33969103bfa567b4877dc41f`
+> 生成时间 (UTC): `2026-03-13T03:22:53Z`
+> 提交 SHA: `e2ab32bdaa06b6437557fe5847f65f4ba7ef8be8`
 
 ```
 ./.github/workflows/build.yml
-./.github/workflows/release.yml
 ./.gitignore
 ./README.md
 ./app/build.gradle.kts
@@ -47,5 +46,5 @@
 ./zip_update/file_list_befor_update.md
 ./zip_update/note.md
 ./zip_update/release_note.md
-./zip_update/update_fix_persistence_1773371678.zip
+./zip_update/update_fix_compile_final.zip
 ```
