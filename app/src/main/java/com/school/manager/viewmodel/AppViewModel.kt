@@ -189,69 +189,71 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun exportFullStateJson(): String = gson.toJson(_state.value)
 
     /** Schedule records with resolved names */
-    fun exportScheduleJson(teacherId: Long? = null): String {
+    fun exportScheduleJson(teacherId: Long?): String {
         val st = _state.value
-        val rows = st.schedule
+        val list = st.schedule
             .filter { teacherId == null || it.teacherId == teacherId }
-            .map { s ->
-                mapOf(
-                    "id"        to s.id,
-                    "class"     to (st.classes.find { it.id == s.classId }?.name ?: ""),
-                    "subject"   to (st.subjects.find { it.id == s.subjectId }?.name ?: ""),
-                    "teacher"   to (st.teachers.find { it.id == s.teacherId }?.name ?: ""),
-                    "day"       to s.day,
-                    "startTime" to s.startTime,
-                    "endTime"   to s.endTime
-                )
-            }
-        return gson.toJson(rows)
+            .map { s -> mapOf(
+                "id"        to s.id,
+                "code"      to s.code,
+                "day"       to s.day,
+                "startTime" to s.startTime,
+                "endTime"   to s.endTime,
+                "class"     to (st.classes.find { it.id == s.classId }?.name ?: ""),
+                "subject"   to (st.subjects.find { it.id == s.subjectId }?.name ?: ""),
+                "teacher"   to (st.teachers.find { it.id == s.teacherId }?.name ?: "")
+            )}
+        return gson.toJson(list)
     }
 
     /** Attendance records with resolved names */
-    fun exportAttendanceJson(teacherId: Long? = null): String {
+    fun exportAttendanceJson(teacherId: Long?): String {
         val st = _state.value
-        val rows = st.attendance
+        val list = st.attendance
             .filter { teacherId == null || it.teacherId == teacherId }
-            .map { a ->
-                mapOf(
-                    "id"        to a.id,
-                    "date"      to a.date,
-                    "class"     to (st.classes.find { it.id == a.classId }?.name ?: ""),
-                    "subject"   to (st.subjects.find { it.id == a.subjectId }?.name ?: ""),
-                    "teacher"   to (st.teachers.find { it.id == a.teacherId }?.name ?: ""),
-                    "topic"     to a.topic,
-                    "status"    to a.status,
-                    "notes"     to a.notes,
-                    "attendees" to a.attendees.size
-                )
-            }
-        return gson.toJson(rows)
+            .map { a -> mapOf(
+                "id"        to a.id,
+                "code"      to a.code,
+                "date"      to a.date,
+                "startTime" to a.startTime,
+                "endTime"   to a.endTime,
+                "topic"     to a.topic,
+                "status"    to a.status,
+                "notes"     to a.notes,
+                "class"     to (st.classes.find { it.id == a.classId }?.name ?: ""),
+                "subject"   to (st.subjects.find { it.id == a.subjectId }?.name ?: ""),
+                "teacher"   to (st.teachers.find { it.id == a.teacherId }?.name ?: ""),
+                "attendees" to a.attendees.mapNotNull { sid -> st.students.find { it.id == sid }?.name }
+            )}
+        return gson.toJson(list)
     }
 
-    // ─── ZIP full backup export ───────────────────────────────────────────────
-    fun exportFullBackupZip(context: Context): ByteArray? {
+    /** Export full backup as ZIP (state.json + avatars/) */
+    fun exportFullBackupZip(context: android.content.Context): ByteArray? {
         return try {
-            val baos = ByteArrayOutputStream()
-            ZipOutputStream(baos).use { zip ->
-                val stateJson = gson.toJson(_state.value).toByteArray(Charsets.UTF_8)
+            val out = ByteArrayOutputStream()
+            ZipOutputStream(out).use { zip ->
+                // state.json
                 zip.putNextEntry(ZipEntry("state.json"))
-                zip.write(stateJson)
+                zip.write(gson.toJson(_state.value).toByteArray())
                 zip.closeEntry()
+
+                // avatars/
                 val avatarDir = File(context.filesDir, "avatars")
                 if (avatarDir.exists()) {
-                    avatarDir.listFiles()?.forEach { f ->
-                        zip.putNextEntry(ZipEntry("avatars/${f.name}"))
-                        f.inputStream().use { it.copyTo(zip) }
+                    avatarDir.listFiles()?.forEach { file ->
+                        zip.putNextEntry(ZipEntry("avatars/${file.name}"))
+                        zip.write(file.readBytes())
                         zip.closeEntry()
                     }
                 }
             }
-            baos.toByteArray()
+            out.toByteArray()
         } catch (_: Exception) { null }
     }
 
-    // ─── ZIP full backup import ───────────────────────────────────────────────
-    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean {
+    /** Import full backup ZIP */
+    fun importFullBackupZip(context: android.content.Context, bytes: ByteArray): Boolean {
         return try {
             var stateJson: String? = null
             val avatarEntries = mutableMapOf<String, ByteArray>()

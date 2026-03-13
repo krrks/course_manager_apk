@@ -17,11 +17,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
 import kotlinx.coroutines.delay
+
+// ── 版本常量（与 build.gradle.kts 保持同步）────────────────────────────────
+private const val APP_VERSION = "1.5.0"
 
 @Composable
 fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
@@ -146,7 +150,13 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                 exportWith(vm.exportAttendanceJson(selectedTeacherId.takeIf { it != 0L }),
                     jsonFilename.replace(".json","_attendance.json"))
             }
-            IoCard(Icons.Default.Upload, "导入 JSON 数据", FluentOrange,
+
+            HorizontalDivider(color = FluentBorder)
+
+            // ── Import JSON ──────────────────────────────────────────────────
+            Text("📥 导入数据",
+                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            IoCard(Icons.Default.FileOpen, "导入 JSON 数据", FluentAmber,
                 "选择本应用导出的 JSON 文件，按 ID 合并") {
                 openFileLauncher.launch(arrayOf("application/json","text/plain","*/*"))
             }
@@ -154,33 +164,51 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
             HorizontalDivider(color = FluentBorder)
 
             // ── Danger zone ──────────────────────────────────────────────────
-            Text("⚠️ 危险操作", style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold, color = FluentRed)
+            Text("⚠️ 危险操作",
+                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+
             var confirmReset by remember { mutableStateOf(false) }
             if (!confirmReset) {
-                OutlinedButton(onClick = { confirmReset = true },
-                    colors  = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed),
-                    shape   = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    Text("清除所有数据，恢复示例数据")
-                }
+                IoCard(Icons.Default.DeleteForever, "重置为示例数据", Color(0xFFE53935),
+                    "清空所有数据并恢复为预设示例（不可撤销）") { confirmReset = true }
             } else {
-                Text("确定要清除所有数据吗？此操作不可撤销。",
-                    style = MaterialTheme.typography.bodyMedium, color = FluentRed)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { confirmReset = false }, modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)) { Text("取消") }
-                    Button(onClick = {
-                        vm.resetToSampleData(); confirmReset = false; toast = "✅ 已恢复示例数据"
-                    }, colors = ButtonDefaults.buttonColors(containerColor = FluentRed),
-                        shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) { Text("确认清除") }
+                Surface(shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFFFEBEE), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("确定要清空所有数据吗？此操作不可撤销。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFB71C1C), fontWeight = FontWeight.Medium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(onClick = { confirmReset = false },
+                                modifier = Modifier.weight(1f)) { Text("取消") }
+                            Button(onClick = { vm.resetToSampleData(); confirmReset = false },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))) {
+                                Text("确认重置", color = Color.White)
+                            }
+                        }
+                    }
                 }
             }
 
-            toast?.let { msg ->
-                Surface(shape = RoundedCornerShape(12.dp),
-                    color = if (msg.startsWith("✅")) FluentGreen.copy(alpha = 0.12f)
-                            else MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier.fillMaxWidth()) {
+            // ── 版本信息 ─────────────────────────────────────────────────────
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "智慧课务管理  v$APP_VERSION",
+                style = MaterialTheme.typography.bodySmall,
+                color = FluentMuted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // ── Toast ────────────────────────────────────────────────────────────
+        toast?.let { msg ->
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                Surface(modifier = Modifier.padding(bottom = 100.dp).widthIn(max = 320.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (msg.startsWith("✅")) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.errorContainer,
+                    shadowElevation = 4.dp) {
                     Text(msg, modifier = Modifier.padding(12.dp),
                         color = if (msg.startsWith("✅")) FluentGreen else MaterialTheme.colorScheme.onErrorContainer,
                         fontWeight = FontWeight.Medium)
@@ -199,7 +227,7 @@ private fun FilenameField(label: String, value: String, placeholder: String, onV
 }
 
 @Composable
-private fun IoCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String,
+private fun IoCard(icon: ImageVector, title: String,
                    color: Color, subtitle: String, onClick: () -> Unit) {
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface,
         shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
