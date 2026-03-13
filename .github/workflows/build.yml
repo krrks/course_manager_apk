@@ -70,76 +70,68 @@ jobs:
             fi
           fi
 
-      # ── 3. 找 zip_update/ 里最新的 zip ──────────────────────────────────────
-      - name: 📦 Find latest zip in zip_update/
+      # ── 3. 查找 zip_update/ 下最新的 zip ────────────────────────────────────
+      - name: 🔎 Find update zip
         id: find_zip
         run: |
-          ZIP_DIR="zip_update"
-          LATEST_ZIP=""
-          if [ -d "$ZIP_DIR" ]; then
-            LATEST_ZIP=$(find "$ZIP_DIR" -maxdepth 1 -name "*.zip" \
-                          -printf '%T@ %p\n' 2>/dev/null \
-                         | sort -rn | head -n1 | awk '{print $2}')
-          fi
-
-          if [ -n "$LATEST_ZIP" ] && [ -f "$LATEST_ZIP" ]; then
-            ZIP_MTIME=$(date -u -r "$LATEST_ZIP" '+%Y-%m-%dT%H:%M:%SZ')
-            echo "✅ Latest zip: $LATEST_ZIP  (mtime: $ZIP_MTIME)"
-            echo "zip_found=true"       >> "$GITHUB_OUTPUT"
-            echo "zip_path=$LATEST_ZIP" >> "$GITHUB_OUTPUT"
-            echo "zip_mtime=$ZIP_MTIME" >> "$GITHUB_OUTPUT"
+          ZIP=$(find zip_update -maxdepth 1 -name 'update_*.zip' \
+                | sort -t_ -k2 -n | tail -n1 || echo "")
+          if [ -n "$ZIP" ]; then
+            MTIME=$(stat -c '%y' "$ZIP" | cut -d'.' -f1)
+            echo "zip_found=true"   >> "$GITHUB_OUTPUT"
+            echo "zip_path=$ZIP"    >> "$GITHUB_OUTPUT"
+            echo "zip_mtime=$MTIME" >> "$GITHUB_OUTPUT"
+            echo "✅ Found zip: $ZIP  (mtime: $MTIME)"
           else
-            echo "ℹ️  No zip found"
-            echo "zip_found=false"      >> "$GITHUB_OUTPUT"
-            echo "zip_path="            >> "$GITHUB_OUTPUT"
-            echo "zip_mtime="           >> "$GITHUB_OUTPUT"
+            echo "zip_found=false"  >> "$GITHUB_OUTPUT"
+            echo "zip_path="        >> "$GITHUB_OUTPUT"
+            echo "zip_mtime="       >> "$GITHUB_OUTPUT"
+            echo "ℹ️  No update zip found"
           fi
 
-      # ── 4. 对比最新 Release，避免重复编译 ──────────────────────────────────
-      - name: 🔎 Compare zip mtime with latest release
-        id: compare_release
+      # ── 4. 检查该 zip 是否已经在 release 里了 ───────────────────────────────
+      - name: 🏷️ Check if zip already released
+        id: already_released
         if: steps.find_zip.outputs.zip_found == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ZIP_MTIME: ${{ steps.find_zip.outputs.zip_mtime }}
-          FORCE: ${{ github.event.inputs.force_build }}
         run: |
-          if [ "$FORCE" = "true" ]; then
-            echo "ℹ️  force_build=true — skipping mtime comparison"
-            echo "already_released=false" >> "$GITHUB_OUTPUT"
+          RELEASED=$(gh release list --limit 50 --json body \
+            -q ".[].body" 2>/dev/null \
+            | grep -F "$ZIP_MTIME" || echo "")
+          if [ -n "$RELEASED" ]; then
+            echo "already=true"  >> "$GITHUB_OUTPUT"
+            echo "ℹ️  This zip mtime was already released"
           else
-            RELEASE_BODY=$(gh release list --limit 1 --json body \
-                            -q '.[0].body' 2>/dev/null || echo "")
-            if echo "$RELEASE_BODY" | grep -qF "$ZIP_MTIME"; then
-              echo "⏭️  zip mtime=$ZIP_MTIME already in latest release"
-              echo "already_released=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "✅ mtime not found in latest release — will build"
-              echo "already_released=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 5. 汇总决策，输出统一的 should_build ─────────────────────────────────
-      - name: 📋 Final decision
+      # ── 5. 决定是否编译 ──────────────────────────────────────────────────────
+      - name: 🤔 Decide whether to build
         id: decision
         env:
-          ONLY_GITHUB:      ${{ steps.github_only.outputs.only_github }}
-          ALREADY_RELEASED: ${{ steps.compare_release.outputs.already_released }}
+          EVENT:           ${{ github.event_name }}
+          ONLY_GITHUB:     ${{ steps.github_only.outputs.only_github }}
+          ZIP_FOUND:       ${{ steps.find_zip.outputs.zip_found }}
+          ALREADY_RELEASED: ${{ steps.already_released.outputs.already }}
+          FORCE:           ${{ github.event.inputs.force_build }}
         run: |
-          if [ "$ONLY_GITHUB" = "true" ]; then
-            echo "⏭️  SKIP — only .github/ files changed"
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
-          elif [ "$ALREADY_RELEASED" = "true" ]; then
-            echo "⏭️  SKIP — zip already released"
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "✅ GO — will build"
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCE" = "true" ]; then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Force build requested"
+          elif [ "$ONLY_GITHUB" = "true" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️  Skipping: only .github/ changed"
+          elif [ "$ZIP_FOUND" = "true" ] && [ "$ALREADY_RELEASED" = "true" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️  Skipping: zip already released"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Will build"
           fi
 
       # ── 6. 决定编译哪些 variant ──────────────────────────────────────────────
-      # 自动触发（push / PR）：仅 release
-      # 手动触发：读取用户勾选；若两者均未勾选则默认仅 release
       - name: 🎛️ Resolve build variants
         id: variants
         env:
@@ -150,13 +142,11 @@ jobs:
           if [ "$EVENT" = "workflow_dispatch" ]; then
             DO_DEBUG="${INPUT_DEBUG}"
             DO_RELEASE="${INPUT_RELEASE}"
-            # 两者都未勾选时回退到仅 release
             if [ "$DO_DEBUG" != "true" ] && [ "$DO_RELEASE" != "true" ]; then
               echo "⚠️  Neither variant selected — defaulting to release only"
               DO_RELEASE="true"
             fi
           else
-            # 自动触发：只编 release
             DO_DEBUG="false"
             DO_RELEASE="true"
           fi
@@ -258,7 +248,6 @@ jobs:
             echo '```'
           } > "$FILE_LIST"
           echo "✅ file_list.md written"
-          cat "$FILE_LIST"
 
       # ── 4. 读取 release_note.md，删除 zip，提交变更 ───────────────────────────
       - name: 🧹 Clean up zip and commit changes
@@ -324,12 +313,18 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
-      # ── 9. Build Release APK（仅当 do_release == 'true'）───────────────────
+      # ── 9. Build Release APK（用 keys/release.jks 签名）──────────────────────
       - name: 🚀 Build Release APK
         if: needs.check.outputs.do_release == 'true'
         run: ./gradlew assembleRelease --no-daemon --build-cache
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+          # 签名参数：从仓库 Variables 读取（由 update_apk_key.yml 自动写入）
+          # 如 Variables 未设置则 Gradle 会回退到 debug 签名（见 build.gradle.kts）
+          KEYSTORE_PATH:           ${{ github.workspace }}/keys/release.jks
+          KEYSTORE_STORE_PASSWORD: ${{ vars.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_ALIAS:      ${{ vars.KEYSTORE_KEY_ALIAS }}
+          KEYSTORE_KEY_PASSWORD:   ${{ vars.KEYSTORE_KEY_PASSWORD }}
 
       # ── 10. Upload APK artifacts ──────────────────────────────────────────
       - name: 📤 Upload Debug APK
@@ -379,12 +374,11 @@ jobs:
           FILES=""
           if [ "$DO_DEBUG"   = "true" ]; then FILES="$FILES app/build/outputs/apk/debug/app-debug.apk"; fi
           if [ "$DO_RELEASE" = "true" ]; then FILES="$FILES app/build/outputs/apk/release/app-release.apk"; fi
-          # trim leading space
           FILES="${FILES# }"
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
           echo "📦 Release files: $FILES"
 
-      # ── 13. 发布 Release ─────────────────────────────────────────────────
+      # ── 13. 发布 Release ─────────────────────────────────────────────────────
       - name: 🏷️ Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

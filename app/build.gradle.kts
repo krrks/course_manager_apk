@@ -12,17 +12,46 @@ android {
         applicationId = "com.school.manager"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 5
+        versionName = "1.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+    }
+
+    // ── 签名配置 ──────────────────────────────────────────────────────────────
+    // release 签名从环境变量读取（由 GitHub Actions 的 build.yml 注入）。
+    // 本地开发时若未设置环境变量，自动回退到 debug 签名，不影响本地调试。
+    signingConfigs {
+        create("release") {
+            val keystorePath  = System.getenv("KEYSTORE_PATH")
+            val storePassword = System.getenv("KEYSTORE_STORE_PASSWORD")
+            val keyAlias      = System.getenv("KEYSTORE_KEY_ALIAS")
+            val keyPassword   = System.getenv("KEYSTORE_KEY_PASSWORD")
+
+            if (keystorePath != null && storePassword != null &&
+                keyAlias != null    && keyPassword != null) {
+                storeFile     = file(keystorePath)
+                this.storePassword = storePassword
+                this.keyAlias      = keyAlias
+                this.keyPassword   = keyPassword
+                println("✅ Release signing: using $keystorePath")
+            } else {
+                // 本地或 CI 未配置 key 时回退 debug 签名（可正常编译，但与正式签名不同）
+                println("⚠️  KEYSTORE env vars not set — falling back to debug signing config")
+                val debugKs = signingConfigs.getByName("debug")
+                storeFile     = debugKs.storeFile
+                this.storePassword = debugKs.storePassword
+                this.keyAlias      = debugKs.keyAlias
+                this.keyPassword   = debugKs.keyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")   // ← 使用正式签名
         }
         debug {
             applicationIdSuffix = ".debug"
