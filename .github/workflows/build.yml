@@ -108,11 +108,11 @@ jobs:
       - name: 🤔 Decide whether to build
         id: decision
         env:
-          EVENT:           ${{ github.event_name }}
-          ONLY_GITHUB:     ${{ steps.github_only.outputs.only_github }}
-          ZIP_FOUND:       ${{ steps.find_zip.outputs.zip_found }}
+          EVENT:            ${{ github.event_name }}
+          ONLY_GITHUB:      ${{ steps.github_only.outputs.only_github }}
+          ZIP_FOUND:        ${{ steps.find_zip.outputs.zip_found }}
           ALREADY_RELEASED: ${{ steps.already_released.outputs.already }}
-          FORCE:           ${{ github.event.inputs.force_build }}
+          FORCE:            ${{ github.event.inputs.force_build }}
         run: |
           if [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCE" = "true" ]; then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
@@ -197,7 +197,7 @@ jobs:
       - name: 📝 Generate file listings
         if: needs.check.outputs.zip_found == 'true'
         env:
-          ZIP_PATH: ${{ needs.check.outputs.zip_path }}
+          ZIP_PATH:  ${{ needs.check.outputs.zip_path }}
           ZIP_MTIME: ${{ needs.check.outputs.zip_mtime }}
         run: |
           mkdir -p zip_update
@@ -303,27 +303,48 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # ── 8. Build Debug APK（仅当 do_debug == 'true'）────────────────────────
+      # ── 8. 从 keys/keystore.properties 加载签名密码到环境变量 ─────────────────
+      # 完全不依赖 Repository Variables / Secrets，密码随 jks 一起存在仓库里
+      - name: 🔑 Load keystore properties
+        id: load_ks
+        run: |
+          PROPS="keys/keystore.properties"
+          if [ -f "$PROPS" ]; then
+            echo "✅ Found $PROPS — loading signing credentials"
+            while IFS='=' read -r key value; do
+              # 跳过空行和注释行
+              key="${key// /}"          # trim spaces
+              [[ -z "$key" || "$key" == \#* ]] && continue
+              # 屏蔽密码明文，避免出现在日志里
+              echo "::add-mask::$value"
+              # 写入 GITHUB_ENV，后续所有 step 自动可见
+              echo "${key}=${value}" >> "$GITHUB_ENV"
+            done < "$PROPS"
+            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "⚠️  $PROPS not found — release APK will use debug signing"
+            echo "    Run '🔑 Generate & Update Release Keystore' workflow to fix this."
+            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 9. Build Debug APK（仅当 do_debug == 'true'）────────────────────────
       - name: 🔧 Build Debug APK
         if: needs.check.outputs.do_debug == 'true'
         run: ./gradlew assembleDebug --no-daemon --build-cache
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
-      # ── 9. Build Release APK（用 keys/release.jks 签名）──────────────────────
+      # ── 10. Build Release APK ─────────────────────────────────────────────
+      # 签名密码已由 step 8 写入 $GITHUB_ENV，Gradle 通过 System.getenv() 读取
+      # KEYSTORE_PATH 指向仓库内的 keys/release.jks
       - name: 🚀 Build Release APK
         if: needs.check.outputs.do_release == 'true'
         run: ./gradlew assembleRelease --no-daemon --build-cache
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
-          # 签名参数：从仓库 Variables 读取（由 update_apk_key.yml 自动写入）
-          # 如 Variables 未设置则 Gradle 会回退到 debug 签名（见 build.gradle.kts）
-          KEYSTORE_PATH:           ${{ github.workspace }}/keys/release.jks
-          KEYSTORE_STORE_PASSWORD: ${{ vars.KEYSTORE_STORE_PASSWORD }}
-          KEYSTORE_KEY_ALIAS:      ${{ vars.KEYSTORE_KEY_ALIAS }}
-          KEYSTORE_KEY_PASSWORD:   ${{ vars.KEYSTORE_KEY_PASSWORD }}
+          GRADLE_OPTS:    "-Dorg.gradle.jvmargs=-Xmx4g"
+          KEYSTORE_PATH:  ${{ github.workspace }}/keys/release.jks
 
-      # ── 10. Upload APK artifacts ──────────────────────────────────────────
+      # ── 11. Upload APK artifacts ──────────────────────────────────────────
       - name: 📤 Upload Debug APK
         if: needs.check.outputs.do_debug == 'true'
         uses: actions/upload-artifact@v4
@@ -338,7 +359,7 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk
 
-      # ── 11. 自动递增版本号 ────────────────────────────────────────────────
+      # ── 12. 自动递增版本号 ────────────────────────────────────────────────
       - name: 🔖 Compute next version tag
         id: version
         env:
@@ -361,7 +382,7 @@ jobs:
           echo "✅ Next version: $NEXT"
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
-      # ── 12. 收集本次实际产出的 APK 路径 ──────────────────────────────────────
+      # ── 13. 收集本次实际产出的 APK 路径 ──────────────────────────────────────
       - name: 📋 Collect APK paths for release
         id: apk_paths
         env:
@@ -375,7 +396,7 @@ jobs:
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
           echo "📦 Release files: $FILES"
 
-      # ── 13. 发布 Release ─────────────────────────────────────────────────────
+      # ── 14. 发布 Release ──────────────────────────────────────────────────
       - name: 🏷️ Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

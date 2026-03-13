@@ -1,17 +1,18 @@
-# v1.5.2 — 彻底修复签名崩溃
+# 签名方案升级：密码随仓库存储，不再依赖 Variables
 
-## 问题根因
-上一个 patch 的 build.gradle.kts 在 `signingConfigs.create("release")` 块内部
-调用了 `signingConfigs.getByName("debug")`，触发 Gradle 配置阶段循环初始化异常，
-导致签名配置本身就失败，进而 packageRelease FAILED。
+## 变更内容
 
-## 本次修复
-将"是否使用 release key"的判断提到 `android {}` 顶层：
-- 四个环境变量全部存在 AND jks 文件真实存在 → 创建 release signingConfig 并使用
-- 任何一个缺失 → `signingConfig = signingConfigs.getByName("debug")`（debug key，不会崩溃）
-- `signingConfigs.create("release")` 块内再也不引用 debug config，避免循环依赖
+### update_apk_key.yml
+- 生成 keystore 后，把密码写入 `keys/keystore.properties`（与 `release.jks` 一起 commit）
+- 移除原来写 Repository Variables 的步骤（不再需要 PAT_TOKEN）
 
-## 后续：让 release APK 使用正式签名
-1. 手动提交 `.github/workflows/update_apk_key.yml`（上次已提供）
+### build.yml
+- 编译前新增 Step 8「Load keystore properties」，从 `keys/keystore.properties` 读取密码
+- 密码通过 `$GITHUB_ENV` 传给后续 step，Gradle 通过 `System.getenv()` 读取
+- 移除所有 `vars.KEYSTORE_*` 引用
+
+## 使用流程
+1. push 这两个 workflow 文件
 2. 到 Actions → 🔑 Generate & Update Release Keystore → Run workflow
-3. 之后编译自动使用匹配的 jks 签名
+3. 确认 keys/release.jks 和 keys/keystore.properties 已自动 commit
+4. 之后每次 push 自动编译并使用正确签名
