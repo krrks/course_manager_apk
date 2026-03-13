@@ -24,14 +24,23 @@ import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
 import kotlinx.coroutines.delay
 
-// ── 版本常量（与 build.gradle.kts 保持同步）────────────────────────────────
-private const val APP_VERSION = "1.5.0"
-
 @Composable
 fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val context  = LocalContext.current
     val state    by vm.state.collectAsState()
     var toast    by remember { mutableStateOf<String?>(null) }
+
+    // 运行时读取版本号，与 build.gradle.kts 中的 versionName 始终一致
+    val appVersion = remember {
+        try {
+            val pi = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            else
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            pi.versionName ?: "─"
+        } catch (_: Exception) { "─" }
+    }
 
     LaunchedEffect(toast) { if (toast != null) { delay(2500); toast = null } }
 
@@ -194,7 +203,7 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
             // ── 版本信息 ─────────────────────────────────────────────────────
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "智慧课务管理  v$APP_VERSION",
+                text = "智慧课务管理  v$appVersion",
                 style = MaterialTheme.typography.bodySmall,
                 color = FluentMuted,
                 textAlign = TextAlign.Center,

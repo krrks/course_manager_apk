@@ -173,11 +173,13 @@ private fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Uni
                 if (rec.topic.isNotBlank())
                     Text("📌 ${rec.topic}", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("👩‍🏫 ${te?.name ?: "─"}", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
-                    Text("🗓 ${rec.date}",          style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+                    Text("👩‍🏫 ${te?.name ?: "─"}",
+                        style = MaterialTheme.typography.bodySmall, color = FluentMuted)
+                    Text("📅 ${rec.date}",
+                        style = MaterialTheme.typography.bodySmall, color = FluentMuted)
                     if (startStr.isNotBlank())
-                        Text("⏰ $startStr", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
-                    Text("👥 ${rec.attendees.size}人", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+                        Text("🕐 $startStr",
+                            style = MaterialTheme.typography.bodySmall, color = FluentMuted)
                 }
             }
         }
@@ -188,48 +190,30 @@ private fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Uni
 
 @Composable
 private fun WeekView(
-    records: List<Attendance>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
-    vm: AppViewModel, onRecordClick: (Attendance) -> Unit
+    records: List<Attendance>,
+    current: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    vm: AppViewModel,
+    onRecordClick: (Attendance) -> Unit
 ) {
-    val weekStart = current.with(DayOfWeek.MONDAY)
-    val weekDays  = (0..6).map { weekStart.plusDays(it.toLong()) }
-    val today     = LocalDate.now()
-    val fmt       = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    val byDate    = records.groupBy { it.date }
-    val weekNum   = current.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
-    val dayNames  = listOf("周一","周二","周三","周四","周五","周六","周日")
+    val monday = current.with(DayOfWeek.MONDAY)
+    val days   = (0..6).map { monday.plusDays(it.toLong()) }
+    val fmt    = DateTimeFormatter.ofPattern("M/d")
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().background(FluentBlue).padding(vertical = 8.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+    Column(Modifier.fillMaxSize()) {
+        // Header nav
+        Row(Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
             IconButton(onClick = { onDateChange(current.minusWeeks(1)) }) {
                 Icon(Icons.Default.ChevronLeft, null, tint = Color.White) }
-            Text("${current.year}年 第${weekNum}周",
+            val weekNum = current.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
+            Text("第 $weekNum 周  ${monday.format(fmt)} – ${monday.plusDays(6).format(fmt)}",
                 color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             IconButton(onClick = { onDateChange(current.plusWeeks(1)) }) {
                 Icon(Icons.Default.ChevronRight, null, tint = Color.White) }
         }
-        // Day headers (sticky)
-        Row(Modifier.fillMaxWidth()) {
-            Spacer(Modifier.width(TIME_COL_W.dp))
-            weekDays.forEach { date ->
-                val isToday = date == today
-                Box(Modifier.weight(1f)
-                    .background(if (isToday) FluentBlueLight else MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(dayNames[date.dayOfWeek.value - 1],
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isToday) FluentBlue else FluentMuted)
-                        Text("${date.dayOfMonth}",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isToday) FluentBlue else MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            }
-        }
-        // Scrollable time grid — time column is fixed, days scroll together
+        // Day columns
         val scrollV = rememberScrollState()
         Row(Modifier.fillMaxSize()) {
             // Fixed time column
@@ -243,40 +227,51 @@ private fun WeekView(
                     }
                 }
             }
-            // Day columns — scroll vertically in sync with time column
-            Row(Modifier.weight(1f).verticalScroll(scrollV)
-                .height((totalCalHeightDp + CAL_V_PAD * 2).dp)) {
-                weekDays.forEach { date ->
-                    val dateStr = fmt.format(date)
-                    val dayRecs = byDate[dateStr] ?: emptyList()
-                    Box(Modifier.weight(1f).fillMaxHeight().border(0.5.dp, FluentBorder)) {
-                        for (h in CAL_START_HOUR..CAL_END_HOUR) {
-                            val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD).dp
-                            Box(Modifier.offset(y = top).fillMaxWidth().height(0.5.dp).background(FluentBorder))
+            // Scrollable day columns
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+                days.forEach { day ->
+                    val dayRecs = records.filter { it.date == day.toString() }
+                    val isToday = day == LocalDate.now()
+                    Column(Modifier.width(DAY_COL_W.dp)) {
+                        Box(Modifier.fillMaxWidth().background(
+                            if (isToday) FluentBlue.copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.surfaceVariant).padding(4.dp),
+                            contentAlignment = Alignment.Center) {
+                            Text("${day.dayOfWeek.value}  ${day.format(fmt)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isToday) FluentBlue else FluentMuted)
                         }
-                        dayRecs.forEach { rec ->
-                            val startStr = rec.resolvedStart()
-                            val endStr   = rec.resolvedEnd()
-                            if (startStr.isBlank()) return@forEach
-                            val sub   = vm.subject(rec.subjectId)
-                            val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                            Box(Modifier
-                                .offset(y = (minuteOffsetDp(startStr) + CAL_V_PAD).dp)
-                                .fillMaxWidth().height(durationDp(startStr, endStr).coerceAtLeast(28f).dp)
-                                .padding(horizontal = 2.dp, vertical = 1.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(color.copy(alpha = 0.2f))
-                                .border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                                .clickable { onRecordClick(rec) }
-                                .padding(3.dp)) {
-                                Column {
-                                    Text(sub?.name ?: "?", style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold, color = color, maxLines = 1)
-                                    // FIX: show start-end time on event block
-                                    if (startStr.isNotBlank() && endStr.isNotBlank())
-                                        Text("$startStr-$endStr", style = MaterialTheme.typography.labelSmall,
-                                            color = color.copy(alpha = 0.8f), maxLines = 1)
-                                    StatusBadge(rec.status)
+                        Box(Modifier.width(DAY_COL_W.dp).verticalScroll(scrollV)
+                            .height((totalCalHeightDp + CAL_V_PAD * 2).dp)
+                            .border(0.5.dp, FluentBorder)) {
+                            for (h in CAL_START_HOUR..CAL_END_HOUR) {
+                                val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD).dp
+                                Box(Modifier.offset(y = top).fillMaxWidth().height(0.5.dp).background(FluentBorder))
+                            }
+                            dayRecs.forEach { rec ->
+                                val startStr = rec.resolvedStart()
+                                val endStr   = rec.resolvedEnd()
+                                if (startStr.isBlank()) return@forEach
+                                val sub   = vm.subject(rec.subjectId)
+                                val cl    = vm.schoolClass(rec.classId)
+                                val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
+                                Box(Modifier
+                                    .offset(y = (minuteOffsetDp(startStr) + CAL_V_PAD).dp)
+                                    .fillMaxWidth().height(durationDp(startStr, endStr).coerceAtLeast(56f).dp)
+                                    .padding(horizontal = 2.dp, vertical = 1.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(color.copy(alpha = 0.15f))
+                                    .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                    .clickable { onRecordClick(rec) }
+                                    .padding(4.dp)) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                        Text(sub?.name ?: cl?.subject ?: "?",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold, color = color, maxLines = 1)
+                                        Text("$startStr–$endStr",
+                                            style = MaterialTheme.typography.labelSmall, color = FluentMuted, maxLines = 1)
+                                    }
                                 }
                             }
                         }
@@ -291,75 +286,78 @@ private fun WeekView(
 
 @Composable
 private fun MonthView(
-    records: List<Attendance>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
-    vm: AppViewModel, onRecordClick: (Attendance) -> Unit
+    records: List<Attendance>,
+    current: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    vm: AppViewModel,
+    onRecordClick: (Attendance) -> Unit
 ) {
-    val ym          = YearMonth.of(current.year, current.month)
-    val firstDow    = ym.atDay(1).dayOfWeek.value
-    val daysInMonth = ym.lengthOfMonth()
-    val today       = LocalDate.now()
-    val fmt         = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    val byDate      = records.groupBy { it.date }
+    val ym     = YearMonth.from(current)
+    val first  = ym.atDay(1)
+    val offset = (first.dayOfWeek.value % 7)
+    val days   = ym.lengthOfMonth()
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
             IconButton(onClick = { onDateChange(current.minusMonths(1)) }) {
                 Icon(Icons.Default.ChevronLeft, null, tint = Color.White) }
-            Text("${current.year}年 ${current.monthValue}月",
-                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("${current.year}年${current.monthValue}月",
+                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             IconButton(onClick = { onDateChange(current.plusMonths(1)) }) {
                 Icon(Icons.Default.ChevronRight, null, tint = Color.White) }
         }
+        // Day-of-week header
         Row(Modifier.fillMaxWidth()) {
-            listOf("一","二","三","四","五","六","日").forEach { d ->
-                Box(Modifier.weight(1f).padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
-                    Text(d, style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold, color = FluentMuted)
-                }
+            listOf("日","一","二","三","四","五","六").forEach { d ->
+                Text(d, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
+                    color = FluentMuted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
-        val cells  = (1 until firstDow).map { -it } + (1..daysInMonth).toList()
-        val padded = cells + List((7 - cells.size % 7) % 7) { 0 }
-        padded.chunked(7).forEach { week ->
-            Row(Modifier.fillMaxWidth()) {
-                week.forEach { day ->
-                    val dateStr = if (day > 0) fmt.format(ym.atDay(day)) else ""
-                    val dayRecs = if (day > 0) (byDate[dateStr] ?: emptyList()) else emptyList()
-                    val isToday = day > 0 && ym.atDay(day) == today
-                    Box(Modifier.weight(1f).defaultMinSize(minHeight = 64.dp)
-                        .border(0.3.dp, FluentBorder)
-                        .background(if (isToday) FluentBlueLight else MaterialTheme.colorScheme.surface)
-                        .padding(3.dp)) {
-                        Column {
-                            if (day > 0) {
-                                Text("$day",
-                                    style     = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                    color     = if (isToday) FluentBlue else MaterialTheme.colorScheme.onSurface)
-                                dayRecs.take(2).forEach { rec ->
-                                    val sub   = vm.subject(rec.subjectId)
-                                    val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                                    Surface(shape = RoundedCornerShape(3.dp), color = color.copy(alpha = 0.18f),
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
-                                            .clickable { onRecordClick(rec) }) {
-                                        Row(Modifier.padding(horizontal = 3.dp, vertical = 1.dp)) {
-                                            Text(sub?.name ?: "?",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = color, maxLines = 1)
-                                        }
+        // Grid
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            val cells = offset + days
+            val rows  = (cells + 6) / 7
+            items(rows) { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    for (col in 0..6) {
+                        val idx = row * 7 + col
+                        val day = if (idx < offset || idx >= offset + days) null
+                        else first.plusDays((idx - offset).toLong())
+                        Box(Modifier.weight(1f).height(64.dp)
+                            .border(0.25.dp, FluentBorder)
+                            .background(if (day == LocalDate.now()) FluentBlue.copy(0.08f) else Color.Transparent)
+                            .clickable(enabled = day != null) { day?.let { onDateChange(it) } }
+                            .padding(2.dp)) {
+                            if (day != null) {
+                                val dayRecs = records.filter { it.date == day.toString() }
+                                Column {
+                                    Text(day.dayOfMonth.toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (day == LocalDate.now()) FluentBlue else FluentMuted)
+                                    dayRecs.take(3).forEach { rec ->
+                                        val sub = vm.subject(rec.subjectId)
+                                        val cl  = vm.schoolClass(rec.classId)
+                                        val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
+                                        Text(sub?.name ?: cl?.subject ?: "?",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = color, maxLines = 1,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(color.copy(0.12f))
+                                                .padding(horizontal = 2.dp)
+                                                .clickable { onRecordClick(rec) })
                                     }
                                 }
-                                if (dayRecs.size > 2)
-                                    Text("+${dayRecs.size - 2}",
-                                        style = MaterialTheme.typography.labelSmall, color = FluentMuted)
                             }
                         }
                     }
                 }
             }
+            item { Spacer(Modifier.height(80.dp)) }
         }
-        Spacer(Modifier.height(80.dp))
     }
 }
 
@@ -367,12 +365,14 @@ private fun MonthView(
 
 @Composable
 private fun DayView(
-    records: List<Attendance>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
-    vm: AppViewModel, onRecordClick: (Attendance) -> Unit
+    records: List<Attendance>,
+    current: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    vm: AppViewModel,
+    onRecordClick: (Attendance) -> Unit
 ) {
-    val fmt     = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    val dayRecs = records.filter { it.date == fmt.format(current) }
-    val dow     = listOf("周一","周二","周三","周四","周五","周六","周日")[current.dayOfWeek.value - 1]
+    val dow    = listOf("","一","二","三","四","五","六","日")[current.dayOfWeek.value]
+    val dayRecs = records.filter { it.date == current.toString() }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
@@ -528,8 +528,22 @@ internal fun AttendanceFormDialog(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         FormDropdown("教师", teacherName, listOf("") + state.teachers.map { it.name }) { teacherName = it }
-        DatePickerField("日期", date) { date = it }
-        TimeRangeRow(startTime, endTime, { startTime = it }, { endTime = it })
+
+        // ── 日期与开始时间并排 ──────────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                DatePickerField("日期", date) { date = it }
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                TimeRangeRow(startTime, endTime, { startTime = it }, { endTime = it })
+            }
+        }
+        // ───────────────────────────────────────────────────────────────────
+
         FormDropdown("状态", status, listOf("completed","cancelled","pending")) { status = it }
         FormTextField("课题", topic, { topic = it }, "本节课主题")
         if (classStudents.isNotEmpty()) {
