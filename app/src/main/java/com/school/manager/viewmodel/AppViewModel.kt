@@ -286,6 +286,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // FIX: removed viewModelScope.launch wrapper — apply() is already async,
     // and wrapping in a coroutine meant data could be lost if the process was
     // killed before the coroutine had a chance to run.
+    // 修复：移除 viewModelScope.launch 包裹，避免退出时协程未执行导致数据丢失。
     private fun save() {
         prefs.edit().putString("state", gson.toJson(_state.value)).apply()
     }
