@@ -660,12 +660,26 @@ private fun AddAttendanceFromScheduleDialog(
         FormDropdown("状态", status, listOf("completed","cancelled","pending")) { status = it }
         FormTextField("备注", notes, { notes = it })
         if (allStudents.isNotEmpty()) {
-            Text("出勤学生", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
-            allStudents.forEach { s ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = checkedIds.contains(s.id),
-                        onCheckedChange = { if (it) checkedIds.add(s.id) else checkedIds.remove(s.id) })
-                    Text(s.name)
+            Text("出勤学生（点击切换）",
+                style = MaterialTheme.typography.labelMedium, color = FluentMuted,
+                modifier = Modifier.padding(top = 4.dp))
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                allStudents.forEach { s ->
+                    val present = checkedIds.contains(s.id)
+                    FilterChip(
+                        selected = present,
+                        onClick  = {
+                            if (present) checkedIds.remove(s.id) else checkedIds.add(s.id)
+                        },
+                        label = { Text(s.name) },
+                        leadingIcon = if (present) ({
+                            Icon(Icons.Default.Check, null,
+                                Modifier.size(FilterChipDefaults.IconSize))
+                        }) else null
+                    )
                 }
             }
         }
@@ -765,6 +779,10 @@ private fun TimeWheelPicker(selHour: MutableIntState, selMin: MutableIntState) {
         // When the user lifts their finger and scrolling stops, snap to the
         // nearest item and notify the caller. A guard flag prevents the
         // programmatic animateScrollToItem from triggering another select cycle.
+        // FIX: 用像素中点判断最近 item，不再依赖 offset > 20 的固定阈值。
+        // 滚动停止后，若 firstVisibleItemScrollOffset >= 半个 itemH，
+        // 则选下一个（fi+1），否则选当前（fi）。
+        val itemHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { itemH.toPx() }
         var suppressNext by remember { mutableStateOf(false) }
         LaunchedEffect(listState) {
             snapshotFlow { listState.isScrollInProgress }
@@ -774,7 +792,7 @@ private fun TimeWheelPicker(selHour: MutableIntState, selMin: MutableIntState) {
                     if (suppressNext) { suppressNext = false; return@collect }
                     val fi      = listState.firstVisibleItemIndex
                     val offset  = listState.firstVisibleItemScrollOffset
-                    val snapped = (if (offset > 20) fi + 1 else fi)
+                    val snapped = (if (offset * 2 >= itemHeightPx) fi + 1 else fi)
                         .coerceIn(0, count - 1)
                     onSelect(snapped)
                     suppressNext = true
