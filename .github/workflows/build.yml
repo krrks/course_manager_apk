@@ -26,7 +26,7 @@ on:
         type: boolean
 
 # ════════════════════════════════════════════════════════════════════════════
-# Job 1 — 预检：决定是否需要编译
+# Job 1 — 预检
 # ════════════════════════════════════════════════════════════════════════════
 jobs:
   check:
@@ -43,13 +43,11 @@ jobs:
       do_release:   ${{ steps.variants.outputs.do_release }}
 
     steps:
-      # ── 1. Checkout ────────────────────────────────────────────────────────
       - name: 📥 Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ── 2. 检查本次提交是否只改动 .github/ ──────────────────────────────────
       - name: 🔍 Check if only .github files changed
         id: github_only
         if: github.event_name == 'push'
@@ -67,7 +65,6 @@ jobs:
             fi
           fi
 
-      # ── 3. 查找 zip_update/ 下最新的 zip ────────────────────────────────────
       - name: 🔎 Find update zip
         id: find_zip
         run: |
@@ -86,7 +83,6 @@ jobs:
             echo "ℹ️  No update zip found"
           fi
 
-      # ── 4. 检查该 zip 是否已经在 release 里了 ───────────────────────────────
       - name: 🏷️ Check if zip already released
         id: already_released
         if: steps.find_zip.outputs.zip_found == 'true'
@@ -104,7 +100,6 @@ jobs:
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 5. 决定是否编译 ──────────────────────────────────────────────────────
       - name: 🤔 Decide whether to build
         id: decision
         env:
@@ -128,7 +123,6 @@ jobs:
             echo "✅ Will build"
           fi
 
-      # ── 6. 决定编译哪些 variant ──────────────────────────────────────────────
       - name: 🎛️ Resolve build variants
         id: variants
         env:
@@ -152,7 +146,7 @@ jobs:
           echo "📦 Variants → debug=$DO_DEBUG  release=$DO_RELEASE"
 
 # ════════════════════════════════════════════════════════════════════════════
-# Job 2 — 编译 & 发布（仅当 check.should_build == 'true' 时运行）
+# Job 2 — 编译 & 发布
 # ════════════════════════════════════════════════════════════════════════════
   build:
     name: 🔨 Build & Release APK
@@ -170,7 +164,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      # ── 2. 解压 zip 到仓库根目录 ──────────────────────────────────────────────
+      # ── 2. 解压 zip ────────────────────────────────────────────────────────
       - name: 📂 Extract zip to repo root
         if: needs.check.outputs.zip_found == 'true'
         env:
@@ -193,85 +187,47 @@ jobs:
           rm -rf _zip_tmp
           echo "✅ Extracted to repo root"
 
-      # ── 3. 生成文件目录清单 → zip_update/note.md & zip_update/file_list.md ────
-      - name: 📝 Generate file listings
-        if: needs.check.outputs.zip_found == 'true'
+      # ── 3. Compute next version tag ───────────────────────────────────────
+      # Moved BEFORE build steps so versionName can be written into build.gradle.kts
+      - name: 🔖 Compute next version tag
+        id: version
         env:
-          ZIP_PATH:  ${{ needs.check.outputs.zip_path }}
-          ZIP_MTIME: ${{ needs.check.outputs.zip_mtime }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p zip_update
+          LATEST=$(gh release list --limit 20 --json tagName \
+                   -q '.[].tagName' 2>/dev/null \
+                   | grep -E '^v1\.[0-9]+$' \
+                   | sort -t. -k2 -n \
+                   | tail -n1 || echo "")
 
-          NOTE="zip_update/note.md"
-          mkdir -p _note_tmp
-          unzip -o "$ZIP_PATH" -d _note_tmp 2>/dev/null
-          ZIP_FILES=$(find _note_tmp -type f | sort | sed "s|_note_tmp/||")
-          rm -rf _note_tmp
-
-          {
-            echo "# 📦 Patch 文件清单"
-            echo ""
-            echo "| 字段 | 值 |"
-            echo "|------|----|"
-            echo "| ZIP 文件 | \`$(basename "$ZIP_PATH")\` |"
-            echo "| 打包时间 (UTC) | \`$ZIP_MTIME\` |"
-            echo "| 生成时间 (UTC) | \`$(date -u '+%Y-%m-%dT%H:%M:%SZ')\` |"
-            echo "| 触发分支 | \`$GITHUB_REF_NAME\` |"
-            echo "| 提交 SHA | \`$GITHUB_SHA\` |"
-            echo ""
-            echo "## 📁 本次 patch 包含的文件"
-            echo ""
-            echo '```'
-            echo "$ZIP_FILES"
-            echo '```'
-          } > "$NOTE"
-          echo "✅ note.md written"
-
-          FILE_LIST="zip_update/file_list.md"
-          {
-            echo "# 🗂 仓库完整文件列表（patch 后快照）"
-            echo ""
-            echo "> 生成时间 (UTC): \`$(date -u '+%Y-%m-%dT%H:%M:%SZ')\`"
-            echo "> 提交 SHA: \`$GITHUB_SHA\`"
-            echo ""
-            echo '```'
-            find . \
-              -not -path './.git/*' \
-              -not -path './build/*' \
-              -not -path './.gradle/*' \
-              -not -path './_zip_tmp/*' \
-              -not -path './_note_tmp/*' \
-              -type f | sort
-            echo '```'
-          } > "$FILE_LIST"
-          echo "✅ file_list.md written"
-
-      # ── 4. 读取 release_note.md，删除 zip，提交变更 ───────────────────────────
-      - name: 🧹 Clean up zip and commit changes
-        if: needs.check.outputs.zip_found == 'true'
-        run: |
-          rm -f zip_update/*.zip
-          echo "🗑️  Removed all *.zip from zip_update/"
-
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-
-          if git diff --cached --quiet; then
-            echo "ℹ️  Nothing to commit"
+          if [ -z "$LATEST" ]; then
+            NEXT="v1.001"
           else
-            RELEASE_NOTE_FILE="zip_update/release_note.md"
-            if [ -f "$RELEASE_NOTE_FILE" ]; then
-              RELEASE_NOTE_BODY=$(cat "$RELEASE_NOTE_FILE")
-              COMMIT_MSG=$(printf '🧹 apply patch & clean zip_update [skip ci]\n\n%s' "$RELEASE_NOTE_BODY")
-            else
-              COMMIT_MSG="🧹 apply patch & clean zip_update [skip ci]"
-            fi
-
-            git commit -m "$COMMIT_MSG"
-            git push origin HEAD
-            echo "✅ Commit pushed"
+            SEQ=$(echo "$LATEST" | sed 's/v1\.//')
+            NEXT_SEQ=$(printf "%03d" $((10#$SEQ + 1)))
+            NEXT="v1.$NEXT_SEQ"
           fi
+
+          echo "✅ Next version: $NEXT"
+          echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
+
+      # ── 4. Write versionName + versionCode into build.gradle.kts ─────────
+      # versionName = tag without the leading 'v'  (e.g. "1.006")
+      # versionCode = the numeric sequence         (e.g. 6)
+      # This means BuildConfig.VERSION_NAME in the app always matches the release tag.
+      - name: ✏️ Stamp versionName & versionCode
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          VERSION="${TAG#v}"                       # strip leading 'v'  → e.g. "1.006"
+          SEQ=$(echo "$VERSION" | sed 's/1\.//')   # e.g. "006"
+          VCODE=$((10#$SEQ))                       # decimal int → e.g. 6
+
+          sed -i "s/versionName = \"[^\"]*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
+          sed -i "s/versionCode = [0-9]*/versionCode = $VCODE/"           app/build.gradle.kts
+
+          echo "✅ versionName=$VERSION  versionCode=$VCODE"
+          grep -E 'versionCode|versionName' app/build.gradle.kts
 
       # ── 5. Set up JDK 17 ──────────────────────────────────────────────────
       - name: ☕ Set up JDK 17
@@ -303,8 +259,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # ── 8. 从 keys/keystore.properties 加载签名密码到环境变量 ─────────────────
-      # 完全不依赖 Repository Variables / Secrets，密码随 jks 一起存在仓库里
+      # ── 8. 加载签名密钥 ───────────────────────────────────────────────────
       - name: 🔑 Load keystore properties
         id: load_ks
         run: |
@@ -312,22 +267,18 @@ jobs:
           if [ -f "$PROPS" ]; then
             echo "✅ Found $PROPS — loading signing credentials"
             while IFS='=' read -r key value; do
-              # 跳过空行和注释行
-              key="${key// /}"          # trim spaces
+              key="${key// /}"
               [[ -z "$key" || "$key" == \#* ]] && continue
-              # 屏蔽密码明文，避免出现在日志里
               echo "::add-mask::$value"
-              # 写入 GITHUB_ENV，后续所有 step 自动可见
               echo "${key}=${value}" >> "$GITHUB_ENV"
             done < "$PROPS"
             echo "has_keystore=true" >> "$GITHUB_OUTPUT"
           else
             echo "⚠️  $PROPS not found — release APK will use debug signing"
-            echo "    Run '🔑 Generate & Update Release Keystore' workflow to fix this."
             echo "has_keystore=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 9. Build Debug APK（仅当 do_debug == 'true'）────────────────────────
+      # ── 9. Build Debug APK ────────────────────────────────────────────────
       - name: 🔧 Build Debug APK
         if: needs.check.outputs.do_debug == 'true'
         run: ./gradlew assembleDebug --no-daemon --build-cache
@@ -335,8 +286,6 @@ jobs:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
       # ── 10. Build Release APK ─────────────────────────────────────────────
-      # 签名密码已由 step 8 写入 $GITHUB_ENV，Gradle 通过 System.getenv() 读取
-      # KEYSTORE_PATH 指向仓库内的 keys/release.jks
       - name: 🚀 Build Release APK
         if: needs.check.outputs.do_release == 'true'
         run: ./gradlew assembleRelease --no-daemon --build-cache
@@ -359,30 +308,7 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk
 
-      # ── 12. 自动递增版本号 ────────────────────────────────────────────────
-      - name: 🔖 Compute next version tag
-        id: version
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          LATEST=$(gh release list --limit 20 --json tagName \
-                   -q '.[].tagName' 2>/dev/null \
-                   | grep -E '^v1\.[0-9]+$' \
-                   | sort -t. -k2 -n \
-                   | tail -n1 || echo "")
-
-          if [ -z "$LATEST" ]; then
-            NEXT="v1.001"
-          else
-            SEQ=$(echo "$LATEST" | sed 's/v1\.//')
-            NEXT_SEQ=$(printf "%03d" $((10#$SEQ + 1)))
-            NEXT="v1.$NEXT_SEQ"
-          fi
-
-          echo "✅ Next version: $NEXT"
-          echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
-
-      # ── 13. 收集本次实际产出的 APK 路径 ──────────────────────────────────────
+      # ── 12. 收集文件列表（可选附件）──────────────────────────────────────
       - name: 📋 Collect APK paths for release
         id: apk_paths
         env:
@@ -395,6 +321,32 @@ jobs:
           FILES="${FILES# }"
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
           echo "📦 Release files: $FILES"
+
+      # ── 13. 清理 zip 并提交 ──────────────────────────────────────────────
+      - name: 🧹 Clean up zip and commit changes
+        if: needs.check.outputs.zip_found == 'true'
+        run: |
+          rm -f zip_update/*.zip
+          echo "🗑️  Removed all *.zip from zip_update/"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "ℹ️  Nothing to commit"
+          else
+            RELEASE_NOTE_FILE="zip_update/release_note.md"
+            if [ -f "$RELEASE_NOTE_FILE" ]; then
+              RELEASE_NOTE_BODY=$(cat "$RELEASE_NOTE_FILE")
+              COMMIT_MSG=$(printf '🧹 apply patch & clean zip_update [skip ci]\n\n%s' "$RELEASE_NOTE_BODY")
+            else
+              COMMIT_MSG="🧹 apply patch & clean zip_update [skip ci]"
+            fi
+            git commit -m "$COMMIT_MSG"
+            git push origin HEAD
+            echo "✅ Commit pushed"
+          fi
 
       # ── 14. 发布 Release ──────────────────────────────────────────────────
       - name: 🏷️ Create GitHub Release
@@ -419,9 +371,9 @@ jobs:
             ### 安装说明
             1. 下载 `app-release.apk`（正式包）或 `app-debug.apk`（调试包，如有）
             2. 在 Android 设备上开启「允许未知来源安装」
-            3. 安装并运行
+            3. 安装并打开应用
           files: ${{ steps.apk_paths.outputs.files }}
-          draft: false
+          draft:      false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
