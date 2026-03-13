@@ -1,5 +1,7 @@
-## Hotfix: menuAnchor unresolved reference
+# Release Notes — v1.5.1-fix / 更新说明
 
-`ExposedDropdownMenuAnchorType` is `@ExperimentalMaterial3Api` in the project's current BOM (`2024.10.00`) and requires an opt-in that was missing, causing a compile error.
+## 修复编译错误
+`sampleAppState()` 函数移到文件末尾（所有 sample 数据定义之后），
+解决 `Unresolved reference 'sampleSchedule'` 编译错误。
 
-Changed approach: use `@Suppress("DEPRECATION")` on `FormDropdown` (CommonComponents.kt) and `AutocompleteTextField` (FluentComponentAliases.kt) to silence the deprecation warning without touching the experimental API. All other fixes from the previous patch (AutoMirrored icons, HorizontalDivider, UI changes) remain intact.
+AppViewModel.kt 保持不变（同上一个 patch）。

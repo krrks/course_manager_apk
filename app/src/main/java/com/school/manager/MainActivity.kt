@@ -45,7 +45,8 @@ fun SchoolManagerApp() {
     val scope           = rememberCoroutineScope()
     val navBackStack    by navController.currentBackStackEntryAsState()
     val currentRoute    = navBackStack?.destination?.route ?: Screen.Schedule.route
-    val currentScreen   = ALL_SCREENS.find { it.route == currentRoute } ?: Screen.Schedule
+
+    val openDrawer: () -> Unit = { scope.launch { drawerState.open() } }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -59,26 +60,17 @@ fun SchoolManagerApp() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp)
-                        .background(
-                            Brush.linearGradient(listOf(FluentBlue, FluentBlueDark))
-                        )
+                        .background(Brush.linearGradient(listOf(FluentBlue, FluentBlueDark)))
                         .padding(20.dp),
                     contentAlignment = Alignment.BottomStart
                 ) {
                     Column {
                         Text("🏫", fontSize = 32.sp)
                         Spacer(Modifier.height(6.dp))
-                        Text(
-                            "智慧课务管理",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Smart School Manager",
-                            color = Color.White.copy(alpha = 0.7f),
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        Text("智慧课务管理", color = Color.White,
+                            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Smart School Manager", color = Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.labelSmall)
                     }
                 }
 
@@ -113,55 +105,25 @@ fun SchoolManagerApp() {
             }
         }
     ) {
-        // No TopAppBar — content fills the full screen from the top.
-        // The ScheduleScreen's CalendarGrid day-header row is now visible at the very top.
-        // Navigation drawer is accessible via the "导航菜单" entry in the ScheduleScreen speed-dial FAB,
-        // and via a persistent menu FAB shown on every non-schedule screen.
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background
-        ) { inner ->
-            Box(modifier = Modifier.fillMaxSize()) {
-                NavHost(
-                    navController    = navController,
-                    startDestination = Screen.Schedule.route,
-                    modifier         = Modifier
-                        .fillMaxSize()
-                        .animateContentSize(),
-                    enterTransition  = { slideInHorizontally { it / 6 } + fadeIn() },
-                    exitTransition   = { slideOutHorizontally { -it / 6 } + fadeOut() },
-                    popEnterTransition  = { slideInHorizontally { -it / 6 } + fadeIn() },
-                    popExitTransition   = { slideOutHorizontally { it / 6 } + fadeOut() },
-                ) {
-                    composable(Screen.Schedule.route)   {
-                        // Pass drawer-open callback so ScheduleScreen's speed-dial FAB can open it
-                        ScheduleScreen(vm, onOpenDrawer = { scope.launch { drawerState.open() } })
-                    }
-                    composable(Screen.Attendance.route) { AttendanceScreen(vm) }
-                    composable(Screen.Classes.route)    { ClassesScreen(vm) }
-                    composable(Screen.Teachers.route)   { TeachersScreen(vm) }
-                    composable(Screen.Students.route)   { StudentsScreen(vm) }
-                    composable(Screen.Stats.route)      { StatsScreen(vm) }
-                    composable(Screen.Export.route)     { ExportScreen(vm) }
-                }
-
-                // Persistent menu FAB shown on every screen except Schedule
-                // (Schedule has its own speed-dial FAB that already includes "导航菜单").
-                if (currentScreen != Screen.Schedule) {
-                    FloatingActionButton(
-                        onClick        = { scope.launch { drawerState.open() } },
-                        modifier       = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(
-                                start  = 16.dp,
-                                bottom = inner.calculateBottomPadding() + 88.dp  // above screen's own FAB
-                            ),
-                        containerColor = FluentBlue,
-                        contentColor   = Color.White,
-                        shape          = androidx.compose.foundation.shape.CircleShape
-                    ) {
-                        Icon(Icons.Default.Menu, contentDescription = "导航菜单")
-                    }
-                }
+        // Each screen now manages its own FAB that merges navigation + add actions.
+        // The standalone menu FAB shown here previously has been removed.
+        Scaffold(containerColor = MaterialTheme.colorScheme.background) { _ ->
+            NavHost(
+                navController    = navController,
+                startDestination = Screen.Schedule.route,
+                modifier         = Modifier.fillMaxSize().animateContentSize(),
+                enterTransition  = { slideInHorizontally { it / 6 } + fadeIn() },
+                exitTransition   = { slideOutHorizontally { -it / 6 } + fadeOut() },
+                popEnterTransition  = { slideInHorizontally { -it / 6 } + fadeIn() },
+                popExitTransition   = { slideOutHorizontally { it / 6 } + fadeOut() },
+            ) {
+                composable(Screen.Schedule.route)   { ScheduleScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Attendance.route) { AttendanceScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Classes.route)    { ClassesScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Teachers.route)   { TeachersScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Students.route)   { StudentsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Stats.route)      { StatsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Export.route)     { ExportScreen(vm, onOpenDrawer = openDrawer) }
             }
         }
     }

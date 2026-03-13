@@ -39,7 +39,7 @@ fun AutocompleteTextField(
     val filtered = suggestions.filter { it.contains(value, ignoreCase = true) && it != value }
 
     ExposedDropdownMenuBox(
-        expanded = expanded && filtered.isNotEmpty(),
+        expanded         = expanded && filtered.isNotEmpty(),
         onExpandedChange = { expanded = it }
     ) {
         OutlinedTextField(
@@ -69,3 +69,4 @@ fun AutocompleteTextField(
         }
     }
 }
+

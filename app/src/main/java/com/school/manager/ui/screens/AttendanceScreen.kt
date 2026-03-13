@@ -15,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.school.manager.data.*
 import com.school.manager.ui.screens.DatePickerField
-
+import com.school.manager.ui.screens.TimeRangeRow
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
@@ -25,42 +25,38 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.IsoFields
 
-// ── Time-axis layout constants ────────────────────────────────────────────────
-// 30 minutes = 40 dp  →  1 hour = 80 dp  →  total 14 h = 1120 dp
-private const val DP_PER_HOUR   = 80f
-private const val DP_PER_MIN    = DP_PER_HOUR / 60f   // ≈ 1.333
-private const val TIME_COL_W    = 52     // dp – left time label column
-private const val DAY_COL_W     = 120    // dp – each day column (week view)
+// ── Time-axis layout constants ─────────────────────────────────────────────────
+private const val DP_PER_HOUR = 80f
+private const val DP_PER_MIN  = DP_PER_HOUR / 60f
+private const val TIME_COL_W  = 52
+private const val DAY_COL_W   = 120
 
-/** dp offset from top of calendar (CAL_START_HOUR) for a given "HH:mm" */
 private fun minuteOffsetDp(hhmm: String): Float {
     if (hhmm.isBlank()) return 0f
     val mins = timeToMinutes(hhmm) - CAL_START_HOUR * 60
     return (mins * DP_PER_MIN).coerceAtLeast(0f)
 }
 
-private fun durationDp(startHhmm: String, endHhmm: String): Float {
-    if (startHhmm.isBlank() || endHhmm.isBlank()) return DP_PER_HOUR / 2f  // 30 min default
-    val mins = (timeToMinutes(endHhmm) - timeToMinutes(startHhmm)).coerceAtLeast(10)
-    return mins * DP_PER_MIN
+private fun durationDp(start: String, end: String): Float {
+    if (start.isBlank() || end.isBlank()) return DP_PER_HOUR / 2f
+    return (timeToMinutes(end) - timeToMinutes(start)).coerceAtLeast(10) * DP_PER_MIN
 }
 
-/** Total calendar height in dp */
-private const val CAL_V_PAD = 10f  // top+bottom padding so 08:00/22:00 labels are not clipped
-private val totalCalHeightDp: Float
-    get() = (CAL_END_HOUR - CAL_START_HOUR) * DP_PER_HOUR
+private const val CAL_V_PAD = 10f
+private val totalCalHeightDp: Float get() = (CAL_END_HOUR - CAL_START_HOUR) * DP_PER_HOUR
+
+private fun packedToColor(packed: Long): Color = Color(packed.toInt())
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-fun AttendanceScreen(vm: AppViewModel) {
-    val state   by vm.state.collectAsState()
-    var view    by remember { mutableStateOf("list") }
+fun AttendanceScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
+    val state    by vm.state.collectAsState()
+    var view     by remember { mutableStateOf("list") }
     var showAdd  by remember { mutableStateOf(false) }
     var viewing  by remember { mutableStateOf<Attendance?>(null) }
     var editing  by remember { mutableStateOf<Attendance?>(null) }
     var calDate  by remember { mutableStateOf(LocalDate.now()) }
-
     var fTeacher by remember { mutableLongStateOf(0L) }
     var fStudent by remember { mutableLongStateOf(0L) }
     var sortDesc by remember { mutableStateOf(true) }
@@ -74,19 +70,19 @@ fun AttendanceScreen(vm: AppViewModel) {
 
     Scaffold(
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showAdd = true },
-                icon = { Icon(Icons.Default.Add, "") },
-                text = { Text("添加记录") },
-                containerColor = FluentBlue, contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp)
+            ScreenSpeedDialFab(
+                addLabel     = "添加记录",
+                addIcon      = Icons.Default.Add,
+                onAdd        = { showAdd = true },
+                onOpenDrawer = onOpenDrawer
             )
         }
     ) { inner ->
-        Column(modifier = Modifier.padding(inner).fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()
+            .padding(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding())) {
+            // View-mode chips
             Row(
-                modifier = Modifier.fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -100,6 +96,7 @@ fun AttendanceScreen(vm: AppViewModel) {
                         "排序", tint = FluentBlue)
                 }
             }
+            // Filter chips
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp),
@@ -110,10 +107,10 @@ fun AttendanceScreen(vm: AppViewModel) {
             }
 
             when (view) {
-                "list"  -> ListAttendanceView(records, vm) { viewing = it }
+                "list"  -> ListView(records, vm)     { viewing = it }
                 "week"  -> WeekView(records, calDate, { calDate = it }, vm) { viewing = it }
-                "month" -> MonthCalendarView(records, calDate, { calDate = it }, vm) { viewing = it }
-                "day"   -> DayView(records, calDate, { calDate = it }, vm) { viewing = it }
+                "month" -> MonthView(records, calDate, { calDate = it }, vm) { viewing = it }
+                "day"   -> DayView(records,  calDate, { calDate = it }, vm) { viewing = it }
             }
         }
     }
@@ -122,8 +119,7 @@ fun AttendanceScreen(vm: AppViewModel) {
         AttendanceDetailDialog(rec, state, vm,
             onDismiss = { viewing = null },
             onEdit    = { editing = rec; viewing = null },
-            onDelete  = { vm.deleteAttendance(rec.id); viewing = null }
-        )
+            onDelete  = { vm.deleteAttendance(rec.id); viewing = null })
     }
     editing?.let { rec ->
         AttendanceFormDialog("编辑记录", rec, state, vm,
@@ -144,14 +140,47 @@ fun AttendanceScreen(vm: AppViewModel) {
 // ── List view ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ListAttendanceView(records: List<Attendance>, vm: AppViewModel, onClick: (Attendance) -> Unit) {
-    LazyColumn(
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
+private fun ListView(records: List<Attendance>, vm: AppViewModel, onClick: (Attendance) -> Unit) {
+    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize()) {
         if (records.isEmpty()) item { EmptyState("📋", "暂无上课记录") }
         else items(records) { rec -> AttendanceCard(rec, vm) { onClick(rec) } }
+        item { Spacer(Modifier.height(80.dp)) }
+    }
+}
+
+@Composable
+private fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Unit) {
+    val sub      = vm.subject(rec.subjectId)
+    val te       = vm.teacher(rec.teacherId)
+    val cl       = vm.schoolClass(rec.classId)
+    val colorIdx = (vm.state.value.subjects.indexOfFirst { it.id == rec.subjectId }.takeIf { it >= 0 }
+        ?: (rec.classId % SUBJECT_COLORS.size).toInt())
+    val color    = Color(SUBJECT_COLORS[colorIdx % SUBJECT_COLORS.size])
+    val startStr = rec.resolvedStart()
+    FluentCard(accentColor = color, modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(sub?.name ?: cl?.subject ?: "?",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
+                    Text("· ${cl?.name ?: "?"}",
+                        style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
+                    StatusBadge(rec.status)
+                }
+                if (rec.topic.isNotBlank())
+                    Text("📌 ${rec.topic}", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("👩‍🏫 ${te?.name ?: "─"}", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+                    Text("🗓 ${rec.date}",          style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+                    if (startStr.isNotBlank())
+                        Text("⏰ $startStr", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+                    Text("👥 ${rec.attendees.size}人", style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+                }
+            }
+        }
     }
 }
 
@@ -159,11 +188,8 @@ private fun ListAttendanceView(records: List<Attendance>, vm: AppViewModel, onCl
 
 @Composable
 private fun WeekView(
-    records: List<Attendance>,
-    current: LocalDate,
-    onDateChange: (LocalDate) -> Unit,
-    vm: AppViewModel,
-    onRecordClick: (Attendance) -> Unit
+    records: List<Attendance>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
+    vm: AppViewModel, onRecordClick: (Attendance) -> Unit
 ) {
     val weekStart = current.with(DayOfWeek.MONDAY)
     val weekDays  = (0..6).map { weekStart.plusDays(it.toLong()) }
@@ -174,13 +200,8 @@ private fun WeekView(
     val dayNames  = listOf("周一","周二","周三","周四","周五","周六","周日")
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Navigation header
-        Row(
-            modifier = Modifier.fillMaxWidth().background(FluentBlue)
-                .padding(vertical = 8.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Row(Modifier.fillMaxWidth().background(FluentBlue).padding(vertical = 8.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             IconButton(onClick = { onDateChange(current.minusWeeks(1)) }) {
                 Icon(Icons.Default.ChevronLeft, null, tint = Color.White) }
             Text("${current.year}年 第${weekNum}周",
@@ -188,17 +209,14 @@ private fun WeekView(
             IconButton(onClick = { onDateChange(current.plusWeeks(1)) }) {
                 Icon(Icons.Default.ChevronRight, null, tint = Color.White) }
         }
-        // Day column headers
+        // Day headers (sticky)
         Row(Modifier.fillMaxWidth()) {
             Spacer(Modifier.width(TIME_COL_W.dp))
             weekDays.forEach { date ->
                 val isToday = date == today
-                Box(
-                    modifier = Modifier.weight(1f)
-                        .background(if (isToday) FluentBlueLight else MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.weight(1f)
+                    .background(if (isToday) FluentBlueLight else MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(dayNames[date.dayOfWeek.value - 1],
                             style = MaterialTheme.typography.labelSmall,
@@ -211,180 +229,55 @@ private fun WeekView(
                 }
             }
         }
-        // Time grid
+        // Scrollable time grid — time column is fixed, days scroll together
         val scrollV = rememberScrollState()
-        val calH    = totalCalHeightDp
-        Box(modifier = Modifier.fillMaxSize().verticalScroll(scrollV)) {
-            Row(modifier = Modifier.height((calH + CAL_V_PAD * 2).dp)) {
-                // Time column
-                Box(modifier = Modifier.width(TIME_COL_W.dp).fillMaxHeight()) {
-                    // Hour labels
+        Row(Modifier.fillMaxSize()) {
+            // Fixed time column
+            Box(Modifier.width(TIME_COL_W.dp).verticalScroll(scrollV)
+                .background(MaterialTheme.colorScheme.surfaceVariant)) {
+                Box(Modifier.height((totalCalHeightDp + CAL_V_PAD * 2).dp)) {
                     for (h in CAL_START_HOUR..CAL_END_HOUR) {
-                        val top = ((h - CAL_START_HOUR) * DP_PER_HOUR).dp
+                        val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD - 7f).dp
                         Text("%02d:00".format(h), style = MaterialTheme.typography.labelSmall,
-                            color = FluentMuted,
-                            modifier = Modifier.offset(y = top + CAL_V_PAD.dp - 7.dp).padding(start = 4.dp))
-                    }
-                    // Half-hour labels
-                    for (h in CAL_START_HOUR until CAL_END_HOUR) {
-                        val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + DP_PER_HOUR / 2f).dp
-                        Text(":%02d".format(30), style = MaterialTheme.typography.labelSmall,
-                            color = FluentBorder,
-                            modifier = Modifier.offset(y = top + CAL_V_PAD.dp - 5.dp).padding(start = 8.dp))
+                            color = FluentMuted, modifier = Modifier.offset(y = top).padding(start = 4.dp))
                     }
                 }
-                // Day columns
+            }
+            // Day columns — scroll vertically in sync with time column
+            Row(Modifier.weight(1f).verticalScroll(scrollV)
+                .height((totalCalHeightDp + CAL_V_PAD * 2).dp)) {
                 weekDays.forEach { date ->
                     val dateStr = fmt.format(date)
                     val dayRecs = byDate[dateStr] ?: emptyList()
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight().border(0.5.dp, FluentBorder)) {
-                        // Hour lines
+                    Box(Modifier.weight(1f).fillMaxHeight().border(0.5.dp, FluentBorder)) {
                         for (h in CAL_START_HOUR..CAL_END_HOUR) {
-                            val top = ((h - CAL_START_HOUR) * DP_PER_HOUR).dp
-                            Box(modifier = Modifier.offset(y = top + CAL_V_PAD.dp).fillMaxWidth()
-                                .height(0.5.dp).background(FluentBorder))
+                            val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD).dp
+                            Box(Modifier.offset(y = top).fillMaxWidth().height(0.5.dp).background(FluentBorder))
                         }
-                        // Half-hour lines
-                        for (h in CAL_START_HOUR until CAL_END_HOUR) {
-                            val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + DP_PER_HOUR / 2f).dp
-                            Box(modifier = Modifier.offset(y = top + CAL_V_PAD.dp).fillMaxWidth()
-                                .height(0.5.dp).background(FluentBorder.copy(alpha = 0.4f)))
-                        }
-                        // Events
                         dayRecs.forEach { rec ->
                             val startStr = rec.resolvedStart()
                             val endStr   = rec.resolvedEnd()
                             if (startStr.isBlank()) return@forEach
-                            val top  = minuteOffsetDp(startStr).dp
-                            val h    = durationDp(startStr, endStr).dp
-                            val sub  = vm.subject(rec.subjectId)
+                            val sub   = vm.subject(rec.subjectId)
                             val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                            Box(
-                                modifier = Modifier
-                                    .offset(y = top + CAL_V_PAD.dp)
-                                    .fillMaxWidth().height(h)
-                                    .padding(horizontal = 2.dp, vertical = 1.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(color.copy(alpha = 0.2f))
-                                    .border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                                    .clickable { onRecordClick(rec) }
-                                    .padding(3.dp)
-                            ) {
-                                Column {
-                                    Text(sub?.name ?: "?",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold, color = color, maxLines = 1)
-                                    Text(startStr, style = MaterialTheme.typography.labelSmall,
-                                        color = FluentMuted, maxLines = 1)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ── Day view ──────────────────────────────────────────────────────────────────
-
-@Composable
-private fun DayView(
-    records: List<Attendance>,
-    current: LocalDate,
-    onDateChange: (LocalDate) -> Unit,
-    vm: AppViewModel,
-    onRecordClick: (Attendance) -> Unit
-) {
-    val fmt    = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    val dayStr = fmt.format(current)
-    val dayRecs = records.filter { it.date == dayStr }
-    val dayNames = listOf("周一","周二","周三","周四","周五","周六","周日")
-    val dow = dayNames[current.dayOfWeek.value - 1]
-    val calH = totalCalHeightDp
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(FluentBlue)
-                .padding(vertical = 8.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = { onDateChange(current.minusDays(1)) }) {
-                Icon(Icons.Default.ChevronLeft, null, tint = Color.White) }
-            Text("${current.year}年${current.monthValue}月${current.dayOfMonth}日  $dow",
-                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            IconButton(onClick = { onDateChange(current.plusDays(1)) }) {
-                Icon(Icons.Default.ChevronRight, null, tint = Color.White) }
-        }
-
-        val scrollV = rememberScrollState()
-        Box(modifier = Modifier.fillMaxSize().verticalScroll(scrollV)) {
-            Row(modifier = Modifier.height((calH + CAL_V_PAD * 2).dp).fillMaxWidth()) {
-                // Time column
-                Box(modifier = Modifier.width(TIME_COL_W.dp).fillMaxHeight()) {
-                    for (h in CAL_START_HOUR..CAL_END_HOUR) {
-                        val top = ((h - CAL_START_HOUR) * DP_PER_HOUR).dp
-                        Text("%02d:00".format(h), style = MaterialTheme.typography.labelSmall,
-                            color = FluentMuted,
-                            modifier = Modifier.offset(y = top + CAL_V_PAD.dp - 7.dp).padding(start = 4.dp))
-                    }
-                    for (h in CAL_START_HOUR until CAL_END_HOUR) {
-                        val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + DP_PER_HOUR / 2f).dp
-                        Text(":30", style = MaterialTheme.typography.labelSmall,
-                            color = FluentBorder,
-                            modifier = Modifier.offset(y = top + CAL_V_PAD.dp - 5.dp).padding(start = 8.dp))
-                    }
-                }
-                // Event column
-                Box(modifier = Modifier.weight(1f).fillMaxHeight().border(0.5.dp, FluentBorder)) {
-                    // Hour lines
-                    for (h in CAL_START_HOUR..CAL_END_HOUR) {
-                        val top = ((h - CAL_START_HOUR) * DP_PER_HOUR).dp
-                        Box(modifier = Modifier.offset(y = top + CAL_V_PAD.dp).fillMaxWidth()
-                            .height(0.5.dp).background(FluentBorder))
-                    }
-                    // Half-hour lines
-                    for (h in CAL_START_HOUR until CAL_END_HOUR) {
-                        val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + DP_PER_HOUR / 2f).dp
-                        Box(modifier = Modifier.offset(y = top + CAL_V_PAD.dp).fillMaxWidth()
-                            .height(0.5.dp).background(FluentBorder.copy(alpha = 0.4f)))
-                    }
-                    if (dayRecs.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("当天暂无上课记录",
-                                style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-                        }
-                    }
-                    dayRecs.forEach { rec ->
-                        val startStr = rec.resolvedStart()
-                        val endStr   = rec.resolvedEnd()
-                        if (startStr.isBlank()) return@forEach
-                        val top     = minuteOffsetDp(startStr).dp
-                        val h       = durationDp(startStr, endStr).dp
-                        val sub     = vm.subject(rec.subjectId)
-                        val cl      = vm.schoolClass(rec.classId)
-                        val te      = vm.teacher(rec.teacherId)
-                        val color   = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                        Box(
-                            modifier = Modifier
-                                .offset(y = top + CAL_V_PAD.dp)
-                                .fillMaxWidth(0.96f).height(h)
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(color.copy(alpha = 0.15f))
-                                .border(1.5.dp, color.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                            Box(Modifier
+                                .offset(y = (minuteOffsetDp(startStr) + CAL_V_PAD).dp)
+                                .fillMaxWidth().height(durationDp(startStr, endStr).coerceAtLeast(28f).dp)
+                                .padding(horizontal = 2.dp, vertical = 1.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(color.copy(alpha = 0.2f))
+                                .border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
                                 .clickable { onRecordClick(rec) }
-                                .padding(6.dp)
-                        ) {
-                            Column {
-                                Text("${sub?.name ?: "?"} · ${cl?.name ?: "?"}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold, color = color, maxLines = 1)
-                                Text("$startStr–$endStr  👩‍🏫${te?.name ?: "─"}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = FluentMuted, maxLines = 1)
-                                StatusBadge(rec.status)
+                                .padding(3.dp)) {
+                                Column {
+                                    Text(sub?.name ?: "?", style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold, color = color, maxLines = 1)
+                                    // FIX: show start-end time on event block
+                                    if (startStr.isNotBlank() && endStr.isNotBlank())
+                                        Text("$startStr-$endStr", style = MaterialTheme.typography.labelSmall,
+                                            color = color.copy(alpha = 0.8f), maxLines = 1)
+                                    StatusBadge(rec.status)
+                                }
                             }
                         }
                     }
@@ -397,26 +290,20 @@ private fun DayView(
 // ── Month view ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun MonthCalendarView(
-    records: List<Attendance>,
-    current: LocalDate,
-    onDateChange: (LocalDate) -> Unit,
-    vm: AppViewModel,
-    onRecordClick: (Attendance) -> Unit
+private fun MonthView(
+    records: List<Attendance>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
+    vm: AppViewModel, onRecordClick: (Attendance) -> Unit
 ) {
-    val ym = YearMonth.of(current.year, current.month)
-    val firstDow = ym.atDay(1).dayOfWeek.value
+    val ym          = YearMonth.of(current.year, current.month)
+    val firstDow    = ym.atDay(1).dayOfWeek.value
     val daysInMonth = ym.lengthOfMonth()
-    val today  = LocalDate.now()
-    val fmt    = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    val byDate = records.groupBy { it.date }
+    val today       = LocalDate.now()
+    val fmt         = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    val byDate      = records.groupBy { it.date }
 
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Row(Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             IconButton(onClick = { onDateChange(current.minusMonths(1)) }) {
                 Icon(Icons.Default.ChevronLeft, null, tint = Color.White) }
             Text("${current.year}年 ${current.monthValue}月",
@@ -438,43 +325,30 @@ private fun MonthCalendarView(
             Row(Modifier.fillMaxWidth()) {
                 week.forEach { day ->
                     val dateStr = if (day > 0) fmt.format(ym.atDay(day)) else ""
-                    val dayRecs = if (day > 0) byDate[dateStr] ?: emptyList() else emptyList()
+                    val dayRecs = if (day > 0) (byDate[dateStr] ?: emptyList()) else emptyList()
                     val isToday = day > 0 && ym.atDay(day) == today
-                    Box(
-                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 60.dp)
-                            .border(0.5.dp, FluentBorder)
-                            .background(if (isToday) FluentBlueLight else Color.Transparent)
-                            .clickable(enabled = day > 0) { onDateChange(ym.atDay(day)) }
-                            .padding(3.dp),
-                        contentAlignment = Alignment.TopStart
-                    ) {
-                        if (day > 0) {
-                            Column {
-                                Box(
-                                    modifier = Modifier.size(22.dp)
-                                        .clip(RoundedCornerShape(11.dp))
-                                        .background(if (isToday) FluentBlue else Color.Transparent),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("$day", style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isToday) Color.White else MaterialTheme.colorScheme.onSurface)
-                                }
+                    Box(Modifier.weight(1f).defaultMinSize(minHeight = 64.dp)
+                        .border(0.3.dp, FluentBorder)
+                        .background(if (isToday) FluentBlueLight else MaterialTheme.colorScheme.surface)
+                        .padding(3.dp)) {
+                        Column {
+                            if (day > 0) {
+                                Text("$day",
+                                    style     = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                    color     = if (isToday) FluentBlue else MaterialTheme.colorScheme.onSurface)
                                 dayRecs.take(2).forEach { rec ->
                                     val sub   = vm.subject(rec.subjectId)
                                     val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth()
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(color.copy(alpha = 0.2f))
-                                            .clickable { onRecordClick(rec) }
-                                            .padding(horizontal = 3.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(sub?.name ?: "?",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = color, maxLines = 1)
+                                    Surface(shape = RoundedCornerShape(3.dp), color = color.copy(alpha = 0.18f),
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
+                                            .clickable { onRecordClick(rec) }) {
+                                        Row(Modifier.padding(horizontal = 3.dp, vertical = 1.dp)) {
+                                            Text(sub?.name ?: "?",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = color, maxLines = 1)
+                                        }
                                     }
-                                    Spacer(Modifier.height(1.dp))
                                 }
                                 if (dayRecs.size > 2)
                                     Text("+${dayRecs.size - 2}",
@@ -485,42 +359,79 @@ private fun MonthCalendarView(
                 }
             }
         }
+        Spacer(Modifier.height(80.dp))
     }
 }
 
-// ── Attendance Card ────────────────────────────────────────────────────────────
+// ── Day view ──────────────────────────────────────────────────────────────────
 
 @Composable
-internal fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Unit) {
-    val sub   = vm.subject(rec.subjectId)
-    val te    = vm.teacher(rec.teacherId)
-    val cl    = vm.schoolClass(rec.classId)
-    val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-    val startStr = rec.resolvedStart()
-    FluentCard(modifier = Modifier.fillMaxWidth(), accentColor = color, onClick = onClick) {
-        Row(modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(sub?.name ?: "?", style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold, color = color)
-                    Text("· ${cl?.name ?: "?"}",
-                        style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-                    StatusBadge(rec.status)
+private fun DayView(
+    records: List<Attendance>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
+    vm: AppViewModel, onRecordClick: (Attendance) -> Unit
+) {
+    val fmt     = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    val dayRecs = records.filter { it.date == fmt.format(current) }
+    val dow     = listOf("周一","周二","周三","周四","周五","周六","周日")[current.dayOfWeek.value - 1]
+
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            IconButton(onClick = { onDateChange(current.minusDays(1)) }) {
+                Icon(Icons.Default.ChevronLeft, null, tint = Color.White) }
+            Text("${current.monthValue}月${current.dayOfMonth}日  $dow",
+                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            IconButton(onClick = { onDateChange(current.plusDays(1)) }) {
+                Icon(Icons.Default.ChevronRight, null, tint = Color.White) }
+        }
+
+        val scrollV = rememberScrollState()
+        Row(Modifier.fillMaxSize()) {
+            // Fixed time column
+            Box(Modifier.width(TIME_COL_W.dp).verticalScroll(scrollV)
+                .background(MaterialTheme.colorScheme.surfaceVariant)) {
+                Box(Modifier.height((totalCalHeightDp + CAL_V_PAD * 2).dp)) {
+                    for (h in CAL_START_HOUR..CAL_END_HOUR) {
+                        val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD - 7f).dp
+                        Text("%02d:00".format(h), style = MaterialTheme.typography.labelSmall,
+                            color = FluentMuted, modifier = Modifier.offset(y = top).padding(start = 4.dp))
+                    }
                 }
-                if (rec.topic.isNotBlank())
-                    Text("📌 ${rec.topic}", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("👩‍🏫 ${te?.name ?: "─"}",
-                        style = MaterialTheme.typography.labelMedium, color = FluentMuted)
-                    Text("🗓 ${rec.date}",
-                        style = MaterialTheme.typography.labelMedium, color = FluentMuted)
-                    if (startStr.isNotBlank())
-                        Text("⏰ $startStr",
-                            style = MaterialTheme.typography.labelMedium, color = FluentMuted)
-                    Text("👥 ${rec.attendees.size}人",
-                        style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+            }
+            // Event column
+            Box(Modifier.weight(1f).verticalScroll(scrollV)
+                .height((totalCalHeightDp + CAL_V_PAD * 2).dp).border(0.5.dp, FluentBorder)) {
+                for (h in CAL_START_HOUR..CAL_END_HOUR) {
+                    val top = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD).dp
+                    Box(Modifier.offset(y = top).fillMaxWidth().height(0.5.dp).background(FluentBorder))
+                }
+                dayRecs.forEach { rec ->
+                    val startStr = rec.resolvedStart()
+                    val endStr   = rec.resolvedEnd()
+                    if (startStr.isBlank()) return@forEach
+                    val sub   = vm.subject(rec.subjectId)
+                    val cl    = vm.schoolClass(rec.classId)
+                    val te    = vm.teacher(rec.teacherId)
+                    val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
+                    Box(Modifier
+                        .offset(y = (minuteOffsetDp(startStr) + CAL_V_PAD).dp)
+                        .fillMaxWidth().height(durationDp(startStr, endStr).coerceAtLeast(56f).dp)
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(color.copy(alpha = 0.15f))
+                        .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .clickable { onRecordClick(rec) }
+                        .padding(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("${sub?.name ?: "?"} · ${cl?.name ?: "?"}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold, color = color, maxLines = 1)
+                            // FIX: show start-end times in day event block
+                            Text("$startStr – $endStr  👩‍🏫${te?.name ?: "─"}",
+                                style = MaterialTheme.typography.labelSmall, color = FluentMuted, maxLines = 1)
+                            StatusBadge(rec.status)
+                        }
+                    }
                 }
             }
         }
@@ -531,18 +442,13 @@ internal fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Un
 
 @Composable
 private fun AttendanceDetailDialog(
-    rec: Attendance,
-    state: AppState,   // ← passed in, not vm.state.value
-    vm: AppViewModel,
-    onDismiss: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    rec: Attendance, state: AppState, vm: AppViewModel,
+    onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     val sub  = vm.subject(rec.subjectId)
     val te   = vm.teacher(rec.teacherId)
     val cl   = vm.schoolClass(rec.classId)
     val ats  = rec.attendees.mapNotNull { vm.student(it) }
-    // Lesson count from already-collected state (no vm.state.value in composable)
     val lessonCount = state.attendance.count {
         it.subjectId == rec.subjectId && it.classId == rec.classId && it.status == "completed"
     }
@@ -565,7 +471,9 @@ private fun AttendanceDetailDialog(
         }
         if (ats.isNotEmpty()) {
             SectionHeader("出勤学生 (${ats.size}人)")
-            FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ats.forEach { s -> ColorChip(s.name, FluentGreen) }
             }
         }
@@ -585,54 +493,50 @@ private fun AttendanceDetailDialog(
 
 @Composable
 internal fun AttendanceFormDialog(
-    title: String,
-    initial: Attendance?,
-    state: AppState,
-    vm: AppViewModel,
-    onDismiss: () -> Unit,
-    onSave: (Attendance) -> Unit
+    title: String, initial: Attendance?,
+    state: AppState, vm: AppViewModel,
+    onDismiss: () -> Unit, onSave: (Attendance) -> Unit
 ) {
-    var className  by remember { mutableStateOf(state.classes.firstOrNull { it.id == initial?.classId }?.name ?: "") }
+    var className   by remember { mutableStateOf(state.classes.firstOrNull { it.id == initial?.classId }?.name ?: "") }
     var teacherName by remember { mutableStateOf(state.teachers.firstOrNull { it.id == initial?.teacherId }?.name ?: "") }
-    var date       by remember { mutableStateOf(initial?.date ?: LocalDate.now().toString()) }
-    var startTime  by remember { mutableStateOf(initial?.resolvedStart() ?: "08:00") }
-    var endTime    by remember { mutableStateOf(initial?.resolvedEnd()   ?: "08:45") }
-    var topic      by remember { mutableStateOf(initial?.topic ?: "") }
-    var status     by remember { mutableStateOf(initial?.status ?: "completed") }
-    var notes      by remember { mutableStateOf(initial?.notes ?: "") }
-    var attendees  by remember { mutableStateOf<List<Long>>(initial?.attendees ?: emptyList()) }
-    var code       by remember { mutableStateOf(initial?.code?.ifBlank { null } ?: genCode("ATT")) }
+    var date        by remember { mutableStateOf(initial?.date ?: LocalDate.now().toString()) }
+    var startTime   by remember { mutableStateOf(initial?.resolvedStart() ?: "08:00") }
+    var endTime     by remember { mutableStateOf(initial?.resolvedEnd()   ?: "08:45") }
+    var topic       by remember { mutableStateOf(initial?.topic  ?: "") }
+    var status      by remember { mutableStateOf(initial?.status ?: "completed") }
+    var notes       by remember { mutableStateOf(initial?.notes  ?: "") }
+    var attendees   by remember { mutableStateOf<List<Long>>(initial?.attendees ?: emptyList()) }
+    var code        by remember { mutableStateOf(initial?.code?.ifBlank { null } ?: genCode("ATT")) }
 
-    val selectedClass = state.classes.firstOrNull { it.name == className }
-    val classStudents = state.students.filter { s -> s.classIds.contains(selectedClass?.id) }
+    val selectedClass   = state.classes.firstOrNull { it.name == className }
+    val classStudents   = state.students.filter { s -> s.classIds.contains(selectedClass?.id) }
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
-        val cls   = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
-        val sId   = state.subjects.firstOrNull { it.name == cls.subject }?.id
-                    ?: initial?.subjectId ?: state.subjects.firstOrNull()?.id ?: 1L
-        val tId   = state.teachers.firstOrNull { it.name == teacherName }?.id
+        val cls  = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
+        val sId  = state.subjects.firstOrNull { it.name == cls.subject }?.id
+                   ?: initial?.subjectId ?: state.subjects.firstOrNull()?.id ?: 1L
+        val tId  = state.teachers.firstOrNull { it.name == teacherName }?.id
         val newId = if (initial != null && initial.id != 0L) initial.id else System.currentTimeMillis()
-        onSave(Attendance(newId, cls.id, sId, tId, date, 0, startTime, endTime, topic, status, notes,
-                          attendees, code.trim().ifBlank { genCode("ATT") }))
+        onSave(Attendance(newId, cls.id, sId, tId, date, 0, startTime, endTime,
+                          topic, status, notes, attendees, code.trim().ifBlank { genCode("ATT") }))
     }) {
         FormTextField("编号", code, { code = it }, "自动生成，可修改")
         FormDropdown("班级", className, state.classes.map { it.name }) { className = it; attendees = emptyList() }
         if (selectedClass?.subject?.isNotBlank() == true) {
             Text("  科目：${selectedClass.subject}",
-                style = MaterialTheme.typography.bodySmall,
-                color = FluentPurple,
+                style = MaterialTheme.typography.bodySmall, color = FluentPurple,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
-        FormDropdown("教师", teacherName, state.teachers.map { it.name }) { teacherName = it }
+        FormDropdown("教师", teacherName, listOf("") + state.teachers.map { it.name }) { teacherName = it }
         DatePickerField("日期", date) { date = it }
-        TimeRangeRow(startTime, endTime,
-            onStartChange = { startTime = it },
-            onEndChange   = { endTime   = it })
+        TimeRangeRow(startTime, endTime, { startTime = it }, { endTime = it })
         FormDropdown("状态", status, listOf("completed","cancelled","pending")) { status = it }
         FormTextField("课题", topic, { topic = it }, "本节课主题")
         if (classStudents.isNotEmpty()) {
             SectionHeader("出勤学生")
-            FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 classStudents.forEach { s ->
                     val on = attendees.contains(s.id)
                     FilterChip(selected = on, onClick = {
@@ -642,28 +546,5 @@ internal fun AttendanceFormDialog(
             }
         }
         FormTextField("备注", notes, { notes = it }, "可选")
-    }
-}
-
-// ── Filter chip helper ────────────────────────────────────────────────────────
-
-@Composable
-private fun DropdownFilterChip(
-    allLabel: String,
-    items: List<Pair<Long, String>>,
-    selected: Long,
-    onSelect: (Long) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val label = items.firstOrNull { it.first == selected }?.second ?: allLabel
-    Box {
-        FilterChip(selected = selected != 0L, onClick = { expanded = true }, label = { Text(label) },
-            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null, Modifier.size(16.dp)) })
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text(allLabel) }, onClick = { onSelect(0L); expanded = false })
-            items.forEach { (id, name) ->
-                DropdownMenuItem(text = { Text(name) }, onClick = { onSelect(id); expanded = false })
-            }
-        }
     }
 }

@@ -5,7 +5,6 @@ import java.time.format.DateTimeFormatter
 
 // ─── Domain Models ────────────────────────────────────────────────────────────
 
-/** Subject kept for backward-compat with old saved data; no longer shown in nav */
 data class Subject(
     val id: Long,
     val name: String,
@@ -20,7 +19,7 @@ data class Teacher(
     val phone: String,
     val subjectIds: List<Long> = emptyList(),
     val avatarUri: String? = null,
-    val code: String = ""        // display / editable ID, e.g. "T001"
+    val code: String = ""
 )
 
 data class SchoolClass(
@@ -29,8 +28,8 @@ data class SchoolClass(
     val grade: String,
     val count: Int,
     val headTeacherId: Long?,
-    val subject: String = "",    // free-text subject for this class
-    val code: String = ""        // display / editable ID, e.g. "C001"
+    val subject: String = "",
+    val code: String = ""
 )
 
 data class Student(
@@ -52,7 +51,7 @@ data class Schedule(
     val period: Int = 0,
     val startTime: String = "",
     val endTime: String = "",
-    val code: String = ""        // display / editable ID, e.g. "SCH001"
+    val code: String = ""
 )
 
 data class Attendance(
@@ -68,18 +67,19 @@ data class Attendance(
     val status: String,
     val notes: String,
     val attendees: List<Long> = emptyList(),
-    val code: String = ""        // display / editable ID, e.g. "ATT001"
+    val code: String = ""
 )
 
 // ─── App State ────────────────────────────────────────────────────────────────
-
+// 默认值全部使用空列表，避免 Gson 反序列化时被 sample 数据污染。
+// 首次安装时由 AppViewModel 调用 sampleAppState() 填入示例数据。
 data class AppState(
-    val subjects:   List<Subject>     = sampleSubjects,
-    val teachers:   List<Teacher>     = sampleTeachers,
-    val classes:    List<SchoolClass> = sampleClasses,
-    val students:   List<Student>     = sampleStudents,
-    val schedule:   List<Schedule>    = sampleSchedule,
-    val attendance: List<Attendance>  = sampleAttendance
+    val subjects:   List<Subject>     = emptyList(),
+    val teachers:   List<Teacher>     = emptyList(),
+    val classes:    List<SchoolClass> = emptyList(),
+    val students:   List<Student>     = emptyList(),
+    val schedule:   List<Schedule>    = emptyList(),
+    val attendance: List<Attendance>  = emptyList()
 )
 
 // ─── Subject Colors (ARGB) ────────────────────────────────────────────────────
@@ -117,13 +117,11 @@ fun Attendance.resolvedStart(): String =
 fun Attendance.resolvedEnd(): String =
     endTime.ifBlank { PERIOD_END_TIMES.getOrElse(period - 1) { "" } }
 
-/** Effective subject name: from Subject lookup, then class.subject, then "?" */
 fun Schedule.resolvedSubjectName(subjects: List<Subject>, classes: List<SchoolClass>): String =
     subjects.find { it.id == subjectId }?.name
         ?: classes.find { it.id == classId }?.subject?.takeIf { it.isNotBlank() }
         ?: "?"
 
-/** Auto-generate a short code from timestamp */
 fun genCode(prefix: String): String {
     val t = System.currentTimeMillis()
     return "$prefix${(t % 100000).toString().padStart(5, '0')}"
@@ -171,9 +169,6 @@ val sampleSchedule = listOf(
     Schedule(8, 3, 2, 2, 1, startTime = "08:00", endTime = "08:45", code = "SCH0008"),
 )
 
-// ── Fix: 使用动态日期，确保预设记录始终出现在当月视图中 ──────────────────────────
-// 每次 AppState() 被调用时（首次安装 / 清空数据）重新计算日期，
-// 相对 today 偏移，使大部分记录落在本月，一条落在上月。
 val sampleAttendance: List<Attendance>
     get() {
         val fmt   = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -205,3 +200,13 @@ val sampleAttendance: List<Attendance>
                 attendees=listOf(5), code="ATT0006"),
         )
     }
+
+// ─── 首次安装时使用的示例状态（放在所有 sample 数据之后）────────────────────────
+fun sampleAppState(): AppState = AppState(
+    subjects   = sampleSubjects,
+    teachers   = sampleTeachers,
+    classes    = sampleClasses,
+    students   = sampleStudents,
+    schedule   = sampleSchedule,
+    attendance = sampleAttendance
+)
