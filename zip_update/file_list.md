@@ -1,12 +1,13 @@
 # 🗂 仓库完整文件列表（patch 后快照）
 
-> 生成时间 (UTC): `2026-03-13T07:45:14Z`
-> 提交 SHA: `373263485ef37729af80a266ee8704e327ddea40`
+> 生成时间 (UTC): `2026-03-16T11:11:59Z`
+> 提交 SHA: `41ad3a0dd85a861a637ac47b02857ddc49099cfc`
 
 ```
 ./.github/workflows/build.yml
 ./.github/workflows/update_apk_key.yml
 ./.gitignore
+./AttendanceScreen_FormDialog_PATCH.kt
 ./README.md
 ./app/build.gradle.kts
 ./app/proguard-rules.pro
@@ -49,5 +50,4 @@
 ./zip_update/file_list_befor_update.md
 ./zip_update/note.md
 ./zip_update/release_note.md
-./zip_update/update_1773387805.zip
 ```
