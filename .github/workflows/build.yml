@@ -65,6 +65,7 @@ jobs:
             fi
           fi
 
+      # ── 查找 zip，没找到时发出显眼警告 ─────────────────────────────────────
       - name: 🔎 Find update zip
         id: find_zip
         run: |
@@ -80,7 +81,19 @@ jobs:
             echo "zip_found=false"  >> "$GITHUB_OUTPUT"
             echo "zip_path="        >> "$GITHUB_OUTPUT"
             echo "zip_mtime="       >> "$GITHUB_OUTPUT"
-            echo "ℹ️  No update zip found"
+            echo ""
+            echo "##################################################"
+            echo "#                                                #"
+            echo "#   ⚠️  WARNING: No update_*.zip found in       #"
+            echo "#   zip_update/                                  #"
+            echo "#                                                #"
+            echo "#   Build will proceed using current source.     #"
+            echo "#   If you intended to apply a patch, make sure  #"
+            echo "#   the zip is named  update_<timestamp>.zip     #"
+            echo "#   and placed in the zip_update/ directory.     #"
+            echo "#                                                #"
+            echo "##################################################"
+            echo ""
           fi
 
       - name: 🏷️ Check if zip already released
@@ -187,8 +200,40 @@ jobs:
           rm -rf _zip_tmp
           echo "✅ Extracted to repo root"
 
+      # ── 2b. 执行 patch.sh（若 zip 中包含）────────────────────────────────
+      #
+      #  放在解压之后、版本号写入之前。
+      #  patch.sh 可以做任何事：重命名文件、批量 sed 替换、删除过期文件等。
+      #  执行完毕后再继续后续步骤（含 commit）。
+      #
+      #  约定：
+      #    - 路径固定为 zip_update/patch.sh
+      #    - sh 脚本由 zip 带入，执行后被下面"清理 zip"步骤一起删除
+      #    - 若 zip 中不包含 patch.sh，此步骤静默跳过，不报错
+      #    - 脚本以 bash 运行，工作目录为 repo root
+      #    - 脚本退出码非 0 时 workflow 报错终止（保护构建）
+      #
+      - name: 🛠️ Run patch.sh (if present in zip)
+        if: needs.check.outputs.zip_found == 'true'
+        run: |
+          PATCH_SH="zip_update/patch.sh"
+          if [ -f "$PATCH_SH" ]; then
+            echo "▶️  Found $PATCH_SH — executing..."
+            echo "──────────── patch.sh 输出 ───────────"
+            chmod +x "$PATCH_SH"
+            bash "$PATCH_SH"
+            PATCH_EXIT=$?
+            echo "──────────────────────────────────────"
+            if [ $PATCH_EXIT -ne 0 ]; then
+              echo "❌ patch.sh exited with code $PATCH_EXIT — aborting build"
+              exit $PATCH_EXIT
+            fi
+            echo "✅ patch.sh completed successfully"
+          else
+            echo "ℹ️  No patch.sh found in zip_update/ — skipping"
+          fi
+
       # ── 3. Compute next version tag ───────────────────────────────────────
-      # Moved BEFORE build steps so versionName can be written into build.gradle.kts
       - name: 🔖 Compute next version tag
         id: version
         env:
@@ -212,16 +257,13 @@ jobs:
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
       # ── 4. Write versionName + versionCode into build.gradle.kts ─────────
-      # versionName = tag without the leading 'v'  (e.g. "1.006")
-      # versionCode = the numeric sequence         (e.g. 6)
-      # This means BuildConfig.VERSION_NAME in the app always matches the release tag.
       - name: ✏️ Stamp versionName & versionCode
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          VERSION="${TAG#v}"                       # strip leading 'v'  → e.g. "1.006"
-          SEQ=$(echo "$VERSION" | sed 's/1\.//')   # e.g. "006"
-          VCODE=$((10#$SEQ))                       # decimal int → e.g. 6
+          VERSION="${TAG#v}"
+          SEQ=$(echo "$VERSION" | sed 's/1\.//')
+          VCODE=$((10#$SEQ))
 
           sed -i "s/versionName = \"[^\"]*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
           sed -i "s/versionCode = [0-9]*/versionCode = $VCODE/"           app/build.gradle.kts
@@ -308,7 +350,7 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk
 
-      # ── 12. 收集文件列表（可选附件）──────────────────────────────────────
+      # ── 12. 收集 APK 路径 ─────────────────────────────────────────────────
       - name: 📋 Collect APK paths for release
         id: apk_paths
         env:
@@ -322,12 +364,21 @@ jobs:
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
           echo "📦 Release files: $FILES"
 
-      # ── 13. 清理 zip 并提交 ──────────────────────────────────────────────
-      - name: 🧹 Clean up zip and commit changes
+      # ── 13. 清理 zip / patch.sh，并提交所有变更 ──────────────────────────
+      #
+      #  顺序：patch.sh 已在步骤 2b 中执行完毕，这里统一 commit：
+      #    - 解压带入的所有文件变更
+      #    - patch.sh 对仓库的修改
+      #    - versionName / versionCode stamp
+      #    - 删除 zip 和 patch.sh 本身
+      #
+      - name: 🧹 Clean up zip & patch.sh, then commit all changes
         if: needs.check.outputs.zip_found == 'true'
         run: |
+          # 删除 zip 和 patch.sh
           rm -f zip_update/*.zip
-          echo "🗑️  Removed all *.zip from zip_update/"
+          rm -f zip_update/patch.sh
+          echo "🗑️  Removed zip_update/*.zip and zip_update/patch.sh (if any)"
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -348,32 +399,69 @@ jobs:
             echo "✅ Commit pushed"
           fi
 
-      # ── 14. 发布 Release ──────────────────────────────────────────────────
+      # ── 14. 更新文件列表快照 ──────────────────────────────────────────────
+      - name: 📋 Update file list snapshot
+        if: needs.check.outputs.zip_found == 'true'
+        run: |
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          SHA=$(git rev-parse HEAD)
+          {
+            echo "# 🗂 仓库完整文件列表（patch 后快照）"
+            echo ""
+            echo "> 生成时间 (UTC): \`$NOW\`"
+            echo "> 提交 SHA: \`$SHA\`"
+            echo ""
+            echo '```'
+            find . -type f \
+              ! -path './.git/*' \
+              ! -path './build/*' \
+              ! -path './.gradle/*' \
+              ! -path './app/build/*' \
+              ! -name '*.zip' \
+              | sort
+            echo '```'
+          } > zip_update/file_list.md
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add zip_update/file_list.md
+          if git diff --cached --quiet; then
+            echo "ℹ️  file_list.md unchanged"
+          else
+            git commit -m "📋 update file_list.md [skip ci]"
+            git push origin HEAD
+            echo "✅ file_list.md updated"
+          fi
+
+      # ── 15. GitHub Release ────────────────────────────────────────────────
       - name: 🏷️ Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "智慧课务管理 ${{ steps.version.outputs.tag }}"
-          body: |
-            ## 📱 智慧课务管理系统 ${{ steps.version.outputs.tag }}
-
-            ### 📦 构建来源
-            ${{ needs.check.outputs.zip_found == 'true'
-                && format('- 来源 zip：`{0}`\n- zip 文件修改时间（UTC）：`{1}`',
-                           needs.check.outputs.zip_path,
-                           needs.check.outputs.zip_mtime)
-                || '- 来源：仓库当前代码（无 zip）' }}
-
-            ### 🛠️ 编译变体
-            - Debug：${{ needs.check.outputs.do_debug == 'true' && '✅' || '—' }}
-            - Release：${{ needs.check.outputs.do_release == 'true' && '✅' || '—' }}
-
-            ### 安装说明
-            1. 下载 `app-release.apk`（正式包）或 `app-debug.apk`（调试包，如有）
-            2. 在 Android 设备上开启「允许未知来源安装」
-            3. 安装并打开应用
-          files: ${{ steps.apk_paths.outputs.files }}
-          draft:      false
-          prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG:      ${{ steps.version.outputs.tag }}
+          ZIP_PATH: ${{ needs.check.outputs.zip_path }}
+          ZIP_MTIME: ${{ needs.check.outputs.zip_mtime }}
+        run: |
+          RELEASE_NOTE_FILE="zip_update/release_note.md"
+          if [ -f "$RELEASE_NOTE_FILE" ]; then
+            BODY=$(cat "$RELEASE_NOTE_FILE")
+          else
+            BODY="Auto build — no release note provided."
+          fi
+
+          # 把 zip mtime 附在 body 里，用于重复检测
+          BODY=$(printf '%s\n\n---\n_zip mtime: %s_' "$BODY" "$ZIP_MTIME")
+
+          # 收集可上传的 APK 文件
+          UPLOAD_FILES=""
+          for f in \
+            app/build/outputs/apk/debug/app-debug.apk \
+            app/build/outputs/apk/release/app-release.apk; do
+            [ -f "$f" ] && UPLOAD_FILES="$UPLOAD_FILES $f"
+          done
+
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --notes "$BODY" \
+            $UPLOAD_FILES
+
+          echo "✅ Released: $TAG"
