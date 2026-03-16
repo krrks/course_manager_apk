@@ -71,8 +71,6 @@ data class Attendance(
 )
 
 // ─── App State ────────────────────────────────────────────────────────────────
-// 默认值全部使用空列表，避免 Gson 反序列化时被 sample 数据污染。
-// 首次安装时由 AppViewModel 调用 sampleAppState() 填入示例数据。
 data class AppState(
     val subjects:   List<Subject>     = emptyList(),
     val teachers:   List<Teacher>     = emptyList(),
@@ -90,7 +88,9 @@ val SUBJECT_COLORS = listOf(
 )
 
 val GRADES = listOf("高一","高二","高三","初一","初二","初三")
-val DAYS   = listOf("周一","周二","周三","周四","周五","周六","周日")
+
+// ── 改动：去掉"周"字，选项更短，在窄 dropdown 中不换行 ──────────────────────────
+val DAYS   = listOf("一","二","三","四","五","六","日")
 
 val PERIOD_TIMES     = listOf("08:00","09:00","10:00","11:00","14:00","15:00","16:00","19:00")
 val PERIOD_END_TIMES = listOf("08:45","09:45","10:45","11:45","14:45","15:45","16:45","19:45")
@@ -201,7 +201,6 @@ val sampleAttendance: List<Attendance>
         )
     }
 
-// ─── 首次安装时使用的示例状态（放在所有 sample 数据之后）────────────────────────
 fun sampleAppState(): AppState = AppState(
     subjects   = sampleSubjects,
     teachers   = sampleTeachers,
