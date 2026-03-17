@@ -245,3 +245,44 @@ app/src/main/java/com/school/manager/
 └── viewmodel/
     └── AppViewModel.kt
 ```
+
+---
+
+## AI Rules
+
+This section defines how the AI assistant (Claude) should behave when working on this project.
+
+### Request source files before making changes
+
+When a task involves modifying an existing file, the AI **must ask the user to upload the current version of that file** before generating any output — unless the file's full and exact content is already available in the conversation or project knowledge.
+
+**Why this matters:** The AI's project knowledge snapshot may be outdated. Generating a patch against a stale version of a file can produce diffs that no longer apply cleanly, introduce merge conflicts, or silently break logic that was changed after the snapshot was taken.
+
+**When to ask for uploads:**
+
+| Situation | Action |
+|-----------|--------|
+| Modifying any `.kt`, `.yml`, `.md`, or other source file | Ask user to upload the current file first |
+| The task is additive only (new file with no dependencies on existing code) | Upload not required |
+| File content was already uploaded in this conversation | Upload not required |
+| File content is confirmed identical to project knowledge snapshot | Upload not required |
+
+**Example prompt the AI should use:**
+
+> Before I generate this patch, could you upload the current `ScheduleScreen.kt`? The project knowledge snapshot may be outdated, and I want to make sure the diff applies cleanly.
+
+### Minimal diffs — change only what is necessary
+
+The AI must limit edits to exactly what is needed for the requested change. It must not:
+- Reformat unrelated code
+- Rename variables or functions outside the scope of the task
+- Reorganize imports unless directly required
+- Add or remove comments unrelated to the change
+
+This keeps diffs small, reviewable, and safe to apply.
+
+### Patch delivery format
+
+All source-code changes must be delivered as a `update_<timestamp>.zip` placed at `zip_update/patches/`, following the rules in [Delivering a Patch](#delivering-a-patch).
+
+Changes to `.github/workflows/build.yml` must be delivered as a **direct file download** (never inside a zip), with a reminder to commit it separately.
