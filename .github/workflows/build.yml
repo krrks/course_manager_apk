@@ -1,4 +1,4 @@
-name: 🔨 Auto Build & Release APK
+name: Build & Release APK
 
 on:
   push:
@@ -10,45 +10,45 @@ on:
   workflow_dispatch:
     inputs:
       force_build:
-        description: '强制编译（忽略 zip 时间戳比对）'
+        description: 'Force build (ignore zip timestamp check)'
         required: false
         default: true
         type: boolean
       build_debug:
-        description: '编译 Debug APK'
+        description: 'Build Debug APK'
         required: false
         default: false
         type: boolean
       build_release:
-        description: '编译 Release APK'
+        description: 'Build Release APK'
         required: false
         default: true
         type: boolean
 
 # ════════════════════════════════════════════════════════════════════════════
-# Job 1 — 预检
+# Job 1 — Pre-flight checks
 # ════════════════════════════════════════════════════════════════════════════
 jobs:
   check:
-    name: 🔍 Pre-flight checks
+    name: Pre-flight checks
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
       should_build: ${{ steps.decision.outputs.should_build }}
-      zip_found:    ${{ steps.find_zip.outputs.zip_found }}
-      zip_path:     ${{ steps.find_zip.outputs.zip_path }}
-      zip_mtime:    ${{ steps.find_zip.outputs.zip_mtime }}
+      patch_found:  ${{ steps.find_patch.outputs.patch_found }}
+      patch_path:   ${{ steps.find_patch.outputs.patch_path }}
+      patch_mtime:  ${{ steps.find_patch.outputs.patch_mtime }}
       do_debug:     ${{ steps.variants.outputs.do_debug }}
       do_release:   ${{ steps.variants.outputs.do_release }}
 
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🔍 Check if only .github files changed
+      - name: Check if only .github files changed
         id: github_only
         if: github.event_name == 'push'
         run: |
@@ -58,67 +58,67 @@ jobs:
           else
             NON_GITHUB=$(echo "$CHANGED" | grep -v '^\.github/' || true)
             if [ -z "$NON_GITHUB" ]; then
-              echo "ℹ️  Only .github/ files changed"
+              echo "ℹ️  Only .github/ files changed — skipping build"
               echo "only_github=true" >> "$GITHUB_OUTPUT"
             else
               echo "only_github=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
-      # ── 查找 zip，没找到时发出显眼警告 ─────────────────────────────────────
-      - name: 🔎 Find update zip
-        id: find_zip
+      # ── Look for a patch zip in zip_update/patches/ ──────────────────────
+      - name: Find patch zip
+        id: find_patch
         run: |
-          ZIP=$(find zip_update -maxdepth 1 -name 'update_*.zip' \
+          ZIP=$(find zip_update/patches -maxdepth 1 -name 'update_*.zip' 2>/dev/null \
                 | sort -t_ -k2 -n | tail -n1 || echo "")
+
           if [ -n "$ZIP" ]; then
             MTIME=$(stat -c '%y' "$ZIP" | cut -d'.' -f1)
-            echo "zip_found=true"   >> "$GITHUB_OUTPUT"
-            echo "zip_path=$ZIP"    >> "$GITHUB_OUTPUT"
-            echo "zip_mtime=$MTIME" >> "$GITHUB_OUTPUT"
-            echo "✅ Found zip: $ZIP  (mtime: $MTIME)"
+            echo "patch_found=true"  >> "$GITHUB_OUTPUT"
+            echo "patch_path=$ZIP"   >> "$GITHUB_OUTPUT"
+            echo "patch_mtime=$MTIME" >> "$GITHUB_OUTPUT"
+            echo "✅ Found patch: $ZIP  (mtime: $MTIME)"
           else
-            echo "zip_found=false"  >> "$GITHUB_OUTPUT"
-            echo "zip_path="        >> "$GITHUB_OUTPUT"
-            echo "zip_mtime="       >> "$GITHUB_OUTPUT"
+            echo "patch_found=false" >> "$GITHUB_OUTPUT"
+            echo "patch_path="       >> "$GITHUB_OUTPUT"
+            echo "patch_mtime="      >> "$GITHUB_OUTPUT"
             echo ""
             echo "##################################################"
             echo "#                                                #"
             echo "#   ⚠️  WARNING: No update_*.zip found in       #"
-            echo "#   zip_update/                                  #"
+            echo "#   zip_update/patches/                          #"
             echo "#                                                #"
             echo "#   Build will proceed using current source.     #"
-            echo "#   If you intended to apply a patch, make sure  #"
-            echo "#   the zip is named  update_<timestamp>.zip     #"
-            echo "#   and placed in the zip_update/ directory.     #"
+            echo "#   To apply a patch, place a zip named          #"
+            echo "#   update_<timestamp>.zip in zip_update/patches/#"
             echo "#                                                #"
             echo "##################################################"
             echo ""
           fi
 
-      - name: 🏷️ Check if zip already released
+      - name: Check if patch already released
         id: already_released
-        if: steps.find_zip.outputs.zip_found == 'true'
+        if: steps.find_patch.outputs.patch_found == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ZIP_MTIME: ${{ steps.find_zip.outputs.zip_mtime }}
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          PATCH_MTIME: ${{ steps.find_patch.outputs.patch_mtime }}
         run: |
           RELEASED=$(gh release list --limit 50 --json body \
             -q ".[].body" 2>/dev/null \
-            | grep -F "$ZIP_MTIME" || echo "")
+            | grep -F "$PATCH_MTIME" || echo "")
           if [ -n "$RELEASED" ]; then
             echo "already=true"  >> "$GITHUB_OUTPUT"
-            echo "ℹ️  This zip mtime was already released"
+            echo "ℹ️  This patch was already released"
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 🤔 Decide whether to build
+      - name: Decide whether to build
         id: decision
         env:
           EVENT:            ${{ github.event_name }}
           ONLY_GITHUB:      ${{ steps.github_only.outputs.only_github }}
-          ZIP_FOUND:        ${{ steps.find_zip.outputs.zip_found }}
+          PATCH_FOUND:      ${{ steps.find_patch.outputs.patch_found }}
           ALREADY_RELEASED: ${{ steps.already_released.outputs.already }}
           FORCE:            ${{ github.event.inputs.force_build }}
         run: |
@@ -128,15 +128,15 @@ jobs:
           elif [ "$ONLY_GITHUB" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             echo "⏭️  Skipping: only .github/ changed"
-          elif [ "$ZIP_FOUND" = "true" ] && [ "$ALREADY_RELEASED" = "true" ]; then
+          elif [ "$PATCH_FOUND" = "true" ] && [ "$ALREADY_RELEASED" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "⏭️  Skipping: zip already released"
+            echo "⏭️  Skipping: patch already released"
           else
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             echo "✅ Will build"
           fi
 
-      - name: 🎛️ Resolve build variants
+      - name: Resolve build variants
         id: variants
         env:
           EVENT:         ${{ github.event_name }}
@@ -156,13 +156,13 @@ jobs:
           fi
           echo "do_debug=$DO_DEBUG"     >> "$GITHUB_OUTPUT"
           echo "do_release=$DO_RELEASE" >> "$GITHUB_OUTPUT"
-          echo "📦 Variants → debug=$DO_DEBUG  release=$DO_RELEASE"
+          echo "Variants → debug=$DO_DEBUG  release=$DO_RELEASE"
 
 # ════════════════════════════════════════════════════════════════════════════
-# Job 2 — 编译 & 发布
+# Job 2 — Build & Release
 # ════════════════════════════════════════════════════════════════════════════
   build:
-    name: 🔨 Build & Release APK
+    name: Build & Release APK
     needs: check
     if: needs.check.outputs.should_build == 'true'
     runs-on: ubuntu-latest
@@ -170,71 +170,59 @@ jobs:
       contents: write
 
     steps:
-      # ── 1. Checkout ────────────────────────────────────────────────────────
-      - name: 📥 Checkout code
+      # ── 1. Checkout ───────────────────────────────────────────────────────
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      # ── 2. 解压 zip ────────────────────────────────────────────────────────
-      - name: 📂 Extract zip to repo root
-        if: needs.check.outputs.zip_found == 'true'
+      # ── 2. Extract patch zip ──────────────────────────────────────────────
+      - name: Extract patch zip
+        if: needs.check.outputs.patch_found == 'true'
         env:
-          ZIP_PATH: ${{ needs.check.outputs.zip_path }}
+          PATCH_PATH: ${{ needs.check.outputs.patch_path }}
         run: |
-          echo "⬇️  Extracting: $ZIP_PATH"
-          mkdir -p _zip_tmp
-          unzip -o "$ZIP_PATH" -d _zip_tmp
+          echo "Extracting: $PATCH_PATH"
+          mkdir -p _patch_tmp
+          unzip -o "$PATCH_PATH" -d _patch_tmp
 
-          echo "──────────── zip 内容 ────────────"
-          find _zip_tmp -type f | sort | sed "s|_zip_tmp/||"
-          echo "──────────────────────────────────"
+          echo "── Patch contents ──────────────────"
+          find _patch_tmp -type f | sort | sed "s|_patch_tmp/||"
+          echo "────────────────────────────────────"
 
-          if find _zip_tmp -type d -name '.github' | grep -q '.'; then
-            echo "❌ FATAL: zip contains .github/ — aborting to protect workflow files"
+          if find _patch_tmp -type d -name '.github' | grep -q '.'; then
+            echo "FATAL: patch zip contains .github/ — aborting to protect workflow files"
             exit 1
           fi
 
-          rsync -av --exclude='.github' _zip_tmp/ .
-          rm -rf _zip_tmp
-          echo "✅ Extracted to repo root"
+          rsync -av --exclude='.github' _patch_tmp/ .
+          rm -rf _patch_tmp
+          echo "✅ Patch extracted to repo root"
 
-      # ── 2b. 执行 patch.sh（若 zip 中包含）────────────────────────────────
-      #
-      #  放在解压之后、版本号写入之前。
-      #  patch.sh 可以做任何事：重命名文件、批量 sed 替换、删除过期文件等。
-      #  执行完毕后再继续后续步骤（含 commit）。
-      #
-      #  约定：
-      #    - 路径固定为 zip_update/patch.sh
-      #    - sh 脚本由 zip 带入，执行后被下面"清理 zip"步骤一起删除
-      #    - 若 zip 中不包含 patch.sh，此步骤静默跳过，不报错
-      #    - 脚本以 bash 运行，工作目录为 repo root
-      #    - 脚本退出码非 0 时 workflow 报错终止（保护构建）
-      #
-      - name: 🛠️ Run patch.sh (if present in zip)
-        if: needs.check.outputs.zip_found == 'true'
+      # ── 3. Run apply.sh if present ────────────────────────────────────────
+      - name: Run apply.sh
+        if: needs.check.outputs.patch_found == 'true'
         run: |
-          PATCH_SH="zip_update/patch.sh"
-          if [ -f "$PATCH_SH" ]; then
-            echo "▶️  Found $PATCH_SH — executing..."
-            echo "──────────── patch.sh 输出 ───────────"
-            chmod +x "$PATCH_SH"
-            bash "$PATCH_SH"
-            PATCH_EXIT=$?
-            echo "──────────────────────────────────────"
-            if [ $PATCH_EXIT -ne 0 ]; then
-              echo "❌ patch.sh exited with code $PATCH_EXIT — aborting build"
-              exit $PATCH_EXIT
+          APPLY_SH="zip_update/apply.sh"
+          if [ -f "$APPLY_SH" ]; then
+            echo "Found $APPLY_SH — executing..."
+            echo "── apply.sh output ─────────────────"
+            chmod +x "$APPLY_SH"
+            bash "$APPLY_SH"
+            EXIT=$?
+            echo "────────────────────────────────────"
+            if [ $EXIT -ne 0 ]; then
+              echo "apply.sh exited with code $EXIT — aborting build"
+              exit $EXIT
             fi
-            echo "✅ patch.sh completed successfully"
+            echo "✅ apply.sh completed successfully"
           else
-            echo "ℹ️  No patch.sh found in zip_update/ — skipping"
+            echo "No apply.sh found — skipping"
           fi
 
-      # ── 3. Compute next version tag ───────────────────────────────────────
-      - name: 🔖 Compute next version tag
+      # ── 4. Compute next version tag ───────────────────────────────────────
+      - name: Compute next version tag
         id: version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -256,8 +244,8 @@ jobs:
           echo "✅ Next version: $NEXT"
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
-      # ── 4. Write versionName + versionCode into build.gradle.kts ─────────
-      - name: ✏️ Stamp versionName & versionCode
+      # ── 5. Stamp versionName & versionCode ───────────────────────────────
+      - name: Stamp version in build.gradle.kts
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
@@ -271,18 +259,18 @@ jobs:
           echo "✅ versionName=$VERSION  versionCode=$VCODE"
           grep -E 'versionCode|versionName' app/build.gradle.kts
 
-      # ── 5. Set up JDK 17 ──────────────────────────────────────────────────
-      - name: ☕ Set up JDK 17
+      # ── 6. Set up JDK 17 ─────────────────────────────────────────────────
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 6. Gradle wrapper jar ─────────────────────────────────────────────
-      - name: 📦 Ensure gradle-wrapper.jar exists
+      # ── 7. Ensure gradle-wrapper.jar ─────────────────────────────────────
+      - name: Ensure gradle-wrapper.jar
         run: |
           if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "⬇️  Downloading gradle-wrapper.jar..."
+            echo "Downloading gradle-wrapper.jar..."
             mkdir -p gradle/wrapper
             curl -fsSL \
               "https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
@@ -290,8 +278,8 @@ jobs:
           fi
           chmod +x ./gradlew
 
-      # ── 7. Gradle 缓存 ────────────────────────────────────────────────────
-      - name: 📂 Cache Gradle
+      # ── 8. Cache Gradle ───────────────────────────────────────────────────
+      - name: Cache Gradle
         uses: actions/cache@v4
         with:
           path: |
@@ -301,8 +289,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # ── 8. 加载签名密钥 ───────────────────────────────────────────────────
-      - name: 🔑 Load keystore properties
+      # ── 9. Load signing keystore ─────────────────────────────────────────
+      - name: Load keystore
         id: load_ks
         run: |
           PROPS="keys/keystore.properties"
@@ -320,96 +308,74 @@ jobs:
             echo "has_keystore=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 9. Build Debug APK ────────────────────────────────────────────────
-      - name: 🔧 Build Debug APK
+      # ── 10. Build Debug APK ───────────────────────────────────────────────
+      - name: Build Debug APK
         if: needs.check.outputs.do_debug == 'true'
         run: ./gradlew assembleDebug --no-daemon --build-cache
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
-      # ── 10. Build Release APK ─────────────────────────────────────────────
-      - name: 🚀 Build Release APK
+      # ── 11. Build Release APK ─────────────────────────────────────────────
+      - name: Build Release APK
         if: needs.check.outputs.do_release == 'true'
         run: ./gradlew assembleRelease --no-daemon --build-cache
         env:
-          GRADLE_OPTS:    "-Dorg.gradle.jvmargs=-Xmx4g"
-          KEYSTORE_PATH:  ${{ github.workspace }}/keys/release.jks
+          GRADLE_OPTS:   "-Dorg.gradle.jvmargs=-Xmx4g"
+          KEYSTORE_PATH: ${{ github.workspace }}/keys/release.jks
 
-      # ── 11. Upload APK artifacts ──────────────────────────────────────────
-      - name: 📤 Upload Debug APK
+      # ── 12. Upload APK artifacts ──────────────────────────────────────────
+      - name: Upload Debug APK artifact
         if: needs.check.outputs.do_debug == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      - name: 📤 Upload Release APK
+      - name: Upload Release APK artifact
         if: needs.check.outputs.do_release == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk
 
-      # ── 12. 收集 APK 路径 ─────────────────────────────────────────────────
-      - name: 📋 Collect APK paths for release
-        id: apk_paths
-        env:
-          DO_DEBUG:   ${{ needs.check.outputs.do_debug }}
-          DO_RELEASE: ${{ needs.check.outputs.do_release }}
+      # ── 13. Commit changes, clean up patch files ──────────────────────────
+      - name: Commit patch changes & clean up
+        if: needs.check.outputs.patch_found == 'true'
         run: |
-          FILES=""
-          if [ "$DO_DEBUG"   = "true" ]; then FILES="$FILES app/build/outputs/apk/debug/app-debug.apk"; fi
-          if [ "$DO_RELEASE" = "true" ]; then FILES="$FILES app/build/outputs/apk/release/app-release.apk"; fi
-          FILES="${FILES# }"
-          echo "files=$FILES" >> "$GITHUB_OUTPUT"
-          echo "📦 Release files: $FILES"
-
-      # ── 13. 清理 zip / patch.sh，并提交所有变更 ──────────────────────────
-      #
-      #  顺序：patch.sh 已在步骤 2b 中执行完毕，这里统一 commit：
-      #    - 解压带入的所有文件变更
-      #    - patch.sh 对仓库的修改
-      #    - versionName / versionCode stamp
-      #    - 删除 zip 和 patch.sh 本身
-      #
-      - name: 🧹 Clean up zip & patch.sh, then commit all changes
-        if: needs.check.outputs.zip_found == 'true'
-        run: |
-          # 删除 zip 和 patch.sh
-          rm -f zip_update/*.zip
-          rm -f zip_update/patch.sh
-          echo "🗑️  Removed zip_update/*.zip and zip_update/patch.sh (if any)"
+          rm -f zip_update/patches/*.zip
+          rm -f zip_update/apply.sh
+          echo "Removed patch zip and apply.sh"
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
 
           if git diff --cached --quiet; then
-            echo "ℹ️  Nothing to commit"
+            echo "Nothing to commit"
           else
-            RELEASE_NOTE_FILE="zip_update/release_note.md"
-            if [ -f "$RELEASE_NOTE_FILE" ]; then
-              RELEASE_NOTE_BODY=$(cat "$RELEASE_NOTE_FILE")
-              COMMIT_MSG=$(printf '🧹 apply patch & clean zip_update [skip ci]\n\n%s' "$RELEASE_NOTE_BODY")
+            CHANGELOG="zip_update/CHANGELOG.md"
+            if [ -f "$CHANGELOG" ]; then
+              NOTE=$(head -80 "$CHANGELOG")
+              COMMIT_MSG=$(printf 'apply patch [skip ci]\n\n%s' "$NOTE")
             else
-              COMMIT_MSG="🧹 apply patch & clean zip_update [skip ci]"
+              COMMIT_MSG="apply patch [skip ci]"
             fi
             git commit -m "$COMMIT_MSG"
             git push origin HEAD
             echo "✅ Commit pushed"
           fi
 
-      # ── 14. 更新文件列表快照 ──────────────────────────────────────────────
-      - name: 📋 Update file list snapshot
-        if: needs.check.outputs.zip_found == 'true'
+      # ── 14. Update repo snapshot ──────────────────────────────────────────
+      - name: Update repo snapshot
+        if: needs.check.outputs.patch_found == 'true'
         run: |
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           SHA=$(git rev-parse HEAD)
           {
-            echo "# 🗂 仓库完整文件列表（patch 后快照）"
+            echo "# Repository Snapshot"
             echo ""
-            echo "> 生成时间 (UTC): \`$NOW\`"
-            echo "> 提交 SHA: \`$SHA\`"
+            echo "> Updated: \`$NOW\`"
+            echo "> Commit:  \`$SHA\`"
             echo ""
             echo '```'
             find . -type f \
@@ -420,38 +386,36 @@ jobs:
               ! -name '*.zip' \
               | sort
             echo '```'
-          } > zip_update/file_list.md
+          } > zip_update/repo_snapshot.md
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add zip_update/file_list.md
+          git add zip_update/repo_snapshot.md
           if git diff --cached --quiet; then
-            echo "ℹ️  file_list.md unchanged"
+            echo "repo_snapshot.md unchanged"
           else
-            git commit -m "📋 update file_list.md [skip ci]"
+            git commit -m "update repo_snapshot.md [skip ci]"
             git push origin HEAD
-            echo "✅ file_list.md updated"
+            echo "✅ repo_snapshot.md updated"
           fi
 
-      # ── 15. GitHub Release ────────────────────────────────────────────────
-      - name: 🏷️ Create GitHub Release
+      # ── 15. Create GitHub Release ─────────────────────────────────────────
+      - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG:      ${{ steps.version.outputs.tag }}
-          ZIP_PATH: ${{ needs.check.outputs.zip_path }}
-          ZIP_MTIME: ${{ needs.check.outputs.zip_mtime }}
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          TAG:         ${{ steps.version.outputs.tag }}
+          PATCH_MTIME: ${{ needs.check.outputs.patch_mtime }}
         run: |
-          RELEASE_NOTE_FILE="zip_update/release_note.md"
-          if [ -f "$RELEASE_NOTE_FILE" ]; then
-            BODY=$(cat "$RELEASE_NOTE_FILE")
+          CHANGELOG="zip_update/CHANGELOG.md"
+          if [ -f "$CHANGELOG" ]; then
+            BODY=$(head -120 "$CHANGELOG")
           else
-            BODY="Auto build — no release note provided."
+            BODY="Auto build — no changelog provided."
           fi
 
-          # 把 zip mtime 附在 body 里，用于重复检测
-          BODY=$(printf '%s\n\n---\n_zip mtime: %s_' "$BODY" "$ZIP_MTIME")
+          # Append patch mtime for duplicate-release detection
+          BODY=$(printf '%s\n\n---\n_patch mtime: %s_' "$BODY" "$PATCH_MTIME")
 
-          # 收集可上传的 APK 文件
           UPLOAD_FILES=""
           for f in \
             app/build/outputs/apk/debug/app-debug.apk \
