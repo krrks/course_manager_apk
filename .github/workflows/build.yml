@@ -383,15 +383,38 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
-      # ── 11. Build Release APK ─────────────────────────────────────────────
+      # ── 11. Load keystore credentials from keys/keystore.properties ───────
+      - name: Load keystore credentials
+        if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_release == 'true'
+        run: |
+          PROPS="keys/keystore.properties"
+          if [ ! -f "$PROPS" ]; then
+            echo "⚠️  $PROPS not found — release APK will use debug key"
+            exit 0
+          fi
+
+          # Parse key=value lines, export each to GITHUB_ENV (mask passwords)
+          while IFS='=' read -r key value; do
+            [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            echo "::add-mask::$value"
+            echo "${key}=${value}" >> "$GITHUB_ENV"
+          done < "$PROPS"
+
+          echo "✅ Keystore credentials loaded from $PROPS"
+
+      # ── 12. Build Release APK ─────────────────────────────────────────────
       - name: Build Release APK
         if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_release == 'true'
         run: ./gradlew assembleRelease --no-daemon --build-cache
         env:
           GRADLE_OPTS:   "-Dorg.gradle.jvmargs=-Xmx4g"
           KEYSTORE_PATH: ${{ github.workspace }}/keys/release.jks
+          # KEYSTORE_STORE_PASSWORD, KEYSTORE_KEY_ALIAS, KEYSTORE_KEY_PASSWORD
+          # are loaded into $GITHUB_ENV by the previous step from keys/keystore.properties
 
-      # ── 12. Upload APK artifacts ──────────────────────────────────────────
+      # ── 13. Upload APK artifacts ──────────────────────────────────────────
       - name: Upload Debug APK artifact
         if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_debug == 'true'
         uses: actions/upload-artifact@v4
@@ -406,7 +429,7 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk
 
-      # ── 13. Commit changes, clean up patch files ──────────────────────────
+      # ── 14. Commit changes, clean up patch files ──────────────────────────
       #   Deletes the zip and apply.sh from patches/, but keeps the patches/
       #   directory itself so the folder remains tracked in git.
       - name: Commit patch changes & clean up
@@ -441,7 +464,7 @@ jobs:
             echo "✅ Commit pushed"
           fi
 
-      # ── 14. Update repo snapshot ──────────────────────────────────────────
+      # ── 15. Update repo snapshot ──────────────────────────────────────────
       - name: Update repo snapshot
         if: needs.check.outputs.patch_found == 'true'
         run: |
@@ -475,7 +498,7 @@ jobs:
             echo "✅ repo_snapshot.md updated"
           fi
 
-      # ── 15. Create GitHub Release ─────────────────────────────────────────
+      # ── 16. Create GitHub Release ─────────────────────────────────────────
       #   Skipped when compile_apk=false (#!no-build mode).
       - name: Create GitHub Release
         if: needs.check.outputs.compile_apk == 'true'
