@@ -769,71 +769,71 @@ internal fun DurationChipsCompact(
     }
     fun push(mins: Int) { onEndChange(addMinutesToTime(startTime.ifBlank { "08:00" }, mins)) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // chips 行与时/分输入合并为一行
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        modifier              = Modifier.fillMaxWidth()
+    ) {
         Text("时长", style = MaterialTheme.typography.labelMedium,
             color = FluentBlue, fontWeight = FontWeight.SemiBold)
 
-        // Preset chips — 短标签不换行
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(60 to "1h", 90 to "1.5h", 120 to "2h").forEach { (mins, label) ->
-                FilterChip(
-                    selected = durMins == mins,
-                    onClick  = { durMins = mins; push(mins) },
-                    label    = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                    colors   = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = FluentBlue,
-                        selectedLabelColor     = Color.White
-                    )
+        // Preset chips — 减小内边距节约空间
+        listOf(60 to "1h", 90 to "1.5h", 120 to "2h").forEach { (mins, label) ->
+            FilterChip(
+                selected = durMins == mins,
+                onClick  = { durMins = mins; push(mins) },
+                label    = { Text(label, style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 0.dp)) },
+                modifier = Modifier.height(28.dp),
+                colors   = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = FluentBlue,
+                    selectedLabelColor     = Color.White
                 )
-            }
-        }
-
-        // 手动时 + 分，固定宽度避免被挤压换行
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment     = Alignment.CenterVertically
-        ) {
-            val h = durMins / 60
-            val m = durMins % 60
-
-            OutlinedTextField(
-                value         = h.toString(),
-                onValueChange = { raw ->
-                    val newH = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 23) ?: h
-                    durMins  = newH * 60 + m; push(durMins)
-                },
-                label           = { Text("时", style = MaterialTheme.typography.labelSmall) },
-                singleLine      = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape           = RoundedCornerShape(8.dp),
-                modifier        = Modifier.width(52.dp),
-                textStyle       = MaterialTheme.typography.bodySmall,
-                colors          = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
-            )
-
-            OutlinedTextField(
-                value         = m.toString(),
-                onValueChange = { raw ->
-                    val newM = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 59) ?: m
-                    durMins  = h * 60 + newM; push(durMins)
-                },
-                label           = { Text("分", style = MaterialTheme.typography.labelSmall) },
-                singleLine      = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape           = RoundedCornerShape(8.dp),
-                modifier        = Modifier.width(52.dp),
-                textStyle       = MaterialTheme.typography.bodySmall,
-                colors          = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
-            )
-
-            Text(
-                "→ ${addMinutesToTime(startTime.ifBlank { "08:00" }, durMins)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = FluentMuted
             )
         }
+
+        // 手动时 + 分输入框
+        val h = durMins / 60
+        val m = durMins % 60
+
+        OutlinedTextField(
+            value         = h.toString(),
+            onValueChange = { raw ->
+                val newH = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 23) ?: h
+                durMins  = newH * 60 + m; push(durMins)
+            },
+            label           = { Text("时", style = MaterialTheme.typography.labelSmall) },
+            singleLine      = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            shape           = RoundedCornerShape(8.dp),
+            modifier        = Modifier.width(48.dp),
+            textStyle       = MaterialTheme.typography.bodySmall,
+            colors          = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
+        )
+
+        OutlinedTextField(
+            value         = m.toString(),
+            onValueChange = { raw ->
+                val newM = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 59) ?: m
+                durMins  = h * 60 + newM; push(durMins)
+            },
+            label           = { Text("分", style = MaterialTheme.typography.labelSmall) },
+            singleLine      = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            shape           = RoundedCornerShape(8.dp),
+            modifier        = Modifier.width(48.dp),
+            textStyle       = MaterialTheme.typography.bodySmall,
+            colors          = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
+        )
+
+        Text(
+            "→ ${addMinutesToTime(startTime.ifBlank { "08:00" }, durMins)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = FluentMuted
+        )
     }
 }
 

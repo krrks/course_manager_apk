@@ -1,6 +1,6 @@
-#!no-build
-# Add build flag support to CHANGELOG.md + update README
+#!build
+# UI: 时长 chips 与时分输入合并为一行
 
-- README.md rewritten: added build flag docs, build.yml manual-update rule
-- CHANGELOG.md now supports #!build / #!no-build on first line
-- build.yml updated separately via direct commit (not in this zip)
+将 DurationChipsCompact 中原来竖排的两行（chips 行 + 时/分输入行）
+合并为单行 Row，同时减小 chip 高度（28dp）和输入框宽度（52→48dp）
+以节约空间。AddAttendanceFromScheduleDialog 和 AttendanceFormDialog 同步生效。
