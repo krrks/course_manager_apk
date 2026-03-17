@@ -124,30 +124,60 @@ jobs:
       #   If the flag is absent, #!build is assumed (default).
       #   workflow_dispatch with force_build=true always compiles regardless.
       #
+      #   BUG FIX: The flag must be read from inside the zip, not from the
+      #   repo's committed CHANGELOG.md. The repo file always reflects the
+      #   *previous* patch (often #!no-build), while the new zip's
+      #   CHANGELOG.md is only extracted in the build job — too late for the
+      #   check job to see it. Fix: use `unzip -p` to peek at CHANGELOG.md
+      #   directly from the zip before extraction.
+      #
       - name: Read build flag from CHANGELOG.md
         id: build_flag
+        env:
+          PATCH_FOUND: ${{ steps.find_patch.outputs.patch_found }}
+          PATCH_PATH:  ${{ steps.find_patch.outputs.patch_path }}
         run: |
-          CHANGELOG="zip_update/CHANGELOG.md"
-          FLAG="build"   # default
+          FLAG="build"   # default — always compile unless explicitly told not to
+          FIRST_LINE=""
 
-          if [ -f "$CHANGELOG" ]; then
-            FIRST_LINE=$(head -1 "$CHANGELOG" | tr -d '[:space:]')
-            case "$FIRST_LINE" in
-              "#!no-build")
-                FLAG="no-build"
-                echo "Build flag: #!no-build — APK compilation will be skipped"
-                ;;
-              "#!build")
-                FLAG="build"
-                echo "Build flag: #!build — APK compilation enabled"
-                ;;
-              *)
-                echo "No build flag on line 1 of CHANGELOG.md — defaulting to #!build"
-                ;;
-            esac
-          else
-            echo "CHANGELOG.md not found — defaulting to #!build"
+          if [ "$PATCH_FOUND" = "true" ] && [ -n "$PATCH_PATH" ]; then
+            # Peek inside the zip for CHANGELOG.md (no full extraction needed)
+            TMP_DIR=$(mktemp -d)
+            if unzip -p "$PATCH_PATH" "zip_update/CHANGELOG.md" \
+                 > "$TMP_DIR/CHANGELOG.md" 2>/dev/null \
+               && [ -s "$TMP_DIR/CHANGELOG.md" ]; then
+              FIRST_LINE=$(head -1 "$TMP_DIR/CHANGELOG.md" | tr -d '[:space:]')
+              echo "Read flag from zip CHANGELOG.md: '$FIRST_LINE'"
+            else
+              echo "No CHANGELOG.md inside zip — falling back to repo file"
+            fi
+            rm -rf "$TMP_DIR"
           fi
+
+          # Fall back to repo file when no zip, or zip had no CHANGELOG.md
+          if [ -z "$FIRST_LINE" ]; then
+            CHANGELOG="zip_update/CHANGELOG.md"
+            if [ -f "$CHANGELOG" ]; then
+              FIRST_LINE=$(head -1 "$CHANGELOG" | tr -d '[:space:]')
+              echo "Read flag from repo CHANGELOG.md: '$FIRST_LINE'"
+            else
+              echo "No CHANGELOG.md found anywhere — defaulting to #!build"
+            fi
+          fi
+
+          case "$FIRST_LINE" in
+            "#!no-build")
+              FLAG="no-build"
+              echo "Build flag: #!no-build — APK compilation will be skipped"
+              ;;
+            "#!build")
+              FLAG="build"
+              echo "Build flag: #!build — APK compilation enabled"
+              ;;
+            *)
+              echo "No recognised build flag — defaulting to #!build (compile)"
+              ;;
+          esac
 
           echo "flag=$FLAG" >> "$GITHUB_OUTPUT"
 
