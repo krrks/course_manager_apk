@@ -36,6 +36,7 @@ jobs:
       contents: read
     outputs:
       should_build: ${{ steps.decision.outputs.should_build }}
+      compile_apk:  ${{ steps.decision.outputs.compile_apk }}
       patch_found:  ${{ steps.find_patch.outputs.patch_found }}
       patch_path:   ${{ steps.find_patch.outputs.patch_path }}
       patch_mtime:  ${{ steps.find_patch.outputs.patch_mtime }}
@@ -74,10 +75,10 @@ jobs:
 
           if [ -n "$ZIP" ]; then
             MTIME=$(stat -c '%y' "$ZIP" | cut -d'.' -f1)
-            echo "patch_found=true"  >> "$GITHUB_OUTPUT"
-            echo "patch_path=$ZIP"   >> "$GITHUB_OUTPUT"
+            echo "patch_found=true"   >> "$GITHUB_OUTPUT"
+            echo "patch_path=$ZIP"    >> "$GITHUB_OUTPUT"
             echo "patch_mtime=$MTIME" >> "$GITHUB_OUTPUT"
-            echo "✅ Found patch: $ZIP  (mtime: $MTIME)"
+            echo "Found patch: $ZIP  (mtime: $MTIME)"
           else
             echo "patch_found=false" >> "$GITHUB_OUTPUT"
             echo "patch_path="       >> "$GITHUB_OUTPUT"
@@ -85,7 +86,7 @@ jobs:
             echo ""
             echo "##################################################"
             echo "#                                                #"
-            echo "#   ⚠️  WARNING: No update_*.zip found in       #"
+            echo "#   WARNING: No update_*.zip found in           #"
             echo "#   zip_update/patches/                          #"
             echo "#                                                #"
             echo "#   Build will proceed using current source.     #"
@@ -113,6 +114,43 @@ jobs:
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # ── Read build flag from CHANGELOG.md first line ─────────────────────
+      #
+      #   First line of zip_update/CHANGELOG.md controls APK compilation:
+      #
+      #     #!build      →  apply patch + compile APK + create GitHub Release
+      #     #!no-build   →  apply patch only, skip compilation and release
+      #
+      #   If the flag is absent, #!build is assumed (default).
+      #   workflow_dispatch with force_build=true always compiles regardless.
+      #
+      - name: Read build flag from CHANGELOG.md
+        id: build_flag
+        run: |
+          CHANGELOG="zip_update/CHANGELOG.md"
+          FLAG="build"   # default
+
+          if [ -f "$CHANGELOG" ]; then
+            FIRST_LINE=$(head -1 "$CHANGELOG" | tr -d '[:space:]')
+            case "$FIRST_LINE" in
+              "#!no-build")
+                FLAG="no-build"
+                echo "Build flag: #!no-build — APK compilation will be skipped"
+                ;;
+              "#!build")
+                FLAG="build"
+                echo "Build flag: #!build — APK compilation enabled"
+                ;;
+              *)
+                echo "No build flag on line 1 of CHANGELOG.md — defaulting to #!build"
+                ;;
+            esac
+          else
+            echo "CHANGELOG.md not found — defaulting to #!build"
+          fi
+
+          echo "flag=$FLAG" >> "$GITHUB_OUTPUT"
+
       - name: Decide whether to build
         id: decision
         env:
@@ -121,19 +159,32 @@ jobs:
           PATCH_FOUND:      ${{ steps.find_patch.outputs.patch_found }}
           ALREADY_RELEASED: ${{ steps.already_released.outputs.already }}
           FORCE:            ${{ github.event.inputs.force_build }}
+          BUILD_FLAG:       ${{ steps.build_flag.outputs.flag }}
         run: |
           if [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCE" = "true" ]; then
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Force build requested"
+            echo "should_build=true"  >> "$GITHUB_OUTPUT"
+            echo "compile_apk=true"   >> "$GITHUB_OUTPUT"
+            echo "Force build — compiling APK"
+
           elif [ "$ONLY_GITHUB" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "⏭️  Skipping: only .github/ changed"
+            echo "compile_apk=false"  >> "$GITHUB_OUTPUT"
+            echo "Skipping: only .github/ changed"
+
           elif [ "$PATCH_FOUND" = "true" ] && [ "$ALREADY_RELEASED" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "⏭️  Skipping: patch already released"
+            echo "compile_apk=false"  >> "$GITHUB_OUTPUT"
+            echo "Skipping: patch already released"
+
+          elif [ "$BUILD_FLAG" = "no-build" ]; then
+            echo "should_build=true"  >> "$GITHUB_OUTPUT"
+            echo "compile_apk=false"  >> "$GITHUB_OUTPUT"
+            echo "Patch-only mode (#!no-build) — will apply patch, skip APK compilation"
+
           else
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Will build"
+            echo "should_build=true"  >> "$GITHUB_OUTPUT"
+            echo "compile_apk=true"   >> "$GITHUB_OUTPUT"
+            echo "Will apply patch and compile APK"
           fi
 
       - name: Resolve build variants
@@ -224,6 +275,7 @@ jobs:
       # ── 4. Compute next version tag ───────────────────────────────────────
       - name: Compute next version tag
         id: version
+        if: needs.check.outputs.compile_apk == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -246,6 +298,7 @@ jobs:
 
       # ── 5. Stamp versionName & versionCode ───────────────────────────────
       - name: Stamp version in build.gradle.kts
+        if: needs.check.outputs.compile_apk == 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
@@ -261,6 +314,7 @@ jobs:
 
       # ── 6. Set up JDK 17 ─────────────────────────────────────────────────
       - name: Set up JDK 17
+        if: needs.check.outputs.compile_apk == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -268,6 +322,7 @@ jobs:
 
       # ── 7. Ensure gradle-wrapper.jar ─────────────────────────────────────
       - name: Ensure gradle-wrapper.jar
+        if: needs.check.outputs.compile_apk == 'true'
         run: |
           if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
             echo "Downloading gradle-wrapper.jar..."
@@ -280,6 +335,7 @@ jobs:
 
       # ── 8. Cache Gradle ───────────────────────────────────────────────────
       - name: Cache Gradle
+        if: needs.check.outputs.compile_apk == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -291,6 +347,7 @@ jobs:
 
       # ── 9. Load signing keystore ─────────────────────────────────────────
       - name: Load keystore
+        if: needs.check.outputs.compile_apk == 'true'
         id: load_ks
         run: |
           PROPS="keys/keystore.properties"
@@ -310,14 +367,14 @@ jobs:
 
       # ── 10. Build Debug APK ───────────────────────────────────────────────
       - name: Build Debug APK
-        if: needs.check.outputs.do_debug == 'true'
+        if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_debug == 'true'
         run: ./gradlew assembleDebug --no-daemon --build-cache
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
       # ── 11. Build Release APK ─────────────────────────────────────────────
       - name: Build Release APK
-        if: needs.check.outputs.do_release == 'true'
+        if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_release == 'true'
         run: ./gradlew assembleRelease --no-daemon --build-cache
         env:
           GRADLE_OPTS:   "-Dorg.gradle.jvmargs=-Xmx4g"
@@ -325,14 +382,14 @@ jobs:
 
       # ── 12. Upload APK artifacts ──────────────────────────────────────────
       - name: Upload Debug APK artifact
-        if: needs.check.outputs.do_debug == 'true'
+        if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_debug == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload Release APK artifact
-        if: needs.check.outputs.do_release == 'true'
+        if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_release == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release
@@ -341,6 +398,8 @@ jobs:
       # ── 13. Commit changes, clean up patch files ──────────────────────────
       - name: Commit patch changes & clean up
         if: needs.check.outputs.patch_found == 'true'
+        env:
+          COMPILE_APK: ${{ needs.check.outputs.compile_apk }}
         run: |
           rm -f zip_update/patches/*.zip
           rm -f zip_update/apply.sh
@@ -355,8 +414,12 @@ jobs:
           else
             CHANGELOG="zip_update/CHANGELOG.md"
             if [ -f "$CHANGELOG" ]; then
-              NOTE=$(head -80 "$CHANGELOG")
-              COMMIT_MSG=$(printf 'apply patch [skip ci]\n\n%s' "$NOTE")
+              NOTE=$(grep -v '^#!' "$CHANGELOG" | head -80)
+              if [ "$COMPILE_APK" = "true" ]; then
+                COMMIT_MSG=$(printf 'apply patch [skip ci]\n\n%s' "$NOTE")
+              else
+                COMMIT_MSG=$(printf 'apply patch (no-build) [skip ci]\n\n%s' "$NOTE")
+              fi
             else
               COMMIT_MSG="apply patch [skip ci]"
             fi
@@ -400,7 +463,9 @@ jobs:
           fi
 
       # ── 15. Create GitHub Release ─────────────────────────────────────────
+      #   Skipped when compile_apk=false (#!no-build mode).
       - name: Create GitHub Release
+        if: needs.check.outputs.compile_apk == 'true'
         env:
           GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
           TAG:         ${{ steps.version.outputs.tag }}
@@ -408,12 +473,11 @@ jobs:
         run: |
           CHANGELOG="zip_update/CHANGELOG.md"
           if [ -f "$CHANGELOG" ]; then
-            BODY=$(head -120 "$CHANGELOG")
+            BODY=$(grep -v '^#!' "$CHANGELOG" | head -120)
           else
             BODY="Auto build — no changelog provided."
           fi
 
-          # Append patch mtime for duplicate-release detection
           BODY=$(printf '%s\n\n---\n_patch mtime: %s_' "$BODY" "$PATCH_MTIME")
 
           UPLOAD_FILES=""
