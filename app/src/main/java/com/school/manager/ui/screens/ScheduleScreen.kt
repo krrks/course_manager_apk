@@ -751,12 +751,8 @@ internal fun StartTimeCompact(
 }
 
 /**
- * 紧凑时长选择区（只含 chips + 手动时/分输入）。
- * 供在 Row 的右侧 weight(2f) 列中使用，不带独立 Surface 背景。
- *
- * chips 改为: 1h / 1.5h / 2h（更短，不换行）
- * 手动输入：固定宽度 48dp，不用 weight，避免被挤压
- * 结束时间提示：→ HH:MM
+ * 紧凑时长选择区（时/分输入框 + 步长10分钟加减号）。
+ * 移除预设 1h/1.5h/2h chips，改用 +/- 按钮调整，步长 10 分钟，默认 2h。
  */
 @Composable
 internal fun DurationChipsCompact(
@@ -765,70 +761,96 @@ internal fun DurationChipsCompact(
     onEndChange: (String) -> Unit
 ) {
     var durMins by remember {
-        mutableIntStateOf(minutesBetween(startTime, endTime).takeIf { it > 0 } ?: 60)
+        mutableIntStateOf(minutesBetween(startTime, endTime).takeIf { it > 0 } ?: 120)
     }
     fun push(mins: Int) { onEndChange(addMinutesToTime(startTime.ifBlank { "08:00" }, mins)) }
 
-    // chips 行与时/分输入合并为一行
+    val h = durMins / 60
+    val m = durMins % 60
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment     = Alignment.CenterVertically,
         modifier              = Modifier.fillMaxWidth()
     ) {
-        Text("时长", style = MaterialTheme.typography.labelMedium,
-            color = FluentBlue, fontWeight = FontWeight.SemiBold)
+        Text(
+            "时长",
+            style      = MaterialTheme.typography.labelMedium,
+            color      = FluentBlue,
+            fontWeight = FontWeight.SemiBold
+        )
 
-        // Preset chips — 减小内边距节约空间
-        listOf(60 to "1h", 90 to "1.5h", 120 to "2h").forEach { (mins, label) ->
-            FilterChip(
-                selected = durMins == mins,
-                onClick  = { durMins = mins; push(mins) },
-                label    = { Text(label, style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 0.dp)) },
-                modifier = Modifier.height(28.dp),
-                colors   = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = FluentBlue,
-                    selectedLabelColor     = Color.White
-                )
-            )
-        }
+        Spacer(Modifier.width(4.dp))
 
-        // 手动时 + 分输入框
-        val h = durMins / 60
-        val m = durMins % 60
-
+        // 时 输入框
         OutlinedTextField(
             value         = h.toString(),
             onValueChange = { raw ->
                 val newH = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 23) ?: h
-                durMins  = newH * 60 + m; push(durMins)
+                durMins  = newH * 60 + m
+                push(durMins)
             },
             label           = { Text("时", style = MaterialTheme.typography.labelSmall) },
             singleLine      = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape           = RoundedCornerShape(8.dp),
-            modifier        = Modifier.width(48.dp),
+            modifier        = Modifier.width(52.dp),
             textStyle       = MaterialTheme.typography.bodySmall,
             colors          = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
+                focusedBorderColor   = FluentBlue,
+                unfocusedBorderColor = FluentBorder
+            )
         )
 
+        // 分 输入框
         OutlinedTextField(
-            value         = m.toString(),
+            value         = "%02d".format(m),
             onValueChange = { raw ->
                 val newM = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 59) ?: m
-                durMins  = h * 60 + newM; push(durMins)
+                durMins  = h * 60 + newM
+                push(durMins)
             },
             label           = { Text("分", style = MaterialTheme.typography.labelSmall) },
             singleLine      = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape           = RoundedCornerShape(8.dp),
-            modifier        = Modifier.width(48.dp),
+            modifier        = Modifier.width(52.dp),
             textStyle       = MaterialTheme.typography.bodySmall,
             colors          = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
+                focusedBorderColor   = FluentBlue,
+                unfocusedBorderColor = FluentBorder
+            )
         )
 
+        Spacer(Modifier.width(2.dp))
+
+        // − 按钮（步长 10 分钟）
+        FilledTonalIconButton(
+            onClick  = { durMins = (durMins - 10).coerceAtLeast(10); push(durMins) },
+            modifier = Modifier.size(32.dp),
+            shape    = RoundedCornerShape(8.dp),
+            colors   = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = FluentBorder,
+                contentColor   = FluentMuted
+            )
+        ) {
+            Icon(Icons.Default.Remove, contentDescription = "-10分钟", modifier = Modifier.size(16.dp))
+        }
+
+        // + 按钮（步长 10 分钟）
+        FilledTonalIconButton(
+            onClick  = { durMins = (durMins + 10).coerceAtMost(23 * 60); push(durMins) },
+            modifier = Modifier.size(32.dp),
+            shape    = RoundedCornerShape(8.dp),
+            colors   = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = FluentBlueLight,
+                contentColor   = FluentBlue
+            )
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "+10分钟", modifier = Modifier.size(16.dp))
+        }
+
+        // 结束时间提示
         Text(
             "→ ${addMinutesToTime(startTime.ifBlank { "08:00" }, durMins)}",
             style = MaterialTheme.typography.labelSmall,
@@ -836,6 +858,14 @@ internal fun DurationChipsCompact(
         )
     }
 }
+
+/** InlineDurationPicker — AttendanceFormDialog 使用的别名，委托给 DurationChipsCompact。 */
+@Composable
+internal fun InlineDurationPicker(
+    startTime: String,
+    endTime: String,
+    onEndChange: (String) -> Unit
+) = DurationChipsCompact(startTime = startTime, endTime = endTime, onEndChange = onEndChange)
 
 /**
  * 原 TimeRangeRow — 保留供 AddAttendanceFromScheduleDialog 和 AttendanceScreen 继续使用。
