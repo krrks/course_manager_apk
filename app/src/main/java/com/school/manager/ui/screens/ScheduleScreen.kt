@@ -596,12 +596,14 @@ private fun AddAttendanceFromScheduleDialog(
     var topic       by remember { mutableStateOf("") }
     var status      by remember { mutableStateOf("completed") }
     var notes       by remember { mutableStateOf("") }
+    var code        by remember { mutableStateOf(genCode("ATT")) }
+
+    val subjectName = state.subjects.find { it.id == slot.subjectId }?.name
+        ?: state.classes.find { it.id == slot.classId }?.subject ?: ""
     val allStudents = state.students.filter { s ->
         state.classes.find { it.id == slot.classId }?.let { s.classIds.contains(it.id) } == true
     }
     val checkedIds = remember { mutableStateListOf<Long>().also { it.addAll(allStudents.map { s -> s.id }) } }
-    val subjectName = state.subjects.find { it.id == slot.subjectId }?.name
-        ?: state.classes.find { it.id == slot.classId }?.subject ?: ""
 
     FluentDialog(title = "添加上课记录", onDismiss = onDismiss, onConfirm = {
         val tId = state.teachers.firstOrNull { it.name == teacherName }?.id ?: slot.teacherId
@@ -618,18 +620,85 @@ private fun AddAttendanceFromScheduleDialog(
             status    = status,
             notes     = notes,
             attendees = checkedIds.toList(),
-            code      = genCode("ATT")
+            code      = code.trim().ifBlank { genCode("ATT") }
         ))
     }) {
-        if (subjectName.isNotBlank())
-            Text("科目：$subjectName", style = MaterialTheme.typography.bodyMedium,
-                color = FluentBlue, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 4.dp))
-        FormDropdown("教师", teacherName, listOf("") + state.teachers.map { it.name }) { teacherName = it }
-        DatePickerField("日期", date) { date = it }
-        TimeRangeRow(startTime, endTime, { startTime = it }, { endTime = it })
-        FormDropdown("状态", status, listOf("completed", "cancelled", "pending")) { status = it }
-        FormTextField("课题", topic, { topic = it }, "本节课主题")
+        // ── 行1：编号½ + 状态½ ────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(Modifier.weight(1f)) {
+                FormTextField("编号", code, { code = it }, "自动生成")
+            }
+            Box(Modifier.weight(1f)) {
+                FormDropdown("状态", status, listOf("completed", "cancelled", "pending")) { status = it }
+            }
+        }
+
+        // ── 行2：科目 badge½ + 教师½ ─────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (subjectName.isNotBlank()) {
+                Surface(
+                    shape    = RoundedCornerShape(12.dp),
+                    color    = FluentBlueLight,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        "📚 $subjectName",
+                        style      = MaterialTheme.typography.bodyMedium,
+                        color      = FluentBlue,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier   = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+                        maxLines   = 1
+                    )
+                }
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            Box(Modifier.weight(1f)) {
+                FormDropdown("教师", teacherName, listOf("") + state.teachers.map { it.name }) { teacherName = it }
+            }
+        }
+
+        // ── 行3：日期½ + 开始时间½ ────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(Modifier.weight(1f)) {
+                DatePickerField("日期", date) { date = it }
+            }
+            Box(Modifier.weight(1f)) {
+                StartTimeCompact(startTime) { newStart ->
+                    val dur = minutesBetween(startTime, endTime).coerceAtLeast(30)
+                    startTime = newStart
+                    endTime   = addMinutesToTime(newStart, dur)
+                }
+            }
+        }
+
+        // ── 行4：课题⅔ + 时长⅓ ───────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(Modifier.weight(2f)) {
+                FormTextField("课题", topic, { topic = it }, "本节课主题")
+            }
+            Box(Modifier.weight(1f)) {
+                DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
+            }
+        }
+
+        // ── 出勤学生 ─────────────────────────────────────────────────
         if (allStudents.isNotEmpty()) {
             SectionHeader("出勤学生")
             androidx.compose.foundation.layout.FlowRow(
@@ -644,6 +713,8 @@ private fun AddAttendanceFromScheduleDialog(
                 }
             }
         }
+
+        // ── 备注 ─────────────────────────────────────────────────────
         FormTextField("备注", notes, { notes = it }, "可选")
     }
 }
@@ -656,7 +727,7 @@ private fun AddAttendanceFromScheduleDialog(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StartTimeCompact(
+internal fun StartTimeCompact(
     startTime: String,
     onStartChange: (String) -> Unit
 ) {
@@ -696,7 +767,7 @@ private fun StartTimeCompact(
  * 结束时间提示：→ HH:MM
  */
 @Composable
-private fun DurationChipsCompact(
+internal fun DurationChipsCompact(
     startTime: String,
     endTime: String,
     onEndChange: (String) -> Unit

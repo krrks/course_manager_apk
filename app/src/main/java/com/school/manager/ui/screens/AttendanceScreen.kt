@@ -49,6 +49,18 @@ private fun packedToColor(packed: Long): Color = Color(packed.toInt())
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+// ── Time helpers (mirrors of ScheduleScreen private helpers) ─────────────────
+private fun addMinutesToTime(hhmm: String, minutes: Int): String {
+    val base  = if (hhmm.isBlank()) 8 * 60 else timeToMinutes(hhmm)
+    val total = (base + minutes).coerceIn(0, 23 * 60 + 59)
+    return "%02d:%02d".format(total / 60, total % 60)
+}
+
+private fun minutesBetween(start: String, end: String): Int =
+    if (start.isBlank() || end.isBlank()) 60
+    else (timeToMinutes(end) - timeToMinutes(start)).coerceAtLeast(0)
+
 @Composable
 fun AttendanceScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val state    by vm.state.collectAsState()
@@ -508,8 +520,8 @@ internal fun AttendanceFormDialog(
     var attendees   by remember { mutableStateOf<List<Long>>(initial?.attendees ?: emptyList()) }
     var code        by remember { mutableStateOf(initial?.code?.ifBlank { null } ?: genCode("ATT")) }
 
-    val selectedClass   = state.classes.firstOrNull { it.name == className }
-    val classStudents   = state.students.filter { s -> s.classIds.contains(selectedClass?.id) }
+    val selectedClass  = state.classes.firstOrNull { it.name == className }
+    val classStudents  = state.students.filter { s -> s.classIds.contains(selectedClass?.id) }
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         val cls  = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
@@ -520,37 +532,88 @@ internal fun AttendanceFormDialog(
         onSave(Attendance(newId, cls.id, sId, tId, date, 0, startTime, endTime,
                           topic, status, notes, attendees, code.trim().ifBlank { genCode("ATT") }))
     }) {
-        FormTextField("编号", code, { code = it }, "自动生成，可修改")
-        FormDropdown("班级", className, state.classes.map { it.name }) { className = it; attendees = emptyList() }
-        if (selectedClass?.subject?.isNotBlank() == true) {
-            Text("  科目：${selectedClass.subject}",
-                style = MaterialTheme.typography.bodySmall, color = FluentPurple,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
-        }
-        FormDropdown("教师", teacherName, listOf("") + state.teachers.map { it.name }) { teacherName = it }
-
-        // ── 日期与开始时间并排 ──────────────────────────────────────────────
+        // ── 行1：编号½ + 状态½ ────────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Box(modifier = Modifier.weight(1f)) {
-                DatePickerField("日期", date) { date = it }
+            Box(Modifier.weight(1f)) {
+                FormTextField("编号", code, { code = it }, "自动生成")
             }
-            Box(modifier = Modifier.weight(1f)) {
-                TimeRangeRow(startTime, endTime, { startTime = it }, { endTime = it })
+            Box(Modifier.weight(1f)) {
+                FormDropdown("状态", status, listOf("completed", "cancelled", "pending")) { status = it }
             }
         }
-        // ───────────────────────────────────────────────────────────────────
 
-        FormDropdown("状态", status, listOf("completed","cancelled","pending")) { status = it }
-        FormTextField("课题", topic, { topic = it }, "本节课主题")
+        // ── 行2：班级½ + 教师½ ────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(Modifier.weight(1f)) {
+                FormDropdown("班级", className, state.classes.map { it.name }) {
+                    className = it; attendees = emptyList()
+                }
+            }
+            Box(Modifier.weight(1f)) {
+                FormDropdown("教师", teacherName, listOf("") + state.teachers.map { it.name }) { teacherName = it }
+            }
+        }
+
+        // ── 科目 badge ────────────────────────────────────────────────
+        if (selectedClass?.subject?.isNotBlank() == true) {
+            Surface(shape = RoundedCornerShape(8.dp), color = FluentPurple.copy(alpha = 0.1f)) {
+                Text(
+                    "科目：${selectedClass.subject}",
+                    style      = MaterialTheme.typography.bodySmall,
+                    color      = FluentPurple,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier   = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        // ── 行3：日期½ + 开始时间½ ────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(Modifier.weight(1f)) {
+                DatePickerField("日期", date) { date = it }
+            }
+            Box(Modifier.weight(1f)) {
+                StartTimeCompact(startTime) { newStart ->
+                    val dur = minutesBetween(startTime, endTime).coerceAtLeast(30)
+                    startTime = newStart
+                    endTime   = addMinutesToTime(newStart, dur)
+                }
+            }
+        }
+
+        // ── 行4：课题⅔ + 时长⅓ ───────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(Modifier.weight(2f)) {
+                FormTextField("课题", topic, { topic = it }, "本节课主题")
+            }
+            Box(Modifier.weight(1f)) {
+                DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
+            }
+        }
+
+        // ── 出勤学生 ─────────────────────────────────────────────────
         if (classStudents.isNotEmpty()) {
             SectionHeader("出勤学生")
             androidx.compose.foundation.layout.FlowRow(
                 Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 classStudents.forEach { s ->
                     val on = attendees.contains(s.id)
                     FilterChip(selected = on, onClick = {
@@ -559,6 +622,8 @@ internal fun AttendanceFormDialog(
                 }
             }
         }
+
+        // ── 备注 ─────────────────────────────────────────────────────
         FormTextField("备注", notes, { notes = it }, "可选")
     }
 }
