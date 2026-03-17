@@ -1,6 +1,6 @@
 # 🗂 仓库完整文件列表
 
-> This file is auto-updated by `build.yml` after every patch zip is applied.
+> This file is generated for repo checking.
 > It includes **all** files in the repo with no exclusions (except `.git/` internals and build outputs).
 
 ```

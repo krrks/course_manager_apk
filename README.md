@@ -56,7 +56,7 @@ An Android app for managing school timetables and class attendance records, buil
 Triggers on every push to any branch. The workflow:
 
 1. Looks for a patch zip in `zip_update/patches/`
-2. If found — extracts it, runs `zip_update/apply.sh` (if present), then optionally compiles
+2. If found — extracts it, runs `zip_update/patches/apply.sh` (if present), then optionally compiles
 3. If not found — proceeds with current source (warning printed in log)
 4. On success with APK compilation — commits changes, tags a release, attaches APKs
 
@@ -133,6 +133,7 @@ The flag line is automatically stripped from commit messages and GitHub Release 
 ──────────────────────────────────────   ──────────────────────────────────
 app/src/.../ScheduleScreen.kt            some_folder/app/src/...
 zip_update/CHANGELOG.md                  .github/workflows/build.yml
+zip_update/patches/apply.sh
 ```
 
 Verify with `unzip -l update_xxx.zip` — paths must start with `app/`, `zip_update/`, etc.
@@ -142,7 +143,8 @@ Verify with `unzip -l update_xxx.zip` — paths must start with `app/`, `zip_upd
 ```bash
 zip -r zip_update/patches/update_$(date +%s).zip \
   app/src/main/java/com/school/manager/ui/screens/MyScreen.kt \
-  zip_update/CHANGELOG.md
+  zip_update/CHANGELOG.md \
+  zip_update/patches/apply.sh   # optional — only if you need a script
 ```
 
 ### What goes in a zip
@@ -151,13 +153,13 @@ zip -r zip_update/patches/update_$(date +%s).zip \
 |------|----------|---------|
 | `app/src/.../*.kt` | optional | Source file replacements |
 | `zip_update/CHANGELOG.md` | recommended | First line = build flag; rest = release notes and commit message |
-| `zip_update/apply.sh` | optional | Script for changes that can't be done by file replacement |
+| `zip_update/patches/apply.sh` | optional | Script for changes that can't be done by file replacement |
 
 ---
 
 ## apply.sh — Script-based Patches
 
-For changes beyond simple file replacement (renaming symbols, deleting files, regex substitutions), include `zip_update/apply.sh` in the zip.
+For changes beyond simple file replacement (renaming symbols, deleting files, regex substitutions), include `zip_update/patches/apply.sh` in the zip.
 
 **Execution order:**
 ```
@@ -169,11 +171,11 @@ Extract zip → Run apply.sh → [Stamp version] → [Build APK] → Commit → 
 
 | Rule | Detail |
 |------|--------|
-| Location | `zip_update/apply.sh` inside the zip |
+| Location | `zip_update/patches/apply.sh` inside the zip |
 | Working directory | Repo root |
 | Shell | `bash` |
 | Exit code | Non-zero aborts the build immediately |
-| Cleanup | Deleted automatically after execution, along with the zip |
+| Cleanup | Deleted automatically after execution, along with the zip; `patches/` directory is preserved |
 | Optional | If absent, the step is silently skipped |
 
 **Example `apply.sh`:**
@@ -198,8 +200,8 @@ echo "Renamed OldName → NewName"
 ```
 zip_update/
 ├── patches/
-│   └── update_<timestamp>.zip   # patch zip — deleted by workflow after apply
-├── apply.sh                     # optional script — delivered via zip, deleted after run
+│   ├── update_<timestamp>.zip   # patch zip — deleted by workflow after apply
+│   └── apply.sh                 # optional script — delivered via zip, deleted after run
 ├── CHANGELOG.md                 # first line = build flag; rest = release notes
 └── repo_snapshot.md             # auto-generated file list after each patch apply
 ```
@@ -207,9 +209,9 @@ zip_update/
 | File | Written by | Purpose |
 |------|-----------|---------|
 | `patches/update_*.zip` | Developer | Contains source files and/or apply.sh |
-| `apply.sh` | Developer (via zip) | Post-extract script; deleted after run |
+| `patches/apply.sh` | Developer (via zip) | Post-extract script; deleted after run; `patches/` dir kept |
 | `CHANGELOG.md` | Developer (via zip) | Build flag on line 1; release notes below |
-| `repo_snapshot.md` | Workflow (auto) | Full file list snapshot after each apply |
+| `repo_snapshot.md` | Workflow (auto) | Full file list snapshot after each patch apply |
 
 ---
 
