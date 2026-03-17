@@ -56,11 +56,11 @@ An Android app for managing school timetables and class attendance records, buil
 Triggers on every push to any branch. The workflow:
 
 1. Looks for a patch zip in `zip_update/patches/`
-2. If found — extracts it, runs `zip_update/apply.sh` (if present), then builds
-3. If not found — builds from current source (with a warning in the log)
-4. On success — commits changes, tags a release, and attaches APKs
+2. If found — extracts it, runs `zip_update/apply.sh` (if present), then optionally compiles
+3. If not found — proceeds with current source (warning printed in log)
+4. On success with APK compilation — commits changes, tags a release, attaches APKs
 
-**Skip conditions** (no build triggered):
+**Skip conditions** (workflow exits early, no build):
 - Only `.github/` files changed
 - The same patch zip was already released
 
@@ -71,24 +71,56 @@ Triggers on every push to any branch. The workflow:
 ## Updating `build.yml`
 
 > **GitHub does not allow a workflow to modify its own workflow files.**
-> `.github/workflows/build.yml` can only be updated by a direct commit — never via a patch zip.
+> `.github/workflows/build.yml` must be updated by a **direct commit** — never via a patch zip.
 
-**The correct process when `build.yml` needs to change:**
-
-1. Deliver all source-code changes via a patch zip as usual (pushed to `zip_update/patches/`)
-2. Commit the new `build.yml` directly to the repo in a **separate commit**
-3. The two commits can be pushed together, but the zip must not contain `.github/`
-
-The workflow enforces this — it will abort with a fatal error if a zip contains `.github/`:
+The workflow enforces this: it aborts with a fatal error if a zip contains `.github/`:
 ```
 FATAL: patch zip contains .github/ — aborting to protect workflow files
 ```
+
+**The correct process when `build.yml` needs to change:**
+
+1. Put all source-code changes in a patch zip as usual (in `zip_update/patches/`)
+2. Commit the new `build.yml` directly to `.github/workflows/build.yml` in a separate commit
+3. Both commits can be pushed in the same `git push` — just keep them as separate commits
 
 ---
 
 ## Delivering a Patch
 
-A patch is a ZIP placed in `zip_update/patches/`. The workflow extracts it and builds automatically on the next push.
+A patch is a ZIP placed in `zip_update/patches/`. The workflow extracts it and processes it automatically on the next push.
+
+### Build flag — control whether APK compilation runs
+
+The **first line** of `zip_update/CHANGELOG.md` acts as a build flag:
+
+| First line | Effect |
+|------------|--------|
+| `#!build` | Apply patch **and** compile APK, tag a GitHub Release |
+| `#!no-build` | Apply patch only — skip compilation, skip release |
+| *(absent)* | Same as `#!build` — compile by default |
+
+Use `#!no-build` for patches that only change documentation, restructure files, or make non-functional edits where a new APK is unnecessary.
+
+**Example `CHANGELOG.md` with no-build flag:**
+```markdown
+#!no-build
+# Rename internal helper functions
+
+Renamed StartTimeCompact and DurationChipsCompact to internal visibility.
+No behavior changes.
+```
+
+**Example `CHANGELOG.md` with build flag:**
+```markdown
+#!build
+# Fix attendance dialog layout
+
+Row 4 split into two independent rows: duration chips on top,
+topic field below. Fixes chip text wrapping on narrow screens.
+```
+
+The flag line is automatically stripped from commit messages and GitHub Release notes.
 
 ### ZIP rules
 
@@ -98,7 +130,7 @@ A patch is a ZIP placed in `zip_update/patches/`. The workflow extracts it and b
 
 ```
 ✅ Correct                               ❌ Wrong
-──────────────────────────────────────   ──────────────────────────────
+──────────────────────────────────────   ──────────────────────────────────
 app/src/.../ScheduleScreen.kt            some_folder/app/src/...
 zip_update/CHANGELOG.md                  .github/workflows/build.yml
 ```
@@ -118,7 +150,7 @@ zip -r zip_update/patches/update_$(date +%s).zip \
 | File | Required | Purpose |
 |------|----------|---------|
 | `app/src/.../*.kt` | optional | Source file replacements |
-| `zip_update/CHANGELOG.md` | recommended | Used as GitHub Release notes and commit message |
+| `zip_update/CHANGELOG.md` | recommended | First line = build flag; rest = release notes and commit message |
 | `zip_update/apply.sh` | optional | Script for changes that can't be done by file replacement |
 
 ---
@@ -129,7 +161,8 @@ For changes beyond simple file replacement (renaming symbols, deleting files, re
 
 **Execution order:**
 ```
-Extract zip → Run apply.sh → Stamp version → Build APK → Commit → GitHub Release
+Extract zip → Run apply.sh → [Stamp version] → [Build APK] → Commit → [GitHub Release]
+                                      ↑ skipped when #!no-build ↑
 ```
 
 **Rules:**
@@ -140,7 +173,7 @@ Extract zip → Run apply.sh → Stamp version → Build APK → Commit → GitH
 | Working directory | Repo root |
 | Shell | `bash` |
 | Exit code | Non-zero aborts the build immediately |
-| Cleanup | Deleted automatically after execution along with the zip |
+| Cleanup | Deleted automatically after execution, along with the zip |
 | Optional | If absent, the step is silently skipped |
 
 **Example `apply.sh`:**
@@ -167,7 +200,7 @@ zip_update/
 ├── patches/
 │   └── update_<timestamp>.zip   # patch zip — deleted by workflow after apply
 ├── apply.sh                     # optional script — delivered via zip, deleted after run
-├── CHANGELOG.md                 # describes the latest patch; used in Release notes
+├── CHANGELOG.md                 # first line = build flag; rest = release notes
 └── repo_snapshot.md             # auto-generated file list after each patch apply
 ```
 
@@ -175,7 +208,7 @@ zip_update/
 |------|-----------|---------|
 | `patches/update_*.zip` | Developer | Contains source files and/or apply.sh |
 | `apply.sh` | Developer (via zip) | Post-extract script; deleted after run |
-| `CHANGELOG.md` | Developer (via zip) | Release notes for the patch |
+| `CHANGELOG.md` | Developer (via zip) | Build flag on line 1; release notes below |
 | `repo_snapshot.md` | Workflow (auto) | Full file list snapshot after each apply |
 
 ---
