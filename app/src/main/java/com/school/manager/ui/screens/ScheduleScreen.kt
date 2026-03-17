@@ -684,19 +684,11 @@ private fun AddAttendanceFromScheduleDialog(
             }
         }
 
-        // ── 行4：课题⅔ + 时长⅓ ───────────────────────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Box(Modifier.weight(2f)) {
-                FormTextField("课题", topic, { topic = it }, "本节课主题")
-            }
-            Box(Modifier.weight(1f)) {
-                DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
-            }
-        }
+        // ── 时长（独立行）────────────────────────────────────────────
+        DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
+
+        // ── 课题（独立行）────────────────────────────────────────────
+        FormTextField("课题", topic, { topic = it }, "本节课主题")
 
         // ── 出勤学生 ─────────────────────────────────────────────────
         if (allStudents.isNotEmpty()) {

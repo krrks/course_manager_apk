@@ -12,8 +12,8 @@ android {
         applicationId = "com.school.manager"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.020"
+        versionCode = 21
+        versionName = "1.021"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
