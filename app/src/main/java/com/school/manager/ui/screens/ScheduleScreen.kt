@@ -478,10 +478,10 @@ private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -
             }
         }
 
-        // 行2：课程编号 2/3 + 开始时间 1/3（对调位置）
+        // 行2：课程编号 1/2 + 开始时间 1/2
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {
-            Box(Modifier.weight(2f)) {
+            Box(Modifier.weight(1f)) {
                 FormTextField("编号", code, { code = it })
             }
             Box(Modifier.weight(1f)) {
@@ -538,10 +538,10 @@ private fun EditScheduleDialog(
             }
         }
 
-        // 行2：课程编号 2/3 + 开始时间 1/3
+        // 行2：课程编号 1/2 + 开始时间 1/2
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {
-            Box(Modifier.weight(2f)) {
+            Box(Modifier.weight(1f)) {
                 FormTextField("编号", code, { code = it })
             }
             Box(Modifier.weight(1f)) {
