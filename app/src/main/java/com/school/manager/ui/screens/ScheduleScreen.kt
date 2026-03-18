@@ -343,7 +343,7 @@ private fun CalendarGrid(
                                 ) {
                                     Column(Modifier.padding(4.dp)) {
                                         Text(
-                                            resolvedSubName,
+                                            slot.resolvedSubjectName(state.subjects, state.classes),
                                             style      = MaterialTheme.typography.labelSmall,
                                             color      = subColor,
                                             fontWeight = FontWeight.Bold,
@@ -401,7 +401,7 @@ private fun ScheduleListView(slots: List<Schedule>, state: AppState, vm: AppView
                         Box(Modifier.size(8.dp, 40.dp).clip(RoundedCornerShape(4.dp)).background(subColor))
                         Column(Modifier.weight(1f)) {
                             // BUG-4 FIX: use resolvedSubjectName
-                            val subjectName = resolvedSubName2
+                            val subjectName = slot.resolvedSubjectName(state.subjects, state.classes)
                             val te2 = state.teachers.find { it.id == slot.teacherId }
                             Text(subjectName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
                             Text("${cl?.name ?: "─"}  ·  ${te2?.name ?: "─"}",
