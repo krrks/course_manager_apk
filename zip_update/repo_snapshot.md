@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-18T05:31:58Z`
-> Commit:  `bf80f50b82fc043eb84c873eb8d78387c0cb3372`
+> Updated: `2026-03-18T07:53:05Z`
+> Commit:  `0d0135e8ad6b526bb80369225d101d179d363b2a`
 
 ```
 ./.github/workflows/build.yml
@@ -15,6 +15,11 @@
 ./app/src/main/java/com/school/manager/MainActivity.kt
 ./app/src/main/java/com/school/manager/Navigation.kt
 ./app/src/main/java/com/school/manager/data/Models.kt
+./app/src/main/java/com/school/manager/data/db/AppDatabase.kt
+./app/src/main/java/com/school/manager/data/db/Daos.kt
+./app/src/main/java/com/school/manager/data/db/Entities.kt
+./app/src/main/java/com/school/manager/data/db/Mappers.kt
+./app/src/main/java/com/school/manager/data/repository/AppRepository.kt
 ./app/src/main/java/com/school/manager/ui/components/CommonComponents.kt
 ./app/src/main/java/com/school/manager/ui/components/FluentComponentAliases.kt
 ./app/src/main/java/com/school/manager/ui/screens/AttendanceScreen.kt
