@@ -333,7 +333,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (_: Exception) { null }
     }
 
-    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean = try {
+    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean {
+        return try {
         var json: String? = null
         val avatarEntries = mutableMapOf<String, ByteArray>()
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
@@ -356,7 +357,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             pathRemap[name] = dest.absolutePath
         }
         importMerge(json!!, pathRemap)
-    } catch (_: Exception) { false }
+        } catch (_: Exception) { false }
+    }
 
     fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
         val state = parseGsonState(json, pathRemap) ?: return false
@@ -373,7 +375,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun parseGsonState(
         json: String,
         pathRemap: Map<String, String> = emptyMap()
-    ): AppState? = try {
+    ): AppState? {
+        return try {
         val raw = gson.fromJson(json, GsonState::class.java) ?: return null
 
         fun remapPath(old: String?): String? {
@@ -446,5 +449,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } ?: emptyList()
 
         AppState(subjects, teachers, classes, students, schedule, attendance)
-    } catch (_: Exception) { null }
+        } catch (_: Exception) { null }
+    }
 }
