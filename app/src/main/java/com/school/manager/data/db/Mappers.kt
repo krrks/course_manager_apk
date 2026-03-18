@@ -1,19 +1,21 @@
 package com.school.manager.data.db
 
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.school.manager.data.*
+import org.json.JSONArray
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
-
-private val gson = Gson()
-private val longListType = object : TypeToken<List<Long>>() {}.type
+// ─── List<Long> ↔ JSON string ─────────────────────────────────────────────────
+// Use Android built-in JSONArray instead of Gson TypeToken<List<Long>>.
+// Gson TypeToken with generics is erased by R8/ProGuard in release builds,
+// causing IllegalStateException on class initialization.
 
 private fun String.toLongList(): List<Long> =
-    try { gson.fromJson(this, longListType) ?: emptyList() } catch (_: Exception) { emptyList() }
+    try {
+        val arr = JSONArray(this)
+        (0 until arr.length()).map { arr.getLong(it) }
+    } catch (_: Exception) { emptyList() }
 
 private fun List<Long>.toJson(): String =
-    gson.toJson(this) ?: "[]"
+    JSONArray(this).toString()
 
 // ─── Subject ──────────────────────────────────────────────────────────────────
 
@@ -48,8 +50,7 @@ fun Student.toEntity(): StudentEntity =
     StudentEntity(id, name, studentNo, gender, grade, classIds.toJson(), avatarUri)
 
 // ─── Schedule ─────────────────────────────────────────────────────────────────
-// subjectId is nullable in DB (SET_NULL on FK delete) but Long in domain model;
-// map null → 0L so existing UI code never sees a null.
+// subjectId nullable in DB (SET_NULL on FK delete); map null → 0L for domain model.
 
 fun ScheduleEntity.toDomain(): Schedule =
     Schedule(id, classId, subjectId ?: 0L, teacherId, day, period, startTime, endTime, code)
@@ -57,7 +58,7 @@ fun ScheduleEntity.toDomain(): Schedule =
 fun Schedule.toEntity(): ScheduleEntity =
     ScheduleEntity(
         id, classId,
-        subjectId = subjectId.takeIf { it != 0L },   // store 0L as NULL
+        subjectId = subjectId.takeIf { it != 0L },
         teacherId, day, period, startTime, endTime, code
     )
 

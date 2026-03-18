@@ -1,38 +1,22 @@
 #!build
-# 迁移存储层：SharedPreferences JSON → Room SQLite
+# Hotfix: 修复 Release 包闪退（R8 TypeToken 泛型擦除）
 
-## 变更概述
+## 问题
 
-将数据持久化从「整包 JSON 写入 SharedPreferences」迁移到 Room 数据库，解决所有孤儿数据 bug。
+Release 构建开启 R8 混淆后，`Mappers.kt` 中静态初始化块：
 
-## 新增文件
+```kotlin
+private val longListType = object : TypeToken<List<Long>>() {}.type
+```
 
-- `data/db/Entities.kt` — 6 个 Room 实体，带完整 FK 注解
-- `data/db/Daos.kt` — 6 个 DAO，Flow + suspend CRUD
-- `data/db/AppDatabase.kt` — Room 数据库单例（school_manager.db）
-- `data/db/Mappers.kt` — 实体 ↔ 领域模型双向转换
-- `data/repository/AppRepository.kt` — 统一数据源，合并 6 个 Flow 为 AppState
+R8 擦除泛型签名 → Gson 抛出 `IllegalStateException: TypeToken must be
+created with a type argument` → `ExceptionInInitializerError` → 闪退。
+
+## 修复
+
+将 `List<Long>` 的 JSON 序列化/反序列化从 Gson `TypeToken` 改为 Android 内置
+`org.json.JSONArray`，完全不受 R8/ProGuard 影响，无需添加任何混淆规则。
 
 ## 修改文件
 
-- `viewmodel/AppViewModel.kt` — 使用 Repository，公共 API 完全不变，所有 UI 无需改动
-- `app/build.gradle.kts` — 添加 `kotlin-kapt` 插件 + Room 依赖
-- `gradle/libs.versions.toml` — 添加 room 版本号及三个库条目
-
-## 解决的 Bug（数据库层面自动处理，无需手写级联逻辑）
-
-| FK 约束 | 效果 |
-|---------|------|
-| `schedule.classId → classes ON DELETE CASCADE` | 删除班级自动删除其所有课表 |
-| `attendance.classId → classes ON DELETE CASCADE` | 删除班级自动删除其所有记录 |
-| `schedule.subjectId → subjects ON DELETE SET_NULL` | 删除科目自动置空课表科目引用 |
-| `attendance.subjectId → subjects ON DELETE SET_NULL` | 删除科目自动置空记录科目引用 |
-| `classes.subjectId → subjects ON DELETE SET_NULL` | 删除科目自动置空班级科目引用 |
-| `schedule.teacherId → teachers ON DELETE SET_NULL` | 删除教师自动置空课表教师引用 |
-| `attendance.teacherId → teachers ON DELETE SET_NULL` | 删除教师自动置空记录教师引用 |
-| `classes.headTeacherId → teachers ON DELETE SET_NULL` | 删除教师自动置空班主任引用 |
-
-## 向后兼容
-
-- 首次启动自动从旧 SharedPreferences 读取并迁移数据到 Room，完成后删除旧 key
-- JSON / ZIP 导出格式与之前完全相同，导入逻辑兼容旧备份文件
+- `app/src/main/java/com/school/manager/data/db/Mappers.kt`
