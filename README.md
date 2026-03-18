@@ -27,9 +27,31 @@ An Android app for managing school timetables and class attendance records, buil
 | UI | Jetpack Compose + Material 3 |
 | Navigation | Navigation Compose |
 | State | ViewModel + StateFlow |
+| **Database** | **Room (SQLite) — 6 tables with FK constraints** |
 | Image loading | Coil |
-| Serialization | Gson |
+| Serialization | Gson (export / import only) |
 | Build | Gradle 8.7 + AGP 8.5 |
+
+---
+
+## Data Storage
+
+All application data is persisted in a **Room SQLite database** (`school_manager.db`), with referential integrity enforced via foreign key constraints:
+
+| FK constraint | On delete |
+|--------------|-----------|
+| `schedule.classId → classes` | CASCADE — deletes orphan schedule rows |
+| `attendance.classId → classes` | CASCADE — deletes orphan attendance rows |
+| `schedule.subjectId → subjects` | SET NULL |
+| `attendance.subjectId → subjects` | SET NULL |
+| `classes.subjectId → subjects` | SET NULL |
+| `schedule.teacherId → teachers` | SET NULL |
+| `attendance.teacherId → teachers` | SET NULL |
+| `classes.headTeacherId → teachers` | SET NULL |
+
+**Legacy migration:** On first launch after upgrading from the old JSON-in-SharedPreferences format, the app automatically reads the existing data, imports it into Room, and removes the old SharedPreferences key — no user action required.
+
+**Export / Import:** The JSON and ZIP backup formats are unchanged. Gson is used only at the export/import boundary; the database itself is the single source of truth.
 
 ---
 
@@ -222,7 +244,14 @@ app/src/main/java/com/school/manager/
 ├── MainActivity.kt
 ├── Navigation.kt
 ├── data/
-│   └── Models.kt
+│   ├── Models.kt                    # domain models + sample data
+│   ├── db/
+│   │   ├── AppDatabase.kt           # Room database singleton
+│   │   ├── Daos.kt                  # DAO interfaces (Flow + suspend CRUD)
+│   │   ├── Entities.kt              # Room entities with FK annotations
+│   │   └── Mappers.kt               # entity ↔ domain model converters
+│   └── repository/
+│       └── AppRepository.kt         # single source of truth; merges 6 flows → AppState
 ├── ui/
 │   ├── components/
 │   │   ├── CommonComponents.kt
@@ -243,7 +272,7 @@ app/src/main/java/com/school/manager/
 ├── util/
 │   └── AvatarUtil.kt
 └── viewmodel/
-    └── AppViewModel.kt
+    └── AppViewModel.kt              # delegates all persistence to AppRepository
 ```
 
 ---
@@ -256,33 +285,4 @@ This section defines how the AI assistant (Claude) should behave when working on
 
 When a task involves modifying an existing file, the AI **must ask the user to upload the current version of that file** before generating any output — unless the file's full and exact content is already available in the conversation or project knowledge.
 
-**Why this matters:** The AI's project knowledge snapshot may be outdated. Generating a patch against a stale version of a file can produce diffs that no longer apply cleanly, introduce merge conflicts, or silently break logic that was changed after the snapshot was taken.
-
-**When to ask for uploads:**
-
-| Situation | Action |
-|-----------|--------|
-| Modifying any `.kt`, `.yml`, `.md`, or other source file | Ask user to upload the current file first |
-| The task is additive only (new file with no dependencies on existing code) | Upload not required |
-| File content was already uploaded in this conversation | Upload not required |
-| File content is confirmed identical to project knowledge snapshot | Upload not required |
-
-**Example prompt the AI should use:**
-
-> Before I generate this patch, could you upload the current `ScheduleScreen.kt`? The project knowledge snapshot may be outdated, and I want to make sure the diff applies cleanly.
-
-### Minimal diffs — change only what is necessary
-
-The AI must limit edits to exactly what is needed for the requested change. It must not:
-- Reformat unrelated code
-- Rename variables or functions outside the scope of the task
-- Reorganize imports unless directly required
-- Add or remove comments unrelated to the change
-
-This keeps diffs small, reviewable, and safe to apply.
-
-### Patch delivery format
-
-All source-code changes must be delivered as a `update_<timestamp>.zip` placed at `zip_update/patches/`, following the rules in [Delivering a Patch](#delivering-a-patch).
-
-Changes to `.github/workflows/build.yml` must be delivered as a **direct file download** (never inside a zip), with a reminder to commit it separately.
+**Why this matters:** The AI's project knowledge snapshot may be outdated.

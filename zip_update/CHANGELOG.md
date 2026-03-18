@@ -1,22 +1,7 @@
-#!build
-# Hotfix: 修复 Release 包闪退（R8 TypeToken 泛型擦除）
+#!no-build
+# 更新文档：Room 存储层描述 + 项目结构
 
-## 问题
-
-Release 构建开启 R8 混淆后，`Mappers.kt` 中静态初始化块：
-
-```kotlin
-private val longListType = object : TypeToken<List<Long>>() {}.type
-```
-
-R8 擦除泛型签名 → Gson 抛出 `IllegalStateException: TypeToken must be
-created with a type argument` → `ExceptionInInitializerError` → 闪退。
-
-## 修复
-
-将 `List<Long>` 的 JSON 序列化/反序列化从 Gson `TypeToken` 改为 Android 内置
-`org.json.JSONArray`，完全不受 R8/ProGuard 影响，无需添加任何混淆规则。
-
-## 修改文件
-
-- `app/src/main/java/com/school/manager/data/db/Mappers.kt`
+- README.md Tech Stack 表格新增 Room 条目，移除 SharedPreferences 相关描述
+- 新增 "Data Storage" 章节，说明 FK 约束和 SET NULL / CASCADE 行为
+- 更新 Project Structure，加入 data/db/ 和 data/repository/ 子目录
+- Serialization 一行改为"仅用于 export / import 边界"，消除歧义
