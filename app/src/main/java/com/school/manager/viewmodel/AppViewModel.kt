@@ -21,15 +21,13 @@ private fun genCode(prefix: String) =
     "$prefix${System.currentTimeMillis().toString().takeLast(6)}"
 
 // ─── Gson-compatible snapshot types ──────────────────────────────────────────
-// Kept for JSON import / export and for migrating legacy SharedPreferences data.
-// All fields nullable for safe deserialization of old backups.
 
 private data class GsonTeacher(
     val id: Long? = null,
     val name: String? = null,
     val gender: String? = null,
     val phone: String? = null,
-    val subjectIds: List<Long>? = null,   // legacy — ignored on load
+    val subjectIds: List<Long>? = null,
     val avatarUri: String? = null,
     val code: String? = null
 )
@@ -61,11 +59,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = AppRepository(app)
     private val gson: Gson = GsonBuilder().create()
 
-    // ─── Live state — all UI screens collect this unchanged ───────────────────
     val state: StateFlow<AppState> = repo.appState
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppState())
 
-    // ─── Schedule filter ──────────────────────────────────────────────────────
     val scheduleFilterMode = MutableStateFlow("all")
     val scheduleFilterId   = MutableStateFlow<Long?>(null)
 
@@ -84,13 +80,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         scheduleFilterId.value   = null
     }
 
-    // ─── Init: migrate legacy SharedPreferences → Room, or seed sample data ──
     init {
         viewModelScope.launch { initializeData() }
     }
 
     private suspend fun initializeData() {
-        if (!repo.isEmpty()) return  // DB already populated — nothing to do
+        if (!repo.isEmpty()) return
 
         val prefs = getApplication<Application>()
             .getSharedPreferences("app_data", Context.MODE_PRIVATE)
@@ -102,11 +97,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             sampleAppState()
         }
         repo.importAll(seed)
-        // Clear the old SharedPreferences entry to avoid re-migration on next launch
         prefs.edit().remove("state").apply()
     }
 
-    // ─── Lookups (synchronous, from in-memory StateFlow) ─────────────────────
     fun subject(id: Long?)     = state.value.subjects.find  { it.id == id }
     fun teacher(id: Long?)     = state.value.teachers.find  { it.id == id }
     fun schoolClass(id: Long?) = state.value.classes.find   { it.id == id }
@@ -124,8 +117,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun updateSubject(s: Subject) {
         viewModelScope.launch {
             repo.updateSubject(s)
-            // BUG-6 FIX: Keep Class.subject string in sync so legacy fallback
-            // code paths (attendance form, schedule form) still resolve correctly.
+            // BUG-6: keep Class.subject string in sync with Subject name
             val updatedClasses = state.value.classes.filter { it.subjectId == s.id }
             updatedClasses.forEach { cls ->
                 repo.updateSchoolClass(cls.copy(subject = s.name))
@@ -133,19 +125,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // BUG-6 FIX: When a subject is deleted, Room SET_NULL nullifies subjectId on
-    // classes/schedule/attendance. Clear the legacy subject string on affected
-    // classes so the fallback display does not show a stale name.
+    // BUG-6 FIX: clear stale subject string before Room SET_NULL kicks in
     fun deleteSubject(id: Long) {
         viewModelScope.launch {
-            // Clear legacy subject string on classes that referenced this subject
             val affectedClasses = state.value.classes.filter { it.subjectId == id }
             affectedClasses.forEach { cls ->
                 repo.updateSchoolClass(cls.copy(subjectId = null, subject = ""))
             }
             repo.deleteSubject(id)
-            // Room FK ON DELETE SET_NULL automatically nullifies:
-            //   classes.subjectId, schedule.subjectId, attendance.subjectId
         }
     }
 
@@ -171,8 +158,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteTeacher(id: Long) {
         viewModelScope.launch { repo.deleteTeacher(id) }
-        // Room FK ON DELETE SET_NULL automatically nullifies:
-        //   classes.headTeacherId, schedule.teacherId, attendance.teacherId
     }
 
     // ─── Classes ──────────────────────────────────────────────────────────────
@@ -199,9 +184,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun updateSchoolClass(c: SchoolClass) {
-        // Keep subject display string in sync with subjectId FK.
-        // This does NOT delete+reinsert (repo.updateSchoolClass calls @Update),
-        // so schedule rows for this class are never cascade-deleted.
         val resolved = c.subjectId?.let { sid ->
             state.value.subjects.find { it.id == sid }?.name ?: c.subject
         } ?: c.subject
@@ -211,9 +193,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             repo.updateSchoolClass(updatedClass)
 
-            // BUG-1 & BUG-2 FIX: Cascade the new subjectId to all existing
-            // Schedule and Attendance rows belonging to this class, so that
-            // the schedule/attendance screens always show the current subject.
+            // BUG-1 & BUG-2 FIX: cascade new subjectId to all Schedule and
+            // Attendance rows for this class so they display the current subject.
             val newSubjectId = updatedClass.subjectId ?: return@launch
 
             state.value.schedule
@@ -228,9 +209,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteSchoolClass(id: Long) {
         viewModelScope.launch { repo.deleteSchoolClass(id) }
-        // Room FK ON DELETE CASCADE automatically deletes:
-        //   all schedule rows with this classId
-        //   all attendance rows with this classId
     }
 
     // ─── Students ─────────────────────────────────────────────────────────────
@@ -323,59 +301,66 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun exportFullBackupZip(context: Context): ByteArray? = try {
-        val state = state.value
         val baos = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zip ->
-            fun addEntry(name: String, data: ByteArray) {
-                zip.putNextEntry(ZipEntry(name))
-                zip.write(data)
-                zip.closeEntry()
-            }
-            addEntry("school_backup.json", gson.toJson(state).toByteArray())
-            state.teachers.mapNotNull { it.avatarUri }.forEach { uri ->
-                val f = File(uri)
-                if (f.exists()) addEntry("avatars/${f.name}", f.readBytes())
-            }
-            state.students.mapNotNull { it.avatarUri }.forEach { uri ->
-                val f = File(uri)
-                if (f.exists()) addEntry("avatars/${f.name}", f.readBytes())
+            zip.putNextEntry(ZipEntry("state.json"))
+            zip.write(exportFullStateJson().toByteArray())
+            zip.closeEntry()
+            val avatarDir = File(context.filesDir, "avatars")
+            if (avatarDir.exists()) {
+                avatarDir.listFiles()?.forEach { f ->
+                    zip.putNextEntry(ZipEntry("avatars/${f.name}"))
+                    zip.write(f.readBytes())
+                    zip.closeEntry()
+                }
             }
         }
         baos.toByteArray()
     } catch (_: Exception) { null }
 
-    fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean = try {
-        val parsed = parseGsonState(json, pathRemap) ?: return false
-        viewModelScope.launch { repo.mergeAll(parsed) }
-        true
-    } catch (_: Exception) { false }
+    // ─── Import ───────────────────────────────────────────────────────────────
 
-    fun importFromZip(context: Context, zipBytes: ByteArray): Boolean = try {
-        var json: String? = null
-        val avatarEntries = mutableMapOf<String, ByteArray>()
-        ZipInputStream(ByteArrayInputStream(zipBytes)).use { zis ->
-            var entry = zis.nextEntry
-            while (entry != null) {
-                when {
-                    entry.name.endsWith(".json") -> json = zis.readBytes().toString(Charsets.UTF_8)
-                    entry.name.startsWith("avatars/") -> {
-                        val name = entry.name.removePrefix("avatars/")
-                        if (name.isNotBlank()) avatarEntries[name] = zis.readBytes()
+    /** Parse JSON → upsert all records (merge, not full replace). Returns false on parse error. */
+    fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
+        if (json.isBlank()) return false
+        val parsed = try { parseGsonState(json, pathRemap) } catch (_: Exception) { null }
+            ?: return false
+        viewModelScope.launch { repo.mergeAll(parsed) }
+        return true
+    }
+
+    fun mergeImport(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean =
+        importMerge(json, pathRemap)
+
+    // Block-body to allow 'return' statements inside the try block
+    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean {
+        return try {
+            var stateJson: String? = null
+            val avatarEntries = mutableMapOf<String, ByteArray>()
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    when {
+                        entry.name == "state.json" ->
+                            stateJson = zip.readBytes().toString(Charsets.UTF_8)
+                        entry.name.startsWith("avatars/") && !entry.isDirectory ->
+                            avatarEntries[File(entry.name).name] = zip.readBytes()
                     }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
                 }
-                entry = zis.nextEntry
             }
-        }
-        if (json == null) return false
-        val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
-        val pathRemap = mutableMapOf<String, String>()
-        avatarEntries.forEach { (name, data) ->
-            val dest = File(avatarDir, name)
-            dest.writeBytes(data)
-            pathRemap[name] = dest.absolutePath
-        }
-        importMerge(json!!, pathRemap)
-    } catch (_: Exception) { false }
+            val json = stateJson ?: return false
+            val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
+            val pathRemap = mutableMapOf<String, String>()
+            avatarEntries.forEach { (name, data) ->
+                val dest = File(avatarDir, name)
+                dest.writeBytes(data)
+                pathRemap[name] = dest.absolutePath
+            }
+            importMerge(json, pathRemap)
+        } catch (_: Exception) { false }
+    }
 
     fun resetToSampleData() {
         viewModelScope.launch { repo.importAll(sampleAppState()) }

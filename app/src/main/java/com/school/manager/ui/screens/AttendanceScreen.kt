@@ -279,7 +279,8 @@ private fun WeekView(
                                     .clickable { onRecordClick(rec) }
                                     .padding(4.dp)) {
                                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                        Text(sub?.name ?: cl?.subject ?: "?",
+                                        // BUG-5 FIX: use resolvedSubjectName (Attendance extension in Models.kt)
+                    Text(rec.resolvedSubjectName(vm.state.value.subjects, vm.state.value.classes),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold, color = color, maxLines = 1)
                                         Text("$startStr–$endStr",
@@ -354,7 +355,7 @@ private fun MonthView(
                                         val sub = vm.subject(rec.subjectId)
                                         val cl  = vm.schoolClass(rec.classId)
                                         val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                                        Text(sub?.name ?: cl?.subject ?: "?",
+                                        Text(rec.resolvedSubjectName(vm.state.value.subjects, vm.state.value.classes),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = color, maxLines = 1,
                                             modifier = Modifier

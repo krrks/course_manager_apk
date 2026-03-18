@@ -1,9 +1,7 @@
 package com.school.manager.ui.screens
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -44,7 +42,7 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                 items(state.classes) { cls ->
                     val sts      = state.students.filter { s -> s.classIds.contains(cls.id) }
                     val gradeCol = gradeColor(cls.grade)
-                    // Resolve subject name via FK, fall back to legacy string
+                    // BUG-4 display fix: resolve subject via FK, fall back to legacy string
                     val subjectDisplay = cls.resolvedSubject(state.subjects)?.name
                         ?: cls.subject.ifBlank { null }
                     FluentCard(
@@ -57,21 +55,22 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Row(
-                                modifier                  = Modifier.fillMaxWidth(),
-                                horizontalArrangement     = Arrangement.SpaceBetween,
-                                verticalAlignment         = Alignment.CenterVertically
+                                modifier              = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment     = Alignment.CenterVertically
                             ) {
                                 Text(cls.name,
                                     style      = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold)
-                                GradeBadge(cls.grade, gradeCol)
+                                // Use ColorChip as grade badge (GradeBadge does not exist)
+                                ColorChip(cls.grade, gradeCol)
                             }
                             Text(
                                 "班主任：${state.teachers.find { it.id == cls.headTeacherId }?.name ?: "未设置"}" +
                                 if (subjectDisplay != null) "   📚 $subjectDisplay" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
                             LinearProgressIndicator(
-                                progress = { if (cls.count > 0) sts.size.toFloat() / cls.count else 0f },
+                                progress  = { if (cls.count > 0) sts.size.toFloat() / cls.count else 0f },
                                 modifier  = Modifier.fillMaxWidth().height(4.dp),
                                 color     = gradeCol,
                                 trackColor = gradeCol.copy(alpha = 0.15f),
@@ -164,8 +163,7 @@ private fun ClassFormDialog(
     var code    by remember { mutableStateOf(initial?.code    ?: genCode("C")) }
 
     // BUG-3 FIX: Subject is selected only from the existing Subject list via FK id.
-    // Free-text entry is removed to prevent subjectId from being silently dropped.
-    // Users manage subjects in the SubjectsScreen.
+    // Free-text entry removed to prevent subjectId from being silently dropped.
     val initialSubject: Subject? = remember(state.subjects, initial) {
         initial?.let { cls ->
             state.subjects.find { it.id == cls.subjectId }
@@ -175,7 +173,6 @@ private fun ClassFormDialog(
     var selectedSubjectId by remember { mutableStateOf(initialSubject?.id) }
     val selectedSubjectName = state.subjects.find { it.id == selectedSubjectId }?.name ?: ""
 
-    // ── Student membership for this class ────────────────────────────────────
     val initialStudentIds = remember(state.students, initial) {
         if (initial == null) emptySet()
         else state.students.filter { it.classIds.contains(initial.id) }.map { it.id }.toSet()
@@ -196,7 +193,6 @@ private fun ClassFormDialog(
                 subject       = chosenSubject?.name ?: "",
                 code          = code.trim()
             )
-            // Apply student membership changes when editing
             if (initial != null) {
                 val classId = initial.id
                 (selectedStudents - initialStudentIds).forEach { sId ->
@@ -219,9 +215,7 @@ private fun ClassFormDialog(
         DropdownField("班主任", teacher,
             listOf("") + state.teachers.map { it.name }) { teacher = it }
 
-        // BUG-3 FIX: Subject is now a pure dropdown bound to Subject.id.
-        // "无科目" is the first option (clears subjectId).
-        // To add/rename subjects, use the SubjectsScreen (科目管理).
+        // BUG-3 FIX: pure dropdown bound to Subject.id — no free-text entry
         if (state.subjects.isNotEmpty()) {
             DropdownField(
                 label    = "科目",
@@ -240,7 +234,6 @@ private fun ClassFormDialog(
                 )
             }
         } else {
-            // No subjects created yet — show a hint
             Surface(
                 shape    = RoundedCornerShape(12.dp),
                 color    = FluentAmber.copy(alpha = 0.1f),
@@ -257,7 +250,6 @@ private fun ClassFormDialog(
 
         FluentTextField("班级编号", code, { code = it })
 
-        // Student section (edit mode only)
         if (initial != null && state.students.isNotEmpty()) {
             SectionHeader("班级学生")
             Text(

@@ -42,7 +42,8 @@ data class Student(
     val gender: String,
     val grade: String,
     val classIds: List<Long> = emptyList(),
-    val avatarUri: String? = null
+    val avatarUri: String? = null,
+    val code: String = ""
 )
 
 data class Schedule(
@@ -119,8 +120,17 @@ fun Attendance.resolvedStart(): String =
 fun Attendance.resolvedEnd(): String =
     endTime.ifBlank { PERIOD_END_TIMES.getOrElse(period - 1) { "" } }
 
-/** Resolve subject name: prefer FK lookup, fall back to legacy string */
+/** Resolve subject name for a Schedule: prefer subjectId FK, fall back to class legacy string */
 fun Schedule.resolvedSubjectName(subjects: List<Subject>, classes: List<SchoolClass>): String =
+    subjects.find { it.id == subjectId }?.name
+        ?: classes.find { it.id == classId }?.let { cls ->
+            subjects.find { it.id == cls.subjectId }?.name
+                ?: cls.subject.takeIf { it.isNotBlank() }
+        }
+        ?: "?"
+
+/** BUG-5 FIX: Same resolution logic for Attendance records */
+fun Attendance.resolvedSubjectName(subjects: List<Subject>, classes: List<SchoolClass>): String =
     subjects.find { it.id == subjectId }?.name
         ?: classes.find { it.id == classId }?.let { cls ->
             subjects.find { it.id == cls.subjectId }?.name
