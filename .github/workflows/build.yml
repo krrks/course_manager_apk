@@ -378,11 +378,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LATEST=$(gh release list --limit 20 --json tagName \
-                   -q '.[].tagName' 2>/dev/null \
-                   | grep -E '^v1\.[0-9]+$' \
-                   | sort -t. -k2 -n \
-                   | tail -n1 || echo "")
+          # Fetch only the single latest release — no need to list all and sort.
+          # gh release list returns releases sorted by creation date descending,
+          # so --limit 1 always gives the most recent tag.
+          LATEST=$(gh release view --json tagName -q '.tagName' 2>/dev/null \
+                   | grep -E '^v1\.[0-9]+$' || echo "")
 
           if [ -z "$LATEST" ]; then
             NEXT="v1.001"
@@ -392,10 +392,11 @@ jobs:
             NEXT="v1.$NEXT_SEQ"
           fi
 
-          echo "✅ Next version: $NEXT"
+          echo "✅ Latest: ${LATEST:-none}  →  Next: $NEXT"
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
-      # ── 5. Stamp versionName & versionCode ───────────────────────────────
+
+      # ── 5b. Stamp versionName & versionCode ───────────────────────────────
       - name: Stamp version in build.gradle.kts
         if: needs.check.outputs.compile_apk == 'true'
         env:
