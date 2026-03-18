@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.school.manager.data.*
+import com.school.manager.data.repository.AppRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
@@ -19,10 +20,10 @@ import java.util.zip.ZipOutputStream
 private fun genCode(prefix: String) =
     "$prefix${System.currentTimeMillis().toString().takeLast(6)}"
 
-// ─── Gson-friendly snapshot ───────────────────────────────────────────────────
-// All fields nullable for safe deserialization.
-// Legacy fields (subjectIds on Teacher, subject String on SchoolClass) kept
-// so old backups can still be loaded without crashing.
+// ─── Gson-compatible snapshot types ──────────────────────────────────────────
+// Kept for JSON import / export and for migrating legacy SharedPreferences data.
+// All fields nullable for safe deserialization of old backups.
+
 private data class GsonTeacher(
     val id: Long? = null,
     val name: String? = null,
@@ -39,34 +40,37 @@ private data class GsonClass(
     val grade: String? = null,
     val count: Int? = null,
     val headTeacherId: Long? = null,
-    val subjectId: Long? = null,          // new FK
-    val subject: String? = null,          // legacy string — kept for migration
+    val subjectId: Long? = null,
+    val subject: String? = null,
     val code: String? = null
 )
 
 private data class GsonState(
-    val subjects:   List<Subject>?     = null,
-    val teachers:   List<GsonTeacher>? = null,
-    val classes:    List<GsonClass>?   = null,
-    val students:   List<Student>?     = null,
-    val schedule:   List<Schedule>?    = null,
-    val attendance: List<Attendance>?  = null
+    val subjects: List<Subject>? = null,
+    val teachers: List<GsonTeacher>? = null,
+    val classes: List<GsonClass>? = null,
+    val students: List<Student>? = null,
+    val schedule: List<Schedule>? = null,
+    val attendance: List<Attendance>? = null
 )
+
+// ─── ViewModel ────────────────────────────────────────────────────────────────
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val prefs = app.getSharedPreferences("app_data", Context.MODE_PRIVATE)
+    private val repo = AppRepository(app)
     private val gson: Gson = GsonBuilder().create()
 
-    private val _state = MutableStateFlow(AppState())
-    val state: StateFlow<AppState> = _state.asStateFlow()
+    // ─── Live state — all UI screens collect this unchanged ───────────────────
+    val state: StateFlow<AppState> = repo.appState
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AppState())
 
     // ─── Schedule filter ──────────────────────────────────────────────────────
     val scheduleFilterMode = MutableStateFlow("all")
     val scheduleFilterId   = MutableStateFlow<Long?>(null)
 
     val scheduleFilterTitle: StateFlow<String> = combine(
-        scheduleFilterMode, scheduleFilterId, _state
+        scheduleFilterMode, scheduleFilterId, state
     ) { mode, id, st ->
         when (mode) {
             "teacher" -> st.teachers.firstOrNull { it.id == id }?.let { "${it.name}的课表" } ?: "课表"
@@ -80,67 +84,89 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         scheduleFilterId.value   = null
     }
 
-    init { load() }
-
-    // ─── Lookups ─────────────────────────────────────────────────────────────
-    fun subject(id: Long?)     = _state.value.subjects.find  { it.id == id }
-    fun teacher(id: Long?)     = _state.value.teachers.find  { it.id == id }
-    fun schoolClass(id: Long?) = _state.value.classes.find   { it.id == id }
-    fun student(id: Long?)     = _state.value.students.find  { it.id == id }
-
-    // ─── Subjects ─────────────────────────────────────────────────────────────
-    fun addSubject(name: String, color: Long, teacherId: Long?) {
-        _state.update { it.copy(subjects = it.subjects +
-            Subject(System.currentTimeMillis(), name, color, teacherId)) }
-        save()
+    // ─── Init: migrate legacy SharedPreferences → Room, or seed sample data ──
+    init {
+        viewModelScope.launch { initializeData() }
     }
 
-    /** Update subject and cascade name into SchoolClass.subject for display fallback */
-    fun updateSubject(s: Subject) {
-        _state.update { st ->
-            // Cascade: keep SchoolClass.subject string in sync for legacy display
-            val updatedClasses = st.classes.map { cls ->
-                if (cls.subjectId == s.id) cls.copy(subject = s.name) else cls
-            }
-            st.copy(
-                subjects = st.subjects.map { if (it.id == s.id) s else it },
-                classes  = updatedClasses
-            )
+    private suspend fun initializeData() {
+        if (!repo.isEmpty()) return  // DB already populated — nothing to do
+
+        val prefs = getApplication<Application>()
+            .getSharedPreferences("app_data", Context.MODE_PRIVATE)
+        val legacyJson = prefs.getString("state", null)
+
+        val seed = if (legacyJson != null) {
+            parseGsonState(legacyJson) ?: sampleAppState()
+        } else {
+            sampleAppState()
         }
-        save()
+        repo.importAll(seed)
+        // Clear the old SharedPreferences entry to avoid re-migration on next launch
+        prefs.edit().remove("state").apply()
+    }
+
+    // ─── Lookups (synchronous, from in-memory StateFlow) ─────────────────────
+    fun subject(id: Long?)     = state.value.subjects.find  { it.id == id }
+    fun teacher(id: Long?)     = state.value.teachers.find  { it.id == id }
+    fun schoolClass(id: Long?) = state.value.classes.find   { it.id == id }
+    fun student(id: Long?)     = state.value.students.find  { it.id == id }
+
+    // ─── Subjects ─────────────────────────────────────────────────────────────
+
+    fun addSubject(name: String, color: Long, teacherId: Long?) {
+        viewModelScope.launch {
+            repo.addSubject(Subject(System.currentTimeMillis(), name, color, teacherId))
+        }
+    }
+
+    fun updateSubject(s: Subject) {
+        viewModelScope.launch {
+            repo.updateSubject(s)
+            // No manual cascade needed — Room FK (SET_NULL) + FK-based UI lookups
+            // handle display automatically. Class.subject string is a display fallback;
+            // sync it here so legacy code paths still work.
+            val updatedClasses = state.value.classes.filter { it.subjectId == s.id }
+            updatedClasses.forEach { cls ->
+                repo.updateSchoolClass(cls.copy(subject = s.name))
+            }
+        }
     }
 
     fun deleteSubject(id: Long) {
-        _state.update { it.copy(subjects = it.subjects.filter { s -> s.id != id }) }
-        save()
+        viewModelScope.launch { repo.deleteSubject(id) }
+        // Room FK ON DELETE SET_NULL automatically nullifies:
+        //   classes.subjectId, schedule.subjectId, attendance.subjectId
     }
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
+
     fun addTeacher(
         name: String,
         gender: String,
         phone: String = "",
-        @Suppress("UNUSED_PARAMETER") subjectIds: List<Long> = emptyList(), // kept for call-site compat
+        @Suppress("UNUSED_PARAMETER") subjectIds: List<Long> = emptyList(),
         avatarUri: String? = null,
         code: String = ""
     ) {
         val c = code.ifBlank { genCode("T") }
-        _state.update { it.copy(teachers = it.teachers +
-            Teacher(System.currentTimeMillis(), name, gender, phone, avatarUri, c)) }
-        save()
+        viewModelScope.launch {
+            repo.addTeacher(Teacher(System.currentTimeMillis(), name, gender, phone, avatarUri, c))
+        }
     }
 
     fun updateTeacher(t: Teacher) {
-        _state.update { st -> st.copy(teachers = st.teachers.map { if (it.id == t.id) t else it }) }
-        save()
+        viewModelScope.launch { repo.updateTeacher(t) }
     }
 
     fun deleteTeacher(id: Long) {
-        _state.update { it.copy(teachers = it.teachers.filter { t -> t.id != id }) }
-        save()
+        viewModelScope.launch { repo.deleteTeacher(id) }
+        // Room FK ON DELETE SET_NULL automatically nullifies:
+        //   classes.headTeacherId, schedule.teacherId, attendance.teacherId
     }
 
     // ─── Classes ──────────────────────────────────────────────────────────────
+
     fun addSchoolClass(
         name: String,
         grade: String,
@@ -151,320 +177,241 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         code: String = ""
     ) {
         val c = code.ifBlank { genCode("C") }
-        // Resolve display string from subjectId if not provided
         val subjectName = subject.ifBlank {
-            _state.value.subjects.find { it.id == subjectId }?.name ?: ""
+            state.value.subjects.find { it.id == subjectId }?.name ?: ""
         }
-        _state.update { it.copy(classes = it.classes +
-            SchoolClass(System.currentTimeMillis(), name, grade, count,
-                headTeacherId, subjectId, subjectName, c)) }
-        save()
+        viewModelScope.launch {
+            repo.addSchoolClass(
+                SchoolClass(System.currentTimeMillis(), name, grade, count,
+                    headTeacherId, subjectId, subjectName, c)
+            )
+        }
     }
 
     fun updateSchoolClass(c: SchoolClass) {
-        // Keep subject string in sync with subjectId
+        // Keep subject display string in sync with subjectId FK
         val resolved = c.subjectId?.let { sid ->
-            _state.value.subjects.find { it.id == sid }?.name ?: c.subject
+            state.value.subjects.find { it.id == sid }?.name ?: c.subject
         } ?: c.subject
-        _state.update { st -> st.copy(classes = st.classes.map {
-            if (it.id == c.id) c.copy(subject = resolved) else it
-        }) }
-        save()
+        viewModelScope.launch {
+            repo.updateSchoolClass(c.copy(subject = resolved))
+        }
     }
 
     fun deleteSchoolClass(id: Long) {
-        _state.update { it.copy(classes = it.classes.filter { c -> c.id != id }) }
-        save()
+        viewModelScope.launch { repo.deleteSchoolClass(id) }
+        // Room FK ON DELETE CASCADE automatically deletes:
+        //   all schedule rows with this classId
+        //   all attendance rows with this classId
     }
 
     // ─── Students ─────────────────────────────────────────────────────────────
-    fun addStudent(name: String, studentNo: String, gender: String, grade: String,
-                   classIds: List<Long>, avatarUri: String? = null) {
-        _state.update { it.copy(students = it.students +
-            Student(System.currentTimeMillis(), name, studentNo, gender, grade, classIds, avatarUri)) }
-        save()
+
+    fun addStudent(
+        name: String, studentNo: String, gender: String,
+        grade: String, classIds: List<Long>, avatarUri: String? = null
+    ) {
+        viewModelScope.launch {
+            repo.addStudent(
+                Student(System.currentTimeMillis(), name, studentNo, gender, grade, classIds, avatarUri)
+            )
+        }
     }
 
     fun updateStudent(s: Student) {
-        _state.update { st -> st.copy(students = st.students.map { if (it.id == s.id) s else it }) }
-        save()
+        viewModelScope.launch { repo.updateStudent(s) }
     }
 
     fun deleteStudent(id: Long) {
-        _state.update { it.copy(students = it.students.filter { s -> s.id != id }) }
-        save()
+        viewModelScope.launch { repo.deleteStudent(id) }
     }
 
     // ─── Schedule ─────────────────────────────────────────────────────────────
-    fun addSchedule(classId: Long, subjectId: Long, teacherId: Long?, day: Int,
-                    startTime: String, endTime: String, code: String = "") {
+
+    fun addSchedule(
+        classId: Long, subjectId: Long, teacherId: Long?, day: Int,
+        startTime: String, endTime: String, code: String = ""
+    ) {
         val c = code.ifBlank { genCode("SCH") }
-        _state.update { it.copy(schedule = it.schedule +
-            Schedule(System.currentTimeMillis(), classId, subjectId, teacherId, day,
-                startTime = startTime, endTime = endTime, code = c)) }
-        save()
+        viewModelScope.launch {
+            repo.addSchedule(
+                Schedule(System.currentTimeMillis(), classId, subjectId,
+                    teacherId, day, startTime = startTime, endTime = endTime, code = c)
+            )
+        }
     }
 
     fun updateSchedule(s: Schedule) {
-        _state.update { st -> st.copy(schedule = st.schedule.map { if (it.id == s.id) s else it }) }
-        save()
+        viewModelScope.launch { repo.updateSchedule(s) }
     }
 
     fun deleteSchedule(id: Long) {
-        _state.update { it.copy(schedule = it.schedule.filter { s -> s.id != id }) }
-        save()
+        viewModelScope.launch { repo.deleteSchedule(id) }
     }
 
     // ─── Attendance ───────────────────────────────────────────────────────────
-    fun addAttendance(classId: Long, subjectId: Long, teacherId: Long?,
-                      date: String, startTime: String, endTime: String,
-                      topic: String, status: String, notes: String,
-                      attendees: List<Long>, code: String = "") {
+
+    fun addAttendance(
+        classId: Long, subjectId: Long, teacherId: Long?,
+        date: String, startTime: String, endTime: String,
+        topic: String, status: String, notes: String,
+        attendees: List<Long>, code: String = ""
+    ) {
         val c = code.ifBlank { genCode("ATT") }
-        _state.update { it.copy(attendance = it.attendance +
-            Attendance(System.currentTimeMillis(), classId, subjectId, teacherId,
-                date, 0, startTime, endTime, topic, status, notes, attendees, c)) }
-        save()
+        viewModelScope.launch {
+            repo.addAttendance(
+                Attendance(System.currentTimeMillis(), classId, subjectId, teacherId,
+                    date, 0, startTime, endTime, topic, status, notes, attendees, c)
+            )
+        }
     }
 
     fun updateAttendance(a: Attendance) {
-        _state.update { st -> st.copy(attendance = st.attendance.map { if (it.id == a.id) a else it }) }
-        save()
+        viewModelScope.launch { repo.updateAttendance(a) }
     }
 
     fun deleteAttendance(id: Long) {
-        _state.update { it.copy(attendance = it.attendance.filter { a -> a.id != id }) }
-        save()
+        viewModelScope.launch { repo.deleteAttendance(id) }
     }
 
     // ─── Stats ────────────────────────────────────────────────────────────────
-    fun completedAttendance() = _state.value.attendance.filter { it.status == "completed" }
 
-    // ─── Export helpers ───────────────────────────────────────────────────────
-    fun exportFullStateJson(): String = gson.toJson(_state.value)
+    fun completedAttendance() = state.value.attendance.filter { it.status == "completed" }
+
+    // ─── Export ───────────────────────────────────────────────────────────────
+
+    fun exportFullStateJson(): String = gson.toJson(state.value)
 
     fun exportScheduleJson(teacherId: Long?): String {
-        val st = _state.value
-        val list = st.schedule
-            .filter { teacherId == null || it.teacherId == teacherId }
-            .map { s -> mapOf(
-                "id"        to s.id,
-                "code"      to s.code,
-                "day"       to s.day,
-                "startTime" to s.startTime,
-                "endTime"   to s.endTime,
-                "class"     to (st.classes.find { it.id == s.classId }?.name ?: ""),
-                "subject"   to (st.subjects.find { it.id == s.subjectId }?.name ?: ""),
-                "teacher"   to (st.teachers.find { it.id == s.teacherId }?.name ?: "")
-            )}
+        val list = if (teacherId == null) state.value.schedule
+                   else state.value.schedule.filter { it.teacherId == teacherId }
         return gson.toJson(list)
     }
 
     fun exportAttendanceJson(teacherId: Long?): String {
-        val st = _state.value
-        val list = st.attendance
-            .filter { teacherId == null || it.teacherId == teacherId }
-            .map { a -> mapOf(
-                "id"        to a.id,
-                "code"      to a.code,
-                "date"      to a.date,
-                "startTime" to a.startTime,
-                "endTime"   to a.endTime,
-                "topic"     to a.topic,
-                "status"    to a.status,
-                "notes"     to a.notes,
-                "class"     to (st.classes.find { it.id == a.classId }?.name ?: ""),
-                "subject"   to (st.subjects.find { it.id == a.subjectId }?.name ?: ""),
-                "teacher"   to (st.teachers.find { it.id == a.teacherId }?.name ?: ""),
-                "attendees" to a.attendees.mapNotNull { sid -> st.students.find { it.id == sid }?.name }
-            )}
+        val list = if (teacherId == null) state.value.attendance
+                   else state.value.attendance.filter { it.teacherId == teacherId }
         return gson.toJson(list)
     }
 
-    fun exportFullBackupZip(context: android.content.Context): ByteArray? {
-        return try {
-            val out = ByteArrayOutputStream()
-            ZipOutputStream(out).use { zip ->
-                zip.putNextEntry(ZipEntry("state.json"))
-                zip.write(gson.toJson(_state.value).toByteArray())
-                zip.closeEntry()
-                val avatarDir = File(context.filesDir, "avatars")
-                if (avatarDir.exists()) {
-                    avatarDir.listFiles()?.forEach { file ->
-                        zip.putNextEntry(ZipEntry("avatars/${file.name}"))
-                        zip.write(file.readBytes())
-                        zip.closeEntry()
-                    }
-                }
-            }
-            out.toByteArray()
-        } catch (_: Exception) { null }
-    }
-
-    fun importFullBackupZip(context: android.content.Context, bytes: ByteArray): Boolean {
-        return try {
-            var stateJson: String? = null
-            val avatarEntries = mutableMapOf<String, ByteArray>()
-            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    when {
-                        entry.name == "state.json" -> {
-                            stateJson = zip.readBytes().toString(Charsets.UTF_8)
-                        }
-                        entry.name.startsWith("avatars/") && !entry.isDirectory -> {
-                            avatarEntries[File(entry.name).name] = zip.readBytes()
-                        }
-                    }
+    fun exportFullBackupZip(context: Context): ByteArray? = try {
+        val baos = ByteArrayOutputStream()
+        ZipOutputStream(baos).use { zip ->
+            zip.putNextEntry(ZipEntry("state.json"))
+            zip.write(exportFullStateJson().toByteArray())
+            zip.closeEntry()
+            val avatarDir = File(context.filesDir, "avatars")
+            if (avatarDir.exists()) {
+                avatarDir.listFiles()?.forEach { f ->
+                    zip.putNextEntry(ZipEntry("avatars/${f.name}"))
+                    zip.write(f.readBytes())
                     zip.closeEntry()
-                    entry = zip.nextEntry
                 }
             }
-            val json = stateJson ?: return false
-            val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
-            val pathRemap = mutableMapOf<String, String>()
-            avatarEntries.forEach { (name, data) ->
-                val dest = File(avatarDir, name)
-                dest.writeBytes(data)
-                pathRemap[name] = dest.absolutePath
-            }
-            importMerge(json, pathRemap)
-        } catch (_: Exception) { false }
-    }
-
-    // ─── Persistence ─────────────────────────────────────────────────────────
-    private fun save() {
-        prefs.edit().putString("state", gson.toJson(_state.value)).commit()
-    }
-
-    private fun load() {
-        val json = prefs.getString("state", null)
-        if (json == null) {
-            _state.value = sampleAppState()
-            save()
-            return
         }
-        try {
-            val raw = gson.fromJson(json, GsonState::class.java)
-            val subjects = raw.subjects ?: emptyList()
+        baos.toByteArray()
+    } catch (_: Exception) { null }
 
-            // Convert GsonTeacher → Teacher (drop legacy subjectIds)
-            val teachers = raw.teachers?.map { gt ->
-                Teacher(
-                    id        = gt.id ?: 0L,
-                    name      = gt.name ?: "",
-                    gender    = gt.gender ?: "男",
-                    phone     = gt.phone ?: "",
-                    avatarUri = gt.avatarUri,
-                    code      = gt.code ?: ""
-                )
-            } ?: emptyList()
+    // ─── Import ───────────────────────────────────────────────────────────────
 
-            // Convert GsonClass → SchoolClass; migrate legacy subject string → subjectId
-            val classes = raw.classes?.map { gc ->
-                val resolvedSubjectId = gc.subjectId
-                    ?: subjects.find { it.name == gc.subject }?.id
-                val resolvedSubjectName = gc.subject?.ifBlank { null }
-                    ?: subjects.find { it.id == resolvedSubjectId }?.name ?: ""
-                SchoolClass(
-                    id            = gc.id ?: 0L,
-                    name          = gc.name ?: "",
-                    grade         = gc.grade ?: "",
-                    count         = gc.count ?: 0,
-                    headTeacherId = gc.headTeacherId,
-                    subjectId     = resolvedSubjectId,
-                    subject       = resolvedSubjectName,
-                    code          = gc.code ?: ""
-                )
-            } ?: emptyList()
-
-            _state.value = AppState(
-                subjects   = subjects,
-                teachers   = teachers,
-                classes    = classes,
-                students   = raw.students   ?: emptyList(),
-                schedule   = raw.schedule   ?: emptyList(),
-                attendance = raw.attendance ?: emptyList()
-            )
-        } catch (_: Exception) {
-            _state.value = sampleAppState()
-            save()
-        }
-    }
-
-    // ─── Import / merge ───────────────────────────────────────────────────────
+    /** Parse JSON → upsert all records (merge, not full replace). Returns false on parse error. */
     fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
-        return try {
-            if (json.isBlank()) return false
-            val raw = gson.fromJson(json, GsonState::class.java)
-
-            fun remapPath(old: String?): String? {
-                if (old == null) return null
-                val name = File(old).name
-                return pathRemap[name] ?: old
-            }
-
-            _state.update { cur ->
-                fun <T : Any> merge(existing: List<T>, incoming: List<T>?, getId: (T) -> Long): List<T> {
-                    if (incoming.isNullOrEmpty()) return existing
-                    val map = existing.associateBy(getId).toMutableMap()
-                    incoming.forEach { map[getId(it)] = it }
-                    return map.values.toList()
-                }
-
-                val incomingSubjects = raw.subjects ?: emptyList()
-
-                val newTeachers = merge(cur.teachers, raw.teachers?.map { gt ->
-                    Teacher(
-                        id        = gt.id ?: 0L,
-                        name      = gt.name ?: "",
-                        gender    = gt.gender ?: "男",
-                        phone     = gt.phone ?: "",
-                        avatarUri = remapPath(gt.avatarUri),
-                        code      = gt.code ?: ""
-                    )
-                }, Teacher::id)
-
-                val newClasses = merge(cur.classes, raw.classes?.map { gc ->
-                    val resolvedSubjectId = gc.subjectId
-                        ?: incomingSubjects.find { it.name == gc.subject }?.id
-                    val resolvedSubjectName = gc.subject?.ifBlank { null }
-                        ?: incomingSubjects.find { it.id == resolvedSubjectId }?.name ?: ""
-                    SchoolClass(
-                        id            = gc.id ?: 0L,
-                        name          = gc.name ?: "",
-                        grade         = gc.grade ?: "",
-                        count         = gc.count ?: 0,
-                        headTeacherId = gc.headTeacherId,
-                        subjectId     = resolvedSubjectId,
-                        subject       = resolvedSubjectName,
-                        code          = gc.code ?: ""
-                    )
-                }, SchoolClass::id)
-
-                val newStudents = merge(cur.students, raw.students?.map { s ->
-                    s.copy(avatarUri = remapPath(s.avatarUri))
-                }, Student::id)
-
-                cur.copy(
-                    subjects   = merge(cur.subjects, incomingSubjects, Subject::id),
-                    teachers   = newTeachers,
-                    classes    = newClasses,
-                    students   = newStudents,
-                    schedule   = merge(cur.schedule,   raw.schedule,   Schedule::id),
-                    attendance = merge(cur.attendance, raw.attendance, Attendance::id)
-                )
-            }
-            save()
-            true
-        } catch (_: Exception) { false }
+        if (json.isBlank()) return false
+        val parsed = try { parseGsonState(json, pathRemap) } catch (_: Exception) { null }
+            ?: return false
+        viewModelScope.launch { repo.mergeAll(parsed) }
+        return true
     }
 
     fun mergeImport(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean =
         importMerge(json, pathRemap)
 
+    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean = try {
+        var stateJson: String? = null
+        val avatarEntries = mutableMapOf<String, ByteArray>()
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                when {
+                    entry.name == "state.json" ->
+                        stateJson = zip.readBytes().toString(Charsets.UTF_8)
+                    entry.name.startsWith("avatars/") && !entry.isDirectory ->
+                        avatarEntries[File(entry.name).name] = zip.readBytes()
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+        val json = stateJson ?: return false
+        val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
+        val pathRemap = mutableMapOf<String, String>()
+        avatarEntries.forEach { (name, data) ->
+            val dest = File(avatarDir, name)
+            dest.writeBytes(data)
+            pathRemap[name] = dest.absolutePath
+        }
+        importMerge(json, pathRemap)
+    } catch (_: Exception) { false }
+
     fun resetToSampleData() {
-        _state.value = sampleAppState()
-        save()
+        viewModelScope.launch { repo.importAll(sampleAppState()) }
     }
+
+    // ─── JSON parsing ─────────────────────────────────────────────────────────
+
+    private fun parseGsonState(
+        json: String,
+        pathRemap: Map<String, String> = emptyMap()
+    ): AppState? = try {
+        val raw = gson.fromJson(json, GsonState::class.java) ?: return null
+
+        fun remapPath(old: String?): String? {
+            if (old == null) return null
+            val name = File(old).name
+            return pathRemap[name] ?: old
+        }
+
+        val subjects = raw.subjects ?: emptyList()
+
+        val teachers = raw.teachers?.map { gt ->
+            Teacher(
+                id        = gt.id ?: 0L,
+                name      = gt.name ?: "",
+                gender    = gt.gender ?: "男",
+                phone     = gt.phone ?: "",
+                avatarUri = remapPath(gt.avatarUri),
+                code      = gt.code ?: ""
+            )
+        } ?: emptyList()
+
+        val classes = raw.classes?.map { gc ->
+            val resolvedSubjectId = gc.subjectId
+                ?: subjects.find { it.name == gc.subject }?.id
+            val resolvedSubjectName = gc.subject?.ifBlank { null }
+                ?: subjects.find { it.id == resolvedSubjectId }?.name ?: ""
+            SchoolClass(
+                id            = gc.id ?: 0L,
+                name          = gc.name ?: "",
+                grade         = gc.grade ?: "",
+                count         = gc.count ?: 0,
+                headTeacherId = gc.headTeacherId,
+                subjectId     = resolvedSubjectId,
+                subject       = resolvedSubjectName,
+                code          = gc.code ?: ""
+            )
+        } ?: emptyList()
+
+        val students = raw.students?.map { s ->
+            s.copy(avatarUri = remapPath(s.avatarUri))
+        } ?: emptyList()
+
+        AppState(
+            subjects   = subjects,
+            teachers   = teachers,
+            classes    = classes,
+            students   = students,
+            schedule   = raw.schedule   ?: emptyList(),
+            attendance = raw.attendance ?: emptyList()
+        )
+    } catch (_: Exception) { null }
 }

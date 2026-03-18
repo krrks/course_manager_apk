@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("kotlin-kapt")                          // ← Room annotation processor
 }
 
 android {
@@ -19,10 +20,6 @@ android {
     }
 
     // ── 签名配置 ──────────────────────────────────────────────────────────────
-    // 只有四个环境变量全齐且 jks 文件真实存在时，才创建 release signingConfig。
-    // 否则 release buildType 不指定 signingConfig（= null），Gradle 自动用 debug key。
-    // 重要：不在 signingConfigs.create 块里引用 signingConfigs.getByName("debug")，
-    //       避免 Gradle 配置阶段的循环初始化异常。
     val keystorePath  = System.getenv("KEYSTORE_PATH")
     val storePassword = System.getenv("KEYSTORE_STORE_PASSWORD")
     val keyAlias      = System.getenv("KEYSTORE_KEY_ALIAS")
@@ -50,7 +47,6 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // 有 release key 就用，没有就让 Gradle 用默认的 debug key（不会 FAILED）
             signingConfig = if (useReleaseKey)
                 signingConfigs.getByName("release")
             else
@@ -95,5 +91,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.gson)
     implementation(libs.coil.compose)
+
+    // ── Room ─────────────────────────────────────────────────────────────────
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    kapt(libs.room.compiler)
+
     debugImplementation(libs.androidx.ui.tooling)
 }
