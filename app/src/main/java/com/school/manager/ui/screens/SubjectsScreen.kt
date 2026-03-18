@@ -85,8 +85,8 @@ private fun SubjectRow(
 ) {
     val te         = vm.teacher(s.teacherId)
     val color      = packedToColor(s.color)
-    val schedCount = state.schedule.count   { it.subjectId == s.id }
-    val attCount   = state.attendance.count { it.subjectId == s.id }
+    val schedCount = state.schedule.count { slot -> state.classes.find { it.id == slot.classId }?.subjectId == s.id }
+    val attCount   = state.attendance.count { att -> state.classes.find { it.id == att.classId }?.subjectId == s.id }
 
     FluentCard(modifier = Modifier.fillMaxWidth(), onClick = onView) {
         Row(
@@ -174,8 +174,8 @@ private fun SubjectDetailDialog(
         if (s.code.isNotBlank()) DetailRow("编号", s.code)
         DetailRow("科目名称", s.name)
         DetailRow("主讲教师", te?.name ?: "未分配")
-        DetailRow("排课数量", "${state.schedule.count   { it.subjectId == s.id }} 节")
-        DetailRow("上课次数", "${state.attendance.count { it.subjectId == s.id }} 次")
+        DetailRow("排课数量", "${state.schedule.count { slot -> state.classes.find { it.id == slot.classId }?.subjectId == s.id }} 节")
+        DetailRow("上课次数", "${state.attendance.count { att -> state.classes.find { it.id == att.classId }?.subjectId == s.id }} 次")
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(

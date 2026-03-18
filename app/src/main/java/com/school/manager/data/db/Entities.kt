@@ -9,8 +9,8 @@ data class SubjectEntity(
     @PrimaryKey val id: Long,
     val name: String,
     val color: Long,
-    val teacherId: Long?,          // soft ref — no DB FK (avoids circular dep)
-    val code: String               // unique display code, e.g. "SBJ00001"
+    val teacherId: Long?,
+    val code: String
 )
 
 // ─── Teacher ──────────────────────────────────────────────────────────────────
@@ -27,8 +27,9 @@ data class TeacherEntity(
 
 // ─── SchoolClass ──────────────────────────────────────────────────────────────
 //  FK constraints:
-//    subjectId    → subjects.id   ON DELETE SET NULL
-//    headTeacherId→ teachers.id   ON DELETE SET NULL
+//    subjectId     → subjects.id   ON DELETE SET NULL
+//    headTeacherId → teachers.id   ON DELETE SET NULL
+//  `subject` string field removed — subjectId is the single source of truth.
 
 @Entity(
     tableName = "classes",
@@ -55,12 +56,10 @@ data class ClassEntity(
     val count: Int,
     val headTeacherId: Long?,
     val subjectId: Long?,
-    val subject: String,           // display fallback — kept for legacy JSON compat
     val code: String
 )
 
 // ─── Student ──────────────────────────────────────────────────────────────────
-//  classIds stored as JSON string (multi-class membership, no junction table)
 
 @Entity(tableName = "students")
 data class StudentEntity(
@@ -69,15 +68,17 @@ data class StudentEntity(
     val studentNo: String,
     val gender: String,
     val grade: String,
-    val classIdsJson: String,      // e.g. "[1,3]"
+    val classIdsJson: String,
     val avatarUri: String?
 )
 
 // ─── Schedule ─────────────────────────────────────────────────────────────────
 //  FK constraints:
-//    classId   → classes.id    ON DELETE CASCADE   (delete class → delete its schedule)
-//    subjectId → subjects.id   ON DELETE SET NULL
+//    classId   → classes.id    ON DELETE CASCADE
 //    teacherId → teachers.id   ON DELETE SET NULL
+//
+//  subjectId removed — subject is always resolved via classId JOIN classes.subjectId.
+//  This eliminates the class-of-truth split and removes all manual cascade logic.
 
 @Entity(
     tableName = "schedule",
@@ -89,24 +90,17 @@ data class StudentEntity(
             onDelete      = ForeignKey.CASCADE
         ),
         ForeignKey(
-            entity        = SubjectEntity::class,
-            parentColumns = ["id"],
-            childColumns  = ["subjectId"],
-            onDelete      = ForeignKey.SET_NULL
-        ),
-        ForeignKey(
             entity        = TeacherEntity::class,
             parentColumns = ["id"],
             childColumns  = ["teacherId"],
             onDelete      = ForeignKey.SET_NULL
         )
     ],
-    indices = [Index("classId"), Index("subjectId"), Index("teacherId")]
+    indices = [Index("classId"), Index("teacherId")]
 )
 data class ScheduleEntity(
     @PrimaryKey val id: Long,
     val classId: Long,
-    val subjectId: Long?,          // nullable: SET_NULL when subject deleted
     val teacherId: Long?,
     val day: Int,
     val period: Int,
@@ -117,7 +111,7 @@ data class ScheduleEntity(
 
 // ─── Attendance ───────────────────────────────────────────────────────────────
 //  FK constraints: same pattern as Schedule
-//  attendees stored as JSON string (list of student IDs)
+//  subjectId removed — resolved at display time via classId → classes.subjectId.
 
 @Entity(
     tableName = "attendance",
@@ -129,24 +123,17 @@ data class ScheduleEntity(
             onDelete      = ForeignKey.CASCADE
         ),
         ForeignKey(
-            entity        = SubjectEntity::class,
-            parentColumns = ["id"],
-            childColumns  = ["subjectId"],
-            onDelete      = ForeignKey.SET_NULL
-        ),
-        ForeignKey(
             entity        = TeacherEntity::class,
             parentColumns = ["id"],
             childColumns  = ["teacherId"],
             onDelete      = ForeignKey.SET_NULL
         )
     ],
-    indices = [Index("classId"), Index("subjectId"), Index("teacherId")]
+    indices = [Index("classId"), Index("teacherId")]
 )
 data class AttendanceEntity(
     @PrimaryKey val id: Long,
     val classId: Long,
-    val subjectId: Long?,          // nullable: SET_NULL when subject deleted
     val teacherId: Long?,
     val date: String,
     val period: Int,
@@ -155,6 +142,6 @@ data class AttendanceEntity(
     val topic: String,
     val status: String,
     val notes: String,
-    val attendeesJson: String,     // e.g. "[1,2,5]"
+    val attendeesJson: String,
     val code: String
 )

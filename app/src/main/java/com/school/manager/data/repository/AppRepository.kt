@@ -9,10 +9,7 @@ class AppRepository(context: Context) {
 
     private val db = AppDatabase.getInstance(context)
 
-    // ─── Live AppState — UI collects this via ViewModel ───────────────────────
-    //
-    // Nested combine: kotlinx.coroutines only provides typed overloads up to 5
-    // flows, so we split 6 flows into two groups of 3 and combine the pairs.
+    // ─── Live AppState ────────────────────────────────────────────────────────
     val appState: Flow<AppState> = combine(
         combine(
             db.subjectDao().allFlow().map { list -> list.map(SubjectEntity::toDomain) },
@@ -32,43 +29,27 @@ class AppRepository(context: Context) {
         AppState(subjects, teachers, classes, students, schedule, attendance)
     }
 
-    // ─── Empty-check (used by ViewModel init to decide seeding) ──────────────
     suspend fun isEmpty(): Boolean =
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
 
     // ─── Subjects ─────────────────────────────────────────────────────────────
-    //
-    //  IMPORTANT: use insert() for new rows, update() for edits.
-    //  Using @Insert(REPLACE) on Subject would trigger ON DELETE SET_NULL for
-    //  classes.subjectId, schedule.subjectId, attendance.subjectId — silently
-    //  nullifying every FK that points to that subject.
-
     suspend fun addSubject(s: Subject)    = db.subjectDao().insert(s.toEntity())
     suspend fun updateSubject(s: Subject) = db.subjectDao().update(s.toEntity())
     suspend fun deleteSubject(id: Long)   = db.subjectDao().deleteById(id)
-    // Room FK (ON DELETE SET_NULL) automatically nullifies:
-    //   classes.subjectId, schedule.subjectId, attendance.subjectId
+    // Room FK (ON DELETE SET NULL) nullifies classes.subjectId automatically.
+    // No manual cascade needed — UI reads subject name via JOIN at display time.
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
     suspend fun addTeacher(t: Teacher)    = db.teacherDao().insert(t.toEntity())
     suspend fun updateTeacher(t: Teacher) = db.teacherDao().update(t.toEntity())
     suspend fun deleteTeacher(id: Long)   = db.teacherDao().deleteById(id)
-    // Room FK (ON DELETE SET_NULL) automatically nullifies:
-    //   classes.headTeacherId, schedule.teacherId, attendance.teacherId
 
     // ─── Classes ──────────────────────────────────────────────────────────────
-    //
-    //  CRITICAL: schedule.classId → classes.id  ON DELETE CASCADE.
-    //  addSchoolClass uses insert() (not replace), which is safe for new rows.
-    //  updateSchoolClass uses update() — does NOT delete+reinsert the row,
-    //  so the CASCADE is never triggered by an edit.
-
+    // Changing a class's subjectId automatically updates what all its schedule
+    // and attendance rows display — no extra writes needed.
     suspend fun addSchoolClass(c: SchoolClass)    = db.classDao().insert(c.toEntity())
     suspend fun updateSchoolClass(c: SchoolClass) = db.classDao().update(c.toEntity())
     suspend fun deleteSchoolClass(id: Long)        = db.classDao().deleteById(id)
-    // Room FK (ON DELETE CASCADE) automatically deletes:
-    //   all schedule rows with this classId
-    //   all attendance rows with this classId
 
     // ─── Students ─────────────────────────────────────────────────────────────
     suspend fun addStudent(s: Student)    = db.studentDao().insert(s.toEntity())
@@ -85,10 +66,8 @@ class AppRepository(context: Context) {
     suspend fun updateAttendance(a: Attendance) = db.attendanceDao().update(a.toEntity())
     suspend fun deleteAttendance(id: Long)      = db.attendanceDao().deleteById(id)
 
-    // ─── Bulk: clear all tables (respects FK order) ───────────────────────────
+    // ─── Bulk: clear all tables ───────────────────────────────────────────────
     suspend fun clearAll() {
-        // Delete children before parents to satisfy FK constraints.
-        // schedule/attendance → classes → students → subjects → teachers
         db.attendanceDao().deleteAll()
         db.scheduleDao().deleteAll()
         db.classDao().deleteAll()
@@ -97,34 +76,29 @@ class AppRepository(context: Context) {
         db.teacherDao().deleteAll()
     }
 
-    // ─── Bulk: full replace (used by reset + ZIP import) ─────────────────────
     suspend fun importAll(state: AppState) {
         clearAll()
         mergeAll(state)
     }
 
-    // ─── Bulk: upsert without clearing (used by JSON merge import) ───────────
     suspend fun mergeAll(incoming: AppState) {
-        // Insert in FK dependency order: parents before children.
-        // Use insert() for each entity; if already present (same id) it is a
-        // no-op (IGNORE strategy), so we follow up with update() to apply changes.
-        incoming.subjects.forEach   { e ->
+        incoming.subjects.forEach { e ->
             val entity = e.toEntity()
             if (db.subjectDao().insert(entity) == -1L) db.subjectDao().update(entity)
         }
-        incoming.teachers.forEach   { e ->
+        incoming.teachers.forEach { e ->
             val entity = e.toEntity()
             if (db.teacherDao().insert(entity) == -1L) db.teacherDao().update(entity)
         }
-        incoming.classes.forEach    { e ->
+        incoming.classes.forEach { e ->
             val entity = e.toEntity()
             if (db.classDao().insert(entity) == -1L) db.classDao().update(entity)
         }
-        incoming.students.forEach   { e ->
+        incoming.students.forEach { e ->
             val entity = e.toEntity()
             if (db.studentDao().insert(entity) == -1L) db.studentDao().update(entity)
         }
-        incoming.schedule.forEach   { e ->
+        incoming.schedule.forEach { e ->
             val entity = e.toEntity()
             if (db.scheduleDao().insert(entity) == -1L) db.scheduleDao().update(entity)
         }
@@ -134,7 +108,6 @@ class AppRepository(context: Context) {
         }
     }
 
-    // ─── Snapshot (used by export when current StateFlow hasn't propagated) ───
     suspend fun snapshot(): AppState = AppState(
         subjects   = db.subjectDao().all().map(SubjectEntity::toDomain),
         teachers   = db.teacherDao().all().map(TeacherEntity::toDomain),

@@ -167,7 +167,7 @@ private fun ClassFormDialog(
     val initialSubject: Subject? = remember(state.subjects, initial) {
         initial?.let { cls ->
             state.subjects.find { it.id == cls.subjectId }
-                ?: state.subjects.find { it.name == cls.subject }
+                
         }
     }
     var selectedSubjectId by remember { mutableStateOf(initialSubject?.id) }
@@ -184,14 +184,7 @@ private fun ClassFormDialog(
             val tId = state.teachers.firstOrNull { it.name == teacher }?.id
             val chosenSubject = state.subjects.find { it.id == selectedSubjectId }
             val savedClass = SchoolClass(
-                id            = initial?.id ?: System.currentTimeMillis(),
-                name          = name.trim(),
-                grade         = grade,
-                count         = count.toIntOrNull() ?: 0,
-                headTeacherId = tId,
-                subjectId     = chosenSubject?.id,
-                subject       = chosenSubject?.name ?: "",
-                code          = code.trim()
+                id            = initial?.id ?: System.currentTimeMillis(), name          = name.trim(), grade         = grade, count         = count.toIntOrNull() ?: 0, headTeacherId = tId, subjectId = chosenSubject?.id, code = code.trim()
             )
             if (initial != null) {
                 val classId = initial.id

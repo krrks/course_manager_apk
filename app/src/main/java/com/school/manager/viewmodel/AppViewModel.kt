@@ -21,6 +21,8 @@ private fun genCode(prefix: String) =
     "$prefix${System.currentTimeMillis().toString().takeLast(6)}"
 
 // ─── Gson-compatible snapshot types ──────────────────────────────────────────
+// Kept flexible so old JSON exports (which still carry subjectId on schedule/
+// attendance rows) can be imported and silently ignored.
 
 private data class GsonTeacher(
     val id: Long? = null,
@@ -39,7 +41,36 @@ private data class GsonClass(
     val count: Int? = null,
     val headTeacherId: Long? = null,
     val subjectId: Long? = null,
-    val subject: String? = null,
+    val subject: String? = null,   // legacy field — used only to resolve subjectId
+    val code: String? = null
+)
+
+// Old exports carry subjectId on schedule/attendance — we read but discard it.
+private data class GsonSchedule(
+    val id: Long? = null,
+    val classId: Long? = null,
+    val subjectId: Long? = null,   // ignored on import (Plan A)
+    val teacherId: Long? = null,
+    val day: Int? = null,
+    val period: Int? = null,
+    val startTime: String? = null,
+    val endTime: String? = null,
+    val code: String? = null
+)
+
+private data class GsonAttendance(
+    val id: Long? = null,
+    val classId: Long? = null,
+    val subjectId: Long? = null,   // ignored on import (Plan A)
+    val teacherId: Long? = null,
+    val date: String? = null,
+    val period: Int? = null,
+    val startTime: String? = null,
+    val endTime: String? = null,
+    val topic: String? = null,
+    val status: String? = null,
+    val notes: String? = null,
+    val attendees: List<Long>? = null,
     val code: String? = null
 )
 
@@ -48,8 +79,8 @@ private data class GsonState(
     val teachers: List<GsonTeacher>? = null,
     val classes: List<GsonClass>? = null,
     val students: List<Student>? = null,
-    val schedule: List<Schedule>? = null,
-    val attendance: List<Attendance>? = null
+    val schedule: List<GsonSchedule>? = null,
+    val attendance: List<GsonAttendance>? = null
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
@@ -115,25 +146,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun updateSubject(s: Subject) {
-        viewModelScope.launch {
-            repo.updateSubject(s)
-            // BUG-6: keep Class.subject string in sync with Subject name
-            val updatedClasses = state.value.classes.filter { it.subjectId == s.id }
-            updatedClasses.forEach { cls ->
-                repo.updateSchoolClass(cls.copy(subject = s.name))
-            }
-        }
+        // No cascade needed — subject name is always read fresh via FK JOIN.
+        viewModelScope.launch { repo.updateSubject(s) }
     }
 
-    // BUG-6 FIX: clear stale subject string before Room SET_NULL kicks in
     fun deleteSubject(id: Long) {
-        viewModelScope.launch {
-            val affectedClasses = state.value.classes.filter { it.subjectId == id }
-            affectedClasses.forEach { cls ->
-                repo.updateSchoolClass(cls.copy(subjectId = null, subject = ""))
-            }
-            repo.deleteSubject(id)
-        }
+        // Room FK ON DELETE SET NULL handles classes.subjectId automatically.
+        viewModelScope.launch { repo.deleteSubject(id) }
     }
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
@@ -161,6 +180,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ─── Classes ──────────────────────────────────────────────────────────────
+    // Changing subjectId here is all that's needed — schedule and attendance
+    // automatically display the updated subject at read time.
 
     fun addSchoolClass(
         name: String,
@@ -168,43 +189,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         count: Int,
         headTeacherId: Long?,
         subjectId: Long? = null,
-        subject: String = "",
+        subject: String = "",      // ignored — kept for call-site compat
         code: String = ""
     ) {
         val c = code.ifBlank { genCode("C") }
-        val subjectName = subject.ifBlank {
-            state.value.subjects.find { it.id == subjectId }?.name ?: ""
-        }
         viewModelScope.launch {
             repo.addSchoolClass(
-                SchoolClass(System.currentTimeMillis(), name, grade, count,
-                    headTeacherId, subjectId, subjectName, c)
+                SchoolClass(System.currentTimeMillis(), name, grade, count, headTeacherId, subjectId, c)
             )
         }
     }
 
     fun updateSchoolClass(c: SchoolClass) {
-        val resolved = c.subjectId?.let { sid ->
-            state.value.subjects.find { it.id == sid }?.name ?: c.subject
-        } ?: c.subject
-
-        val updatedClass = c.copy(subject = resolved)
-
-        viewModelScope.launch {
-            repo.updateSchoolClass(updatedClass)
-
-            // BUG-1 & BUG-2 FIX: cascade new subjectId to all Schedule and
-            // Attendance rows for this class so they display the current subject.
-            val newSubjectId = updatedClass.subjectId ?: return@launch
-
-            state.value.schedule
-                .filter { it.classId == c.id && it.subjectId != newSubjectId }
-                .forEach { slot -> repo.updateSchedule(slot.copy(subjectId = newSubjectId)) }
-
-            state.value.attendance
-                .filter { it.classId == c.id && it.subjectId != newSubjectId }
-                .forEach { att -> repo.updateAttendance(att.copy(subjectId = newSubjectId)) }
-        }
+        // Single write — no cascade loop required.
+        viewModelScope.launch { repo.updateSchoolClass(c) }
     }
 
     fun deleteSchoolClass(id: Long) {
@@ -215,7 +213,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addStudent(
         name: String, studentNo: String, gender: String,
-        grade: String, classIds: List<Long>, avatarUri: String? = null
+        grade: String, classIds: List<Long>, avatarUri: String? = null,
+        code: String = ""
     ) {
         viewModelScope.launch {
             repo.addStudent(
@@ -235,14 +234,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ─── Schedule ─────────────────────────────────────────────────────────────
 
     fun addSchedule(
-        classId: Long, subjectId: Long, teacherId: Long?, day: Int,
-        startTime: String, endTime: String, code: String = ""
+        classId: Long,
+        @Suppress("UNUSED_PARAMETER") subjectId: Long = 0L,  // ignored — Plan A
+        teacherId: Long?,
+        day: Int,
+        startTime: String,
+        endTime: String,
+        code: String = ""
     ) {
         val c = code.ifBlank { genCode("SCH") }
         viewModelScope.launch {
             repo.addSchedule(
-                Schedule(System.currentTimeMillis(), classId, subjectId,
-                    teacherId, day, startTime = startTime, endTime = endTime, code = c)
+                Schedule(System.currentTimeMillis(), classId, teacherId, day,
+                    startTime = startTime, endTime = endTime, code = c)
             )
         }
     }
@@ -258,15 +262,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ─── Attendance ───────────────────────────────────────────────────────────
 
     fun addAttendance(
-        classId: Long, subjectId: Long, teacherId: Long?,
-        date: String, startTime: String, endTime: String,
-        topic: String, status: String, notes: String,
-        attendees: List<Long>, code: String = ""
+        classId: Long,
+        @Suppress("UNUSED_PARAMETER") subjectId: Long = 0L,  // ignored — Plan A
+        teacherId: Long?,
+        date: String,
+        startTime: String,
+        endTime: String,
+        topic: String,
+        status: String,
+        notes: String,
+        attendees: List<Long>,
+        code: String = ""
     ) {
         val c = code.ifBlank { genCode("ATT") }
         viewModelScope.launch {
             repo.addAttendance(
-                Attendance(System.currentTimeMillis(), classId, subjectId, teacherId,
+                Attendance(System.currentTimeMillis(), classId, teacherId,
                     date, 0, startTime, endTime, topic, status, notes, attendees, c)
             )
         }
@@ -301,11 +312,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun exportFullBackupZip(context: Context): ByteArray? = try {
-        val baos = ByteArrayOutputStream()
+        val json  = gson.toJson(repo.snapshot().also { })
+        val baos  = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zip ->
             zip.putNextEntry(ZipEntry("state.json"))
-            zip.write(exportFullStateJson().toByteArray())
+            zip.write(gson.toJson(state.value).toByteArray())
             zip.closeEntry()
+
             val avatarDir = File(context.filesDir, "avatars")
             if (avatarDir.exists()) {
                 avatarDir.listFiles()?.forEach { f ->
@@ -318,48 +331,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         baos.toByteArray()
     } catch (_: Exception) { null }
 
-    // ─── Import ───────────────────────────────────────────────────────────────
-
-    /** Parse JSON → upsert all records (merge, not full replace). Returns false on parse error. */
-    fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
-        if (json.isBlank()) return false
-        val parsed = try { parseGsonState(json, pathRemap) } catch (_: Exception) { null }
-            ?: return false
-        viewModelScope.launch { repo.mergeAll(parsed) }
-        return true
-    }
-
-    fun mergeImport(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean =
-        importMerge(json, pathRemap)
-
-    // Block-body to allow 'return' statements inside the try block
-    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean {
-        return try {
-            var stateJson: String? = null
-            val avatarEntries = mutableMapOf<String, ByteArray>()
-            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    when {
-                        entry.name == "state.json" ->
-                            stateJson = zip.readBytes().toString(Charsets.UTF_8)
-                        entry.name.startsWith("avatars/") && !entry.isDirectory ->
-                            avatarEntries[File(entry.name).name] = zip.readBytes()
-                    }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
+    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean = try {
+        var json: String? = null
+        val avatarEntries = mutableMapOf<String, ByteArray>()
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val data = zip.readBytes()
+                when {
+                    entry.name == "state.json"          -> json = data.toString(Charsets.UTF_8)
+                    entry.name.startsWith("avatars/")   -> avatarEntries[entry.name.removePrefix("avatars/")] = data
                 }
+                entry = zip.nextEntry
             }
-            val json = stateJson ?: return false
-            val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
-            val pathRemap = mutableMapOf<String, String>()
-            avatarEntries.forEach { (name, data) ->
-                val dest = File(avatarDir, name)
-                dest.writeBytes(data)
-                pathRemap[name] = dest.absolutePath
-            }
-            importMerge(json, pathRemap)
-        } catch (_: Exception) { false }
+        }
+        if (json == null) return false
+        val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
+        val pathRemap = mutableMapOf<String, String>()
+        avatarEntries.forEach { (name, data) ->
+            val dest = File(avatarDir, name)
+            dest.writeBytes(data)
+            pathRemap[name] = dest.absolutePath
+        }
+        importMerge(json!!, pathRemap)
+    } catch (_: Exception) { false }
+
+    fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
+        val state = parseGsonState(json, pathRemap) ?: return false
+        viewModelScope.launch { repo.mergeAll(state) }
+        return true
     }
 
     fun resetToSampleData() {
@@ -394,10 +394,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } ?: emptyList()
 
         val classes = raw.classes?.map { gc ->
+            // Resolve subjectId from old exports that may only have a subject string
             val resolvedSubjectId = gc.subjectId
                 ?: subjects.find { it.name == gc.subject }?.id
-            val resolvedSubjectName = gc.subject?.ifBlank { null }
-                ?: subjects.find { it.id == resolvedSubjectId }?.name ?: ""
             SchoolClass(
                 id            = gc.id ?: 0L,
                 name          = gc.name ?: "",
@@ -405,7 +404,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 count         = gc.count ?: 0,
                 headTeacherId = gc.headTeacherId,
                 subjectId     = resolvedSubjectId,
-                subject       = resolvedSubjectName,
                 code          = gc.code ?: ""
             )
         } ?: emptyList()
@@ -414,13 +412,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             s.copy(avatarUri = remapPath(s.avatarUri))
         } ?: emptyList()
 
-        AppState(
-            subjects   = subjects,
-            teachers   = teachers,
-            classes    = classes,
-            students   = students,
-            schedule   = raw.schedule   ?: emptyList(),
-            attendance = raw.attendance ?: emptyList()
-        )
+        // subjectId on schedule/attendance rows is intentionally ignored (Plan A)
+        val schedule = raw.schedule?.map { gs ->
+            Schedule(
+                id        = gs.id ?: 0L,
+                classId   = gs.classId ?: 0L,
+                teacherId = gs.teacherId,
+                day       = gs.day ?: 1,
+                period    = gs.period ?: 0,
+                startTime = gs.startTime ?: "",
+                endTime   = gs.endTime ?: "",
+                code      = gs.code ?: ""
+            )
+        } ?: emptyList()
+
+        val attendance = raw.attendance?.map { ga ->
+            Attendance(
+                id        = ga.id ?: 0L,
+                classId   = ga.classId ?: 0L,
+                teacherId = ga.teacherId,
+                date      = ga.date ?: "",
+                period    = ga.period ?: 0,
+                startTime = ga.startTime ?: "",
+                endTime   = ga.endTime ?: "",
+                topic     = ga.topic ?: "",
+                status    = ga.status ?: "completed",
+                notes     = ga.notes ?: "",
+                attendees = ga.attendees ?: emptyList(),
+                code      = ga.code ?: ""
+            )
+        } ?: emptyList()
+
+        AppState(subjects, teachers, classes, students, schedule, attendance)
     } catch (_: Exception) { null }
 }

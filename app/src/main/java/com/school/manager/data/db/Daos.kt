@@ -4,16 +4,6 @@ import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
 // ─── Subject ──────────────────────────────────────────────────────────────────
-//
-//  IMPORTANT: Do NOT use @Insert(REPLACE) for updates on any entity that has
-//  child rows referencing it via FK.  SQLite's REPLACE strategy deletes the old
-//  row first, which fires all ON DELETE triggers (SET_NULL / CASCADE) before the
-//  new row is inserted — silently nullifying or deleting child data.
-//
-//  Pattern used here for all DAOs:
-//    upsert  → INSERT(IGNORE) + UPDATE fallback  (safe, no cascade side-effects)
-//    insert  → INSERT(IGNORE)  — for brand-new rows from addXxx() in ViewModel
-//    update  → @Update         — for edits from updateXxx() in ViewModel
 
 @Dao
 interface SubjectDao {
@@ -64,10 +54,8 @@ interface TeacherDao {
 
 // ─── SchoolClass ──────────────────────────────────────────────────────────────
 //
-//  Critical: schedule.classId → classes.id  ON DELETE CASCADE.
-//  Using INSERT(REPLACE) here would delete+reinsert the class row, firing
-//  the CASCADE and wiping all schedule/attendance rows for that class.
-//  Always use update() for edits.
+//  CRITICAL: schedule.classId → classes.id  ON DELETE CASCADE.
+//  Always use update() for edits — never INSERT(REPLACE).
 
 @Dao
 interface ClassDao {
@@ -114,6 +102,10 @@ interface StudentDao {
 }
 
 // ─── Schedule ─────────────────────────────────────────────────────────────────
+//
+//  subjectId removed from schedule table (Plan A).
+//  Subject is derived at read time via classId → classes.subjectId.
+//  No subject-cascade logic needed anywhere.
 
 @Dao
 interface ScheduleDao {
@@ -137,6 +129,8 @@ interface ScheduleDao {
 }
 
 // ─── Attendance ───────────────────────────────────────────────────────────────
+//
+//  subjectId removed from attendance table (Plan A).
 
 @Dao
 interface AttendanceDao {

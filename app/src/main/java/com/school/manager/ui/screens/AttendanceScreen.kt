@@ -163,7 +163,7 @@ private fun ListView(records: List<Attendance>, vm: AppViewModel, onClick: (Atte
 
 @Composable
 private fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Unit) {
-    val sub      = vm.subject(rec.subjectId)
+    val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
     val te       = vm.teacher(rec.teacherId)
     val cl       = vm.schoolClass(rec.classId)
     val colorIdx = (vm.state.value.subjects.indexOfFirst { it.id == rec.subjectId }.takeIf { it >= 0 }
@@ -177,7 +177,7 @@ private fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Uni
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     // BUG-5 FIX: resolve via subjectId FK first
-                    Text(rec.resolvedSubjectName(vm.state.value.subjects, vm.state.value.classes),
+                    Text(rec.subjectName(vm.state.value.classes, vm.state.value.subjects),
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
                     Text("· ${cl?.name ?: "?"}",
                         style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
@@ -266,7 +266,7 @@ private fun WeekView(
                                 val startStr = rec.resolvedStart()
                                 val endStr   = rec.resolvedEnd()
                                 if (startStr.isBlank()) return@forEach
-                                val sub   = vm.subject(rec.subjectId)
+                                val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
                                 val cl    = vm.schoolClass(rec.classId)
                                 val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
                                 Box(Modifier
@@ -280,7 +280,7 @@ private fun WeekView(
                                     .padding(4.dp)) {
                                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                         // BUG-5 FIX: use resolvedSubjectName (Attendance extension in Models.kt)
-                    Text(rec.resolvedSubjectName(vm.state.value.subjects, vm.state.value.classes),
+                    Text(rec.subjectName(vm.state.value.classes, vm.state.value.subjects),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold, color = color, maxLines = 1)
                                         Text("$startStr–$endStr",
@@ -352,10 +352,10 @@ private fun MonthView(
                                         fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
                                         color = if (day == LocalDate.now()) FluentBlue else FluentMuted)
                                     dayRecs.take(3).forEach { rec ->
-                                        val sub = vm.subject(rec.subjectId)
+                                        val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
                                         val cl  = vm.schoolClass(rec.classId)
                                         val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                                        Text(rec.resolvedSubjectName(vm.state.value.subjects, vm.state.value.classes),
+                                        Text(rec.subjectName(vm.state.value.classes, vm.state.value.subjects),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = color, maxLines = 1,
                                             modifier = Modifier
@@ -423,7 +423,7 @@ private fun DayView(
                     val startStr = rec.resolvedStart()
                     val endStr   = rec.resolvedEnd()
                     if (startStr.isBlank()) return@forEach
-                    val sub   = vm.subject(rec.subjectId)
+                    val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
                     val cl    = vm.schoolClass(rec.classId)
                     val te    = vm.teacher(rec.teacherId)
                     val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
@@ -459,19 +459,18 @@ private fun AttendanceDetailDialog(
     rec: Attendance, state: AppState, vm: AppViewModel,
     onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
-    val sub  = vm.subject(rec.subjectId)
+    val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
     val te   = vm.teacher(rec.teacherId)
     val cl   = vm.schoolClass(rec.classId)
     val ats  = rec.attendees.mapNotNull { vm.student(it) }
     val lessonCount = state.attendance.count {
-        it.subjectId == rec.subjectId && it.classId == rec.classId && it.status == "completed"
+        it.classId == rec.classId && it.status == "completed"
     }
 
     FluentDialog(title = "上课记录详情", onDismiss = onDismiss) {
         if (rec.code.isNotBlank()) DetailRow("编号", rec.code)
         DetailRow("班级", cl?.name ?: "─")
-        val classSubject = cl?.subject?.takeIf { it.isNotBlank() }
-        DetailRow("科目", sub?.name ?: classSubject ?: "─")
+        DetailRow("科目", sub?.name ?: "─")
         DetailRow("教师", te?.name ?: "─")
         DetailRow("日期", rec.date)
         val s = rec.resolvedStart(); val e = rec.resolvedEnd()
@@ -532,7 +531,7 @@ internal fun AttendanceFormDialog(
                    ?: initial?.subjectId ?: state.subjects.firstOrNull()?.id ?: 1L
         val tId  = state.teachers.firstOrNull { it.name == teacherName }?.id
         val newId = if (initial != null && initial.id != 0L) initial.id else System.currentTimeMillis()
-        onSave(Attendance(newId, cls.id, sId, tId, date, 0, startTime, endTime,
+        onSave(Attendance(newId, cls.id, tId, date, 0, startTime, endTime,
                           topic, status, notes, attendees, code.trim().ifBlank { genCode("ATT") }))
     }) {
         // ── 行1：编号½ + 状态½ ────────────────────────────────────────

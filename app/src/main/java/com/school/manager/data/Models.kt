@@ -10,7 +10,7 @@ data class Subject(
     val name: String,
     val color: Long,
     val teacherId: Long?,
-    val code: String = ""          // unique display code, e.g. "SBJ00001"
+    val code: String = ""
 )
 
 data class Teacher(
@@ -18,7 +18,6 @@ data class Teacher(
     val name: String,
     val gender: String,
     val phone: String,
-    // subjectIds removed — derived dynamically from Subject.teacherId
     val avatarUri: String? = null,
     val code: String = ""
 )
@@ -29,9 +28,8 @@ data class SchoolClass(
     val grade: String,
     val count: Int,
     val headTeacherId: Long?,
-    // subjectId is the canonical FK; subject string kept for legacy JSON compat
+    // subjectId is the single source of truth — no redundant subject string
     val subjectId: Long? = null,
-    val subject: String = "",          // legacy / display fallback
     val code: String = ""
 )
 
@@ -46,10 +44,10 @@ data class Student(
     val code: String = ""
 )
 
+// Schedule no longer owns subjectId — subject is resolved via classId → classes.subjectId
 data class Schedule(
     val id: Long,
     val classId: Long,
-    val subjectId: Long,
     val teacherId: Long?,
     val day: Int,
     val period: Int = 0,
@@ -58,10 +56,10 @@ data class Schedule(
     val code: String = ""
 )
 
+// Attendance no longer owns subjectId — resolved via classId at query / display time
 data class Attendance(
     val id: Long,
     val classId: Long,
-    val subjectId: Long,
     val teacherId: Long?,
     val date: String,
     val period: Int = 0,
@@ -120,28 +118,16 @@ fun Attendance.resolvedStart(): String =
 fun Attendance.resolvedEnd(): String =
     endTime.ifBlank { PERIOD_END_TIMES.getOrElse(period - 1) { "" } }
 
-/** Resolve subject name for a Schedule: prefer subjectId FK, fall back to class legacy string */
-fun Schedule.resolvedSubjectName(subjects: List<Subject>, classes: List<SchoolClass>): String =
-    subjects.find { it.id == subjectId }?.name
-        ?: classes.find { it.id == classId }?.let { cls ->
-            subjects.find { it.id == cls.subjectId }?.name
-                ?: cls.subject.takeIf { it.isNotBlank() }
-        }
-        ?: "?"
-
-/** BUG-5 FIX: Same resolution logic for Attendance records */
-fun Attendance.resolvedSubjectName(subjects: List<Subject>, classes: List<SchoolClass>): String =
-    subjects.find { it.id == subjectId }?.name
-        ?: classes.find { it.id == classId }?.let { cls ->
-            subjects.find { it.id == cls.subjectId }?.name
-                ?: cls.subject.takeIf { it.isNotBlank() }
-        }
-        ?: "?"
-
-/** Resolve the canonical subject for a class */
+/** Resolve subject for a class — single source of truth */
 fun SchoolClass.resolvedSubject(subjects: List<Subject>): Subject? =
     subjects.find { it.id == subjectId }
-        ?: subjects.find { it.name == subject }
+
+/** Convenience: subject name via class lookup */
+fun Schedule.subjectName(classes: List<SchoolClass>, subjects: List<Subject>): String =
+    classes.find { it.id == classId }?.resolvedSubject(subjects)?.name ?: "?"
+
+fun Attendance.subjectName(classes: List<SchoolClass>, subjects: List<Subject>): String =
+    classes.find { it.id == classId }?.resolvedSubject(subjects)?.name ?: "?"
 
 fun genCode(prefix: String): String {
     val t = System.currentTimeMillis()
@@ -166,9 +152,9 @@ val sampleTeachers = listOf(
 )
 
 val sampleClasses = listOf(
-    SchoolClass(1, "高一(1)班", "高一", 45, 1, subjectId = 1, subject = "数学", code = "C00001"),
-    SchoolClass(2, "高一(2)班", "高一", 43, 2, subjectId = 2, subject = "语文", code = "C00002"),
-    SchoolClass(3, "高二(1)班", "高二", 47, 3, subjectId = 3, subject = "英语", code = "C00003"),
+    SchoolClass(1, "高一(1)班", "高一", 45, 1, subjectId = 1, code = "C00001"),
+    SchoolClass(2, "高一(2)班", "高一", 43, 2, subjectId = 2, code = "C00002"),
+    SchoolClass(3, "高二(1)班", "高二", 47, 3, subjectId = 3, code = "C00003"),
 )
 
 val sampleStudents = listOf(
@@ -180,14 +166,14 @@ val sampleStudents = listOf(
 )
 
 val sampleSchedule = listOf(
-    Schedule(1, 1, 1, 1, 1, startTime = "08:00", endTime = "08:45", code = "SCH0001"),
-    Schedule(2, 1, 2, 2, 1, startTime = "09:00", endTime = "09:45", code = "SCH0002"),
-    Schedule(3, 1, 3, 3, 2, startTime = "08:00", endTime = "08:45", code = "SCH0003"),
-    Schedule(4, 1, 4, 1, 3, startTime = "10:00", endTime = "10:45", code = "SCH0004"),
-    Schedule(5, 1, 5, 4, 4, startTime = "09:00", endTime = "09:45", code = "SCH0005"),
-    Schedule(6, 2, 1, 1, 1, startTime = "10:00", endTime = "10:45", code = "SCH0006"),
-    Schedule(7, 2, 3, 3, 2, startTime = "11:00", endTime = "11:45", code = "SCH0007"),
-    Schedule(8, 3, 2, 2, 1, startTime = "08:00", endTime = "08:45", code = "SCH0008"),
+    Schedule(1, 1, 1, 1, startTime = "08:00", endTime = "08:45", code = "SCH0001"),
+    Schedule(2, 1, 2, 1, startTime = "09:00", endTime = "09:45", code = "SCH0002"),
+    Schedule(3, 1, 3, 2, startTime = "08:00", endTime = "08:45", code = "SCH0003"),
+    Schedule(4, 1, 1, 3, startTime = "10:00", endTime = "10:45", code = "SCH0004"),
+    Schedule(5, 1, 4, 4, startTime = "09:00", endTime = "09:45", code = "SCH0005"),
+    Schedule(6, 2, 1, 1, startTime = "10:00", endTime = "10:45", code = "SCH0006"),
+    Schedule(7, 2, 3, 2, startTime = "11:00", endTime = "11:45", code = "SCH0007"),
+    Schedule(8, 3, 2, 1, startTime = "08:00", endTime = "08:45", code = "SCH0008"),
 )
 
 val sampleAttendance: List<Attendance>
@@ -195,27 +181,27 @@ val sampleAttendance: List<Attendance>
         val fmt   = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val today = LocalDate.now()
         return listOf(
-            Attendance(1, 1, 1, 1, fmt.format(today.minusDays(7)),
+            Attendance(1, 1, 1, fmt.format(today.minusDays(7)),
                 startTime="08:00", endTime="08:45", topic="函数与极限",
                 status="completed", notes="讲解了基本函数类型",
                 attendees=listOf(1,2), code="ATT0001"),
-            Attendance(2, 1, 2, 2, fmt.format(today.minusDays(7)),
+            Attendance(2, 1, 2, fmt.format(today.minusDays(7)),
                 startTime="09:00", endTime="09:45", topic="古诗文鉴赏",
                 status="completed", notes="",
                 attendees=listOf(1), code="ATT0002"),
-            Attendance(3, 1, 3, 3, fmt.format(today.minusDays(6)),
+            Attendance(3, 1, 3, fmt.format(today.minusDays(6)),
                 startTime="08:00", endTime="08:45", topic="时态复习",
                 status="completed", notes="重点复习过去完成时",
                 attendees=listOf(2), code="ATT0003"),
-            Attendance(4, 2, 1, 1, fmt.format(today.minusDays(6)),
+            Attendance(4, 2, 1, fmt.format(today.minusDays(6)),
                 startTime="10:00", endTime="10:45", topic="方程组",
                 status="cancelled", notes="教师请假",
                 attendees=emptyList(), code="ATT0004"),
-            Attendance(5, 1, 4, 1, fmt.format(today),
+            Attendance(5, 1, 1, fmt.format(today),
                 startTime="10:00", endTime="10:45", topic="牛顿运动定律",
                 status="completed", notes="",
                 attendees=listOf(1,2), code="ATT0005"),
-            Attendance(6, 3, 2, 2, fmt.format(today.minusMonths(1)),
+            Attendance(6, 3, 2, fmt.format(today.minusMonths(1)),
                 startTime="08:00", endTime="08:45", topic="现代文阅读",
                 status="completed", notes="",
                 attendees=listOf(5), code="ATT0006"),

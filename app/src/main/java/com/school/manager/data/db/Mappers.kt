@@ -4,9 +4,6 @@ import com.school.manager.data.*
 import org.json.JSONArray
 
 // ─── List<Long> ↔ JSON string ─────────────────────────────────────────────────
-// Use Android built-in JSONArray instead of Gson TypeToken<List<Long>>.
-// Gson TypeToken with generics is erased by R8/ProGuard in release builds,
-// causing IllegalStateException on class initialization.
 
 private fun String.toLongList(): List<Long> =
     try {
@@ -34,12 +31,13 @@ fun Teacher.toEntity(): TeacherEntity =
     TeacherEntity(id, name, gender, phone, avatarUri, code)
 
 // ─── SchoolClass ──────────────────────────────────────────────────────────────
+// `subject` string column removed in v3 migration; only subjectId FK remains.
 
 fun ClassEntity.toDomain(): SchoolClass =
-    SchoolClass(id, name, grade, count, headTeacherId, subjectId, subject, code)
+    SchoolClass(id, name, grade, count, headTeacherId, subjectId, code)
 
 fun SchoolClass.toEntity(): ClassEntity =
-    ClassEntity(id, name, grade, count, headTeacherId, subjectId, subject, code)
+    ClassEntity(id, name, grade, count, headTeacherId, subjectId, code)
 
 // ─── Student ──────────────────────────────────────────────────────────────────
 
@@ -50,23 +48,20 @@ fun Student.toEntity(): StudentEntity =
     StudentEntity(id, name, studentNo, gender, grade, classIds.toJson(), avatarUri)
 
 // ─── Schedule ─────────────────────────────────────────────────────────────────
-// subjectId nullable in DB (SET_NULL on FK delete); map null → 0L for domain model.
+// subjectId removed from ScheduleEntity in v3 — no mapping needed.
 
 fun ScheduleEntity.toDomain(): Schedule =
-    Schedule(id, classId, subjectId ?: 0L, teacherId, day, period, startTime, endTime, code)
+    Schedule(id, classId, teacherId, day, period, startTime, endTime, code)
 
 fun Schedule.toEntity(): ScheduleEntity =
-    ScheduleEntity(
-        id, classId,
-        subjectId = subjectId.takeIf { it != 0L },
-        teacherId, day, period, startTime, endTime, code
-    )
+    ScheduleEntity(id, classId, teacherId, day, period, startTime, endTime, code)
 
 // ─── Attendance ───────────────────────────────────────────────────────────────
+// subjectId removed from AttendanceEntity in v3 — no mapping needed.
 
 fun AttendanceEntity.toDomain(): Attendance =
     Attendance(
-        id, classId, subjectId ?: 0L, teacherId,
+        id, classId, teacherId,
         date, period, startTime, endTime,
         topic, status, notes,
         attendeesJson.toLongList(), code
@@ -74,9 +69,8 @@ fun AttendanceEntity.toDomain(): Attendance =
 
 fun Attendance.toEntity(): AttendanceEntity =
     AttendanceEntity(
-        id, classId,
-        subjectId = subjectId.takeIf { it != 0L },
-        teacherId, date, period, startTime, endTime,
+        id, classId, teacherId,
+        date, period, startTime, endTime,
         topic, status, notes,
         attendees.toJson(), code
     )

@@ -324,8 +324,8 @@ private fun CalendarGrid(
                                 val endStr   = slot.resolvedEnd()
                                 val yDp      = minuteOffsetDp(startStr) * scale + CAL_V_PAD
                                 val hDp      = (durationDp(startStr, endStr) * scale).coerceAtLeast(28f)
-                                val sub      = state.subjects.find { it.id == slot.subjectId }
-                                    ?: state.subjects.find { s -> state.classes.find { it.id == slot.classId }?.subject == s.name }
+                                val sub = state.classes.find { it.id == slot.classId }?.resolvedSubject(state.subjects)
+                                    ?: state.classes.find { it.id == slot.classId }?.resolvedSubject(state.subjects)
                                 val cl       = state.classes.find { it.id == slot.classId }
                                 val colorIdx = state.subjects.indexOf(sub).takeIf { it >= 0 }
                                     ?: (slot.classId % SUBJECT_COLORS.size).toInt()
@@ -343,7 +343,7 @@ private fun CalendarGrid(
                                 ) {
                                     Column(Modifier.padding(4.dp)) {
                                         Text(
-                                            slot.resolvedSubjectName(state.subjects, state.classes),
+                                            slot.subjectName(state.classes, state.subjects),
                                             style      = MaterialTheme.typography.labelSmall,
                                             color      = subColor,
                                             fontWeight = FontWeight.Bold,
@@ -388,8 +388,8 @@ private fun ScheduleListView(slots: List<Schedule>, state: AppState, vm: AppView
             items(daySlots.sortedBy { it.startTime }) { slot ->
                 // BUG-4 FIX: use resolvedSubjectName() which prioritises slot.subjectId FK
                 val cl       = state.classes.find { it.id == slot.classId }
-                val resolvedSubName = slot.resolvedSubjectName(state.subjects, state.classes)
-                val sub      = state.subjects.find { it.id == slot.subjectId }
+                val resolvedSubName = slot.subjectName(state.classes, state.subjects)
+                val sub = state.classes.find { it.id == slot.classId }?.resolvedSubject(state.subjects)
                 val colorIdx = state.subjects.indexOf(sub).takeIf { it >= 0 }
                     ?: (slot.classId % SUBJECT_COLORS.size).toInt()
                 val subColor = Color(SUBJECT_COLORS[colorIdx % SUBJECT_COLORS.size])
@@ -401,7 +401,7 @@ private fun ScheduleListView(slots: List<Schedule>, state: AppState, vm: AppView
                         Box(Modifier.size(8.dp, 40.dp).clip(RoundedCornerShape(4.dp)).background(subColor))
                         Column(Modifier.weight(1f)) {
                             // BUG-4 FIX: use resolvedSubjectName
-                            val subjectName = slot.resolvedSubjectName(state.subjects, state.classes)
+                            val subjectName = slot.subjectName(state.classes, state.subjects)
                             val te2 = state.teachers.find { it.id == slot.teacherId }
                             Text(subjectName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
                             Text("${cl?.name ?: "─"}  ·  ${te2?.name ?: "─"}",
@@ -456,12 +456,12 @@ private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -
 
     FluentDialog(title = "添加课程", onDismiss = onDismiss, onConfirm = {
         val cls = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
-        val sId = cls.subjectId
-            ?: state.subjects.firstOrNull { it.name == cls.subject }?.id
+                    ?: state.subjects.firstOrNull { it.name == cls.subject }?.id
             ?: state.subjects.firstOrNull()?.id ?: return@FluentDialog
         val tId = state.teachers.firstOrNull { it.name == teacherName }?.id
         val d   = DAYS.indexOf(day) + 1
-        vm.addSchedule(cls.id, sId, tId, d, startTime, endTime, code)
+        val tId = state.teachers.firstOrNull { it.name == teacherName }?.id
+        vm.addSchedule(cls.id, teacherId = tId, d, startTime, endTime, code)
         onDismiss()
     }) {
         // 行1：班级 1/2 + 教师 1/2
@@ -593,8 +593,7 @@ private fun AddAttendanceFromScheduleDialog(
     var notes       by remember { mutableStateOf("") }
     var code        by remember { mutableStateOf(genCode("ATT")) }
 
-    val subjectName = state.subjects.find { it.id == slot.subjectId }?.name
-        ?: state.classes.find { it.id == slot.classId }?.subject ?: ""
+    val subjectName = state.classes.find { it.id == slot.classId }?.resolvedSubject(state.subjects)?.name ?: ""
     val allStudents = state.students.filter { s ->
         state.classes.find { it.id == slot.classId }?.let { s.classIds.contains(it.id) } == true
     }
@@ -606,7 +605,7 @@ private fun AddAttendanceFromScheduleDialog(
         onSave(Attendance(
             id        = System.currentTimeMillis(),
             classId   = cls.id,
-            subjectId = slot.subjectId,
+            
             teacherId = tId,
             date      = date,
             startTime = startTime,
@@ -1073,11 +1072,11 @@ private fun renderScheduleBitmap(context: Context, slots: List<Schedule>, state:
         val bottom = (headerH + endMin * (rowH / 60f)).coerceAtMost(h.toFloat())
         val left   = timeW + dayIdx * colW + 2f
         val right  = left + colW - 4f
-        val subIdx = state.subjects.indexOfFirst { it.id == slot.subjectId }.takeIf { it >= 0 } ?: 0
+        val subIdx = state.subjects.indexOfFirst { it.id == state.classes.find { c -> c.id == slot.classId }?.subjectId }.takeIf { it >= 0 } ?: 0
         val c      = colors[subIdx % colors.size]
         cv.drawRoundRect(RectF(left, top, right, bottom), 6f, 6f, Paint().apply { color = c; alpha = 50 })
-        val subName = state.subjects.find { it.id == slot.subjectId }?.name
-            ?: state.classes.find { it.id == slot.classId }?.subject ?: "?"
+        val subName = state.classes.find { it.id == slot.classId }?.resolvedSubject(state.subjects)?.name
+            ?: "?"
         cv.drawText(subName, left + 4f, top + 18f,
             Paint().apply { this.color = c; textSize = 14f; isAntiAlias = true; typeface = Typeface.DEFAULT_BOLD })
     }
