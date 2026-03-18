@@ -343,7 +343,7 @@ private fun CalendarGrid(
                                 ) {
                                     Column(Modifier.padding(4.dp)) {
                                         Text(
-                                            sub?.name ?: cl?.subject ?: "?",
+                                            resolvedSubName,
                                             style      = MaterialTheme.typography.labelSmall,
                                             color      = subColor,
                                             fontWeight = FontWeight.Bold,
@@ -386,9 +386,10 @@ private fun ScheduleListView(slots: List<Schedule>, state: AppState, vm: AppView
                 )
             }
             items(daySlots.sortedBy { it.startTime }) { slot ->
-                val sub      = state.subjects.find { it.id == slot.subjectId }
-                    ?: state.subjects.find { s -> state.classes.find { it.id == slot.classId }?.subject == s.name }
+                // BUG-4 FIX: use resolvedSubjectName() which prioritises slot.subjectId FK
                 val cl       = state.classes.find { it.id == slot.classId }
+                val resolvedSubName = slot.resolvedSubjectName(state.subjects, state.classes)
+                val sub      = state.subjects.find { it.id == slot.subjectId }
                 val colorIdx = state.subjects.indexOf(sub).takeIf { it >= 0 }
                     ?: (slot.classId % SUBJECT_COLORS.size).toInt()
                 val subColor = Color(SUBJECT_COLORS[colorIdx % SUBJECT_COLORS.size])
@@ -399,7 +400,8 @@ private fun ScheduleListView(slots: List<Schedule>, state: AppState, vm: AppView
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.size(8.dp, 40.dp).clip(RoundedCornerShape(4.dp)).background(subColor))
                         Column(Modifier.weight(1f)) {
-                            val subjectName = sub?.name ?: cl?.subject?.takeIf { it.isNotBlank() } ?: "?"
+                            // BUG-4 FIX: use resolvedSubjectName
+                            val subjectName = resolvedSubName2
                             val te2 = state.teachers.find { it.id == slot.teacherId }
                             Text(subjectName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
                             Text("${cl?.name ?: "─"}  ·  ${te2?.name ?: "─"}",

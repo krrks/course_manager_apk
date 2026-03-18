@@ -176,7 +176,8 @@ private fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Uni
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text(sub?.name ?: cl?.subject ?: "?",
+                    // BUG-5 FIX: resolve via subjectId FK first
+                    Text(rec.resolvedSubjectName(vm.state.value.subjects, vm.state.value.classes),
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
                     Text("· ${cl?.name ?: "?"}",
                         style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
