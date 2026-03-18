@@ -1,0 +1,116 @@
+name: 🧹 Cleanup Old Releases & Workflow Runs
+
+on:
+  # 每次 build.yml 产出新 release 后自动触发
+  workflow_run:
+    workflows: ["Build & Release APK"]
+    types: [completed]
+
+  # 也可以手动触发，方便首次清理存量
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: '保留最新几条（Releases 和 Workflow Runs 各自独立计算）'
+        required: false
+        default: '10'
+
+jobs:
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # 删除 releases / tags
+      actions: write       # 删除 workflow runs
+
+    steps:
+      - name: 🧹 Delete old Releases (keep newest ${{ github.event.inputs.keep || 10 }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO:     ${{ github.repository }}
+          KEEP:     ${{ github.event.inputs.keep || 10 }}
+        run: |
+          set -e
+          echo "── Releases ──────────────────────────────────"
+
+          # List all release IDs sorted by created_at descending (newest first)
+          RELEASE_IDS=$(gh api "repos/$REPO/releases" \
+            --paginate \
+            --jq '.[].id' \
+            | head -200)
+
+          TOTAL=$(echo "$RELEASE_IDS" | grep -c . || true)
+          echo "Total releases found: $TOTAL  |  Keeping newest: $KEEP"
+
+          if [ "$TOTAL" -le "$KEEP" ]; then
+            echo "Nothing to delete."
+          else
+            TO_DELETE=$(echo "$RELEASE_IDS" | tail -n "+$(( KEEP + 1 ))")
+            COUNT=$(echo "$TO_DELETE" | grep -c . || true)
+            echo "Deleting $COUNT old release(s)..."
+
+            echo "$TO_DELETE" | while read -r rid; do
+              [ -z "$rid" ] && continue
+
+              # Get the tag name before deleting the release
+              TAG=$(gh api "repos/$REPO/releases/$rid" --jq '.tag_name' 2>/dev/null || echo "")
+
+              gh api --method DELETE "repos/$REPO/releases/$rid" && \
+                echo "  ✅ Deleted release $rid  (tag: ${TAG:-unknown})" || \
+                echo "  ⚠️  Failed to delete release $rid"
+
+              # Delete the git tag as well so the tag list stays clean
+              if [ -n "$TAG" ]; then
+                gh api --method DELETE "repos/$REPO/git/refs/tags/$TAG" 2>/dev/null && \
+                  echo "     🏷️  Deleted tag $TAG" || \
+                  echo "     ⚠️  Tag $TAG not found or already deleted"
+              fi
+            done
+          fi
+
+      - name: 🧹 Delete old Workflow Runs (keep newest ${{ github.event.inputs.keep || 10 }} per workflow)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO:     ${{ github.repository }}
+          KEEP:     ${{ github.event.inputs.keep || 10 }}
+        run: |
+          set -e
+          echo "── Workflow Runs ──────────────────────────────"
+
+          # Get all distinct workflow IDs in the repo
+          WORKFLOW_IDS=$(gh api "repos/$REPO/actions/workflows" \
+            --paginate \
+            --jq '.workflows[].id')
+
+          for WF_ID in $WORKFLOW_IDS; do
+            WF_NAME=$(gh api "repos/$REPO/actions/workflows/$WF_ID" --jq '.name' 2>/dev/null || echo "id=$WF_ID")
+            echo ""
+            echo "  Workflow: $WF_NAME (id=$WF_ID)"
+
+            # List run IDs for this workflow, newest first
+            RUN_IDS=$(gh api "repos/$REPO/actions/workflows/$WF_ID/runs" \
+              --paginate \
+              --jq '.workflow_runs[].id' \
+              | head -200)
+
+            TOTAL=$(echo "$RUN_IDS" | grep -c . || true)
+            echo "  Total runs: $TOTAL  |  Keeping newest: $KEEP"
+
+            if [ "$TOTAL" -le "$KEEP" ]; then
+              echo "  Nothing to delete."
+              continue
+            fi
+
+            TO_DELETE=$(echo "$RUN_IDS" | tail -n "+$(( KEEP + 1 ))")
+            COUNT=$(echo "$TO_DELETE" | grep -c . || true)
+            echo "  Deleting $COUNT old run(s)..."
+
+            echo "$TO_DELETE" | while read -r run_id; do
+              [ -z "$run_id" ] && continue
+              gh api --method DELETE "repos/$REPO/actions/runs/$run_id" && \
+                echo "    ✅ Deleted run $run_id" || \
+                echo "    ⚠️  Failed to delete run $run_id"
+            done
+          done
+
+          echo ""
+          echo "=== Cleanup complete ==="
