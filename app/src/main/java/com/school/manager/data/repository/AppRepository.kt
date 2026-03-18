@@ -37,40 +37,52 @@ class AppRepository(context: Context) {
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
 
     // ─── Subjects ─────────────────────────────────────────────────────────────
-    suspend fun addSubject(s: Subject)    = db.subjectDao().upsert(s.toEntity())
-    suspend fun updateSubject(s: Subject) = db.subjectDao().upsert(s.toEntity())
+    //
+    //  IMPORTANT: use insert() for new rows, update() for edits.
+    //  Using @Insert(REPLACE) on Subject would trigger ON DELETE SET_NULL for
+    //  classes.subjectId, schedule.subjectId, attendance.subjectId — silently
+    //  nullifying every FK that points to that subject.
+
+    suspend fun addSubject(s: Subject)    = db.subjectDao().insert(s.toEntity())
+    suspend fun updateSubject(s: Subject) = db.subjectDao().update(s.toEntity())
     suspend fun deleteSubject(id: Long)   = db.subjectDao().deleteById(id)
     // Room FK (ON DELETE SET_NULL) automatically nullifies:
     //   classes.subjectId, schedule.subjectId, attendance.subjectId
 
     // ─── Teachers ─────────────────────────────────────────────────────────────
-    suspend fun addTeacher(t: Teacher)    = db.teacherDao().upsert(t.toEntity())
-    suspend fun updateTeacher(t: Teacher) = db.teacherDao().upsert(t.toEntity())
+    suspend fun addTeacher(t: Teacher)    = db.teacherDao().insert(t.toEntity())
+    suspend fun updateTeacher(t: Teacher) = db.teacherDao().update(t.toEntity())
     suspend fun deleteTeacher(id: Long)   = db.teacherDao().deleteById(id)
     // Room FK (ON DELETE SET_NULL) automatically nullifies:
     //   classes.headTeacherId, schedule.teacherId, attendance.teacherId
 
     // ─── Classes ──────────────────────────────────────────────────────────────
-    suspend fun addSchoolClass(c: SchoolClass)    = db.classDao().upsert(c.toEntity())
-    suspend fun updateSchoolClass(c: SchoolClass) = db.classDao().upsert(c.toEntity())
+    //
+    //  CRITICAL: schedule.classId → classes.id  ON DELETE CASCADE.
+    //  addSchoolClass uses insert() (not replace), which is safe for new rows.
+    //  updateSchoolClass uses update() — does NOT delete+reinsert the row,
+    //  so the CASCADE is never triggered by an edit.
+
+    suspend fun addSchoolClass(c: SchoolClass)    = db.classDao().insert(c.toEntity())
+    suspend fun updateSchoolClass(c: SchoolClass) = db.classDao().update(c.toEntity())
     suspend fun deleteSchoolClass(id: Long)        = db.classDao().deleteById(id)
     // Room FK (ON DELETE CASCADE) automatically deletes:
     //   all schedule rows with this classId
     //   all attendance rows with this classId
 
     // ─── Students ─────────────────────────────────────────────────────────────
-    suspend fun addStudent(s: Student)    = db.studentDao().upsert(s.toEntity())
-    suspend fun updateStudent(s: Student) = db.studentDao().upsert(s.toEntity())
+    suspend fun addStudent(s: Student)    = db.studentDao().insert(s.toEntity())
+    suspend fun updateStudent(s: Student) = db.studentDao().update(s.toEntity())
     suspend fun deleteStudent(id: Long)   = db.studentDao().deleteById(id)
 
     // ─── Schedule ─────────────────────────────────────────────────────────────
-    suspend fun addSchedule(s: Schedule)    = db.scheduleDao().upsert(s.toEntity())
-    suspend fun updateSchedule(s: Schedule) = db.scheduleDao().upsert(s.toEntity())
+    suspend fun addSchedule(s: Schedule)    = db.scheduleDao().insert(s.toEntity())
+    suspend fun updateSchedule(s: Schedule) = db.scheduleDao().update(s.toEntity())
     suspend fun deleteSchedule(id: Long)    = db.scheduleDao().deleteById(id)
 
     // ─── Attendance ───────────────────────────────────────────────────────────
-    suspend fun addAttendance(a: Attendance)    = db.attendanceDao().upsert(a.toEntity())
-    suspend fun updateAttendance(a: Attendance) = db.attendanceDao().upsert(a.toEntity())
+    suspend fun addAttendance(a: Attendance)    = db.attendanceDao().insert(a.toEntity())
+    suspend fun updateAttendance(a: Attendance) = db.attendanceDao().update(a.toEntity())
     suspend fun deleteAttendance(id: Long)      = db.attendanceDao().deleteById(id)
 
     // ─── Bulk: clear all tables (respects FK order) ───────────────────────────
@@ -93,13 +105,33 @@ class AppRepository(context: Context) {
 
     // ─── Bulk: upsert without clearing (used by JSON merge import) ───────────
     suspend fun mergeAll(incoming: AppState) {
-        // Insert in FK dependency order: parents before children
-        incoming.subjects.forEach   { db.subjectDao().upsert(it.toEntity()) }
-        incoming.teachers.forEach   { db.teacherDao().upsert(it.toEntity()) }
-        incoming.classes.forEach    { db.classDao().upsert(it.toEntity()) }
-        incoming.students.forEach   { db.studentDao().upsert(it.toEntity()) }
-        incoming.schedule.forEach   { db.scheduleDao().upsert(it.toEntity()) }
-        incoming.attendance.forEach { db.attendanceDao().upsert(it.toEntity()) }
+        // Insert in FK dependency order: parents before children.
+        // Use insert() for each entity; if already present (same id) it is a
+        // no-op (IGNORE strategy), so we follow up with update() to apply changes.
+        incoming.subjects.forEach   { e ->
+            val entity = e.toEntity()
+            if (db.subjectDao().insert(entity) == -1L) db.subjectDao().update(entity)
+        }
+        incoming.teachers.forEach   { e ->
+            val entity = e.toEntity()
+            if (db.teacherDao().insert(entity) == -1L) db.teacherDao().update(entity)
+        }
+        incoming.classes.forEach    { e ->
+            val entity = e.toEntity()
+            if (db.classDao().insert(entity) == -1L) db.classDao().update(entity)
+        }
+        incoming.students.forEach   { e ->
+            val entity = e.toEntity()
+            if (db.studentDao().insert(entity) == -1L) db.studentDao().update(entity)
+        }
+        incoming.schedule.forEach   { e ->
+            val entity = e.toEntity()
+            if (db.scheduleDao().insert(entity) == -1L) db.scheduleDao().update(entity)
+        }
+        incoming.attendance.forEach { e ->
+            val entity = e.toEntity()
+            if (db.attendanceDao().insert(entity) == -1L) db.attendanceDao().update(entity)
+        }
     }
 
     // ─── Snapshot (used by export when current StateFlow hasn't propagated) ───

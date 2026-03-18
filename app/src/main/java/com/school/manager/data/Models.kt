@@ -9,7 +9,8 @@ data class Subject(
     val id: Long,
     val name: String,
     val color: Long,
-    val teacherId: Long?
+    val teacherId: Long?,
+    val code: String = ""          // unique display code, e.g. "SBJ00001"
 )
 
 data class Teacher(
@@ -140,11 +141,11 @@ fun genCode(prefix: String): String {
 // ─── Sample Data ──────────────────────────────────────────────────────────────
 
 val sampleSubjects = listOf(
-    Subject(1, "数学", SUBJECT_COLORS[0], 1),
-    Subject(2, "语文", SUBJECT_COLORS[1], 2),
-    Subject(3, "英语", SUBJECT_COLORS[2], 3),
-    Subject(4, "物理", SUBJECT_COLORS[3], 1),
-    Subject(5, "化学", SUBJECT_COLORS[4], 4),
+    Subject(1, "数学", SUBJECT_COLORS[0], 1, "SBJ00001"),
+    Subject(2, "语文", SUBJECT_COLORS[1], 2, "SBJ00002"),
+    Subject(3, "英语", SUBJECT_COLORS[2], 3, "SBJ00003"),
+    Subject(4, "物理", SUBJECT_COLORS[3], 1, "SBJ00004"),
+    Subject(5, "化学", SUBJECT_COLORS[4], 4, "SBJ00005"),
 )
 
 val sampleTeachers = listOf(

@@ -20,10 +20,10 @@ private fun List<Long>.toJson(): String =
 // ─── Subject ──────────────────────────────────────────────────────────────────
 
 fun SubjectEntity.toDomain(): Subject =
-    Subject(id, name, color, teacherId)
+    Subject(id, name, color, teacherId, code)
 
 fun Subject.toEntity(): SubjectEntity =
-    SubjectEntity(id, name, color, teacherId)
+    SubjectEntity(id, name, color, teacherId, code)
 
 // ─── Teacher ──────────────────────────────────────────────────────────────────
 

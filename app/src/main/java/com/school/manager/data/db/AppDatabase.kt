@@ -2,6 +2,7 @@ package com.school.manager.data.db
 
 import android.content.Context
 import androidx.room.*
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -12,7 +13,7 @@ import androidx.room.*
         ScheduleEntity::class,
         AttendanceEntity::class
     ],
-    version  = 1,
+    version  = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,6 +28,16 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
 
+        // ── Migration v1 → v2 ─────────────────────────────────────────────────
+        // Adds the `code` column to the subjects table.
+        // All existing subjects get an empty string as their initial code value;
+        // the ViewModel will keep generating codes for new subjects automatically.
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE subjects ADD COLUMN code TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -34,9 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "school_manager.db"
                 )
-                // Future schema changes: add Migration objects here instead of
-                // fallbackToDestructiveMigration, e.g.:
-                //   .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2)
                 .fallbackToDestructiveMigration()
                 .build()
                 .also { INSTANCE = it }

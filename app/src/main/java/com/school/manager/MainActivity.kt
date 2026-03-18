@@ -52,7 +52,7 @@ fun SchoolManagerApp() {
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+                drawerShape          = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
             ) {
                 // ── Drawer header ──
@@ -80,10 +80,10 @@ fun SchoolManagerApp() {
                 ALL_SCREENS.forEach { screen ->
                     val selected = currentRoute == screen.route
                     NavigationDrawerItem(
-                        icon   = { Icon(screen.icon, contentDescription = screen.title) },
-                        label  = { Text(screen.title, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) },
+                        icon     = { Icon(screen.icon, contentDescription = screen.title) },
+                        label    = { Text(screen.title, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) },
                         selected = selected,
-                        onClick = {
+                        onClick  = {
                             scope.launch { drawerState.close() }
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -91,13 +91,13 @@ fun SchoolManagerApp() {
                                 restoreState    = true
                             }
                         },
-                        shape  = RoundedCornerShape(12.dp),
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor   = FluentBlueLight,
-                            selectedIconColor        = FluentBlue,
-                            selectedTextColor        = FluentBlue,
-                            unselectedIconColor      = FluentMuted,
-                            unselectedTextColor      = FluentMuted
+                        shape    = RoundedCornerShape(12.dp),
+                        colors   = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = FluentBlueLight,
+                            selectedIconColor      = FluentBlue,
+                            selectedTextColor      = FluentBlue,
+                            unselectedIconColor    = FluentMuted,
+                            unselectedTextColor    = FluentMuted
                         ),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
                     )
@@ -105,15 +105,14 @@ fun SchoolManagerApp() {
             }
         }
     ) {
-        // Each screen now manages its own FAB that merges navigation + add actions.
-        // The standalone menu FAB shown here previously has been removed.
+        // Each screen manages its own FAB that merges navigation + add actions.
         Scaffold(containerColor = MaterialTheme.colorScheme.background) { _ ->
             NavHost(
-                navController    = navController,
-                startDestination = Screen.Schedule.route,
-                modifier         = Modifier.fillMaxSize().animateContentSize(),
-                enterTransition  = { slideInHorizontally { it / 6 } + fadeIn() },
-                exitTransition   = { slideOutHorizontally { -it / 6 } + fadeOut() },
+                navController       = navController,
+                startDestination    = Screen.Schedule.route,
+                modifier            = Modifier.fillMaxSize().animateContentSize(),
+                enterTransition     = { slideInHorizontally { it / 6 } + fadeIn() },
+                exitTransition      = { slideOutHorizontally { -it / 6 } + fadeOut() },
                 popEnterTransition  = { slideInHorizontally { -it / 6 } + fadeIn() },
                 popExitTransition   = { slideOutHorizontally { it / 6 } + fadeOut() },
             ) {
@@ -122,6 +121,7 @@ fun SchoolManagerApp() {
                 composable(Screen.Classes.route)    { ClassesScreen(vm, onOpenDrawer = openDrawer) }
                 composable(Screen.Teachers.route)   { TeachersScreen(vm, onOpenDrawer = openDrawer) }
                 composable(Screen.Students.route)   { StudentsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Subjects.route)   { SubjectsScreen(vm, onOpenDrawer = openDrawer) }
                 composable(Screen.Stats.route)      { StatsScreen(vm, onOpenDrawer = openDrawer) }
                 composable(Screen.Export.route)     { ExportScreen(vm, onOpenDrawer = openDrawer) }
             }

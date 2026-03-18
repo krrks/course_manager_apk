@@ -4,6 +4,16 @@ import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
 // ─── Subject ──────────────────────────────────────────────────────────────────
+//
+//  IMPORTANT: Do NOT use @Insert(REPLACE) for updates on any entity that has
+//  child rows referencing it via FK.  SQLite's REPLACE strategy deletes the old
+//  row first, which fires all ON DELETE triggers (SET_NULL / CASCADE) before the
+//  new row is inserted — silently nullifying or deleting child data.
+//
+//  Pattern used here for all DAOs:
+//    upsert  → INSERT(IGNORE) + UPDATE fallback  (safe, no cascade side-effects)
+//    insert  → INSERT(IGNORE)  — for brand-new rows from addXxx() in ViewModel
+//    update  → @Update         — for edits from updateXxx() in ViewModel
 
 @Dao
 interface SubjectDao {
@@ -13,8 +23,11 @@ interface SubjectDao {
     @Query("SELECT * FROM subjects ORDER BY id")
     suspend fun all(): List<SubjectEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(e: SubjectEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(e: SubjectEntity): Long
+
+    @Update
+    suspend fun update(e: SubjectEntity)
 
     @Query("DELETE FROM subjects WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -36,8 +49,11 @@ interface TeacherDao {
     @Query("SELECT * FROM teachers ORDER BY id")
     suspend fun all(): List<TeacherEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(e: TeacherEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(e: TeacherEntity): Long
+
+    @Update
+    suspend fun update(e: TeacherEntity)
 
     @Query("DELETE FROM teachers WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -47,6 +63,11 @@ interface TeacherDao {
 }
 
 // ─── SchoolClass ──────────────────────────────────────────────────────────────
+//
+//  Critical: schedule.classId → classes.id  ON DELETE CASCADE.
+//  Using INSERT(REPLACE) here would delete+reinsert the class row, firing
+//  the CASCADE and wiping all schedule/attendance rows for that class.
+//  Always use update() for edits.
 
 @Dao
 interface ClassDao {
@@ -56,8 +77,11 @@ interface ClassDao {
     @Query("SELECT * FROM classes ORDER BY id")
     suspend fun all(): List<ClassEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(e: ClassEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(e: ClassEntity): Long
+
+    @Update
+    suspend fun update(e: ClassEntity)
 
     @Query("DELETE FROM classes WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -76,8 +100,11 @@ interface StudentDao {
     @Query("SELECT * FROM students ORDER BY id")
     suspend fun all(): List<StudentEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(e: StudentEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(e: StudentEntity): Long
+
+    @Update
+    suspend fun update(e: StudentEntity)
 
     @Query("DELETE FROM students WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -96,8 +123,11 @@ interface ScheduleDao {
     @Query("SELECT * FROM schedule ORDER BY day, startTime")
     suspend fun all(): List<ScheduleEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(e: ScheduleEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(e: ScheduleEntity): Long
+
+    @Update
+    suspend fun update(e: ScheduleEntity)
 
     @Query("DELETE FROM schedule WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -116,8 +146,11 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance ORDER BY date DESC")
     suspend fun all(): List<AttendanceEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(e: AttendanceEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(e: AttendanceEntity): Long
+
+    @Update
+    suspend fun update(e: AttendanceEntity)
 
     @Query("DELETE FROM attendance WHERE id = :id")
     suspend fun deleteById(id: Long)

@@ -9,7 +9,8 @@ data class SubjectEntity(
     @PrimaryKey val id: Long,
     val name: String,
     val color: Long,
-    val teacherId: Long?           // soft ref — no DB FK (avoids circular dep)
+    val teacherId: Long?,          // soft ref — no DB FK (avoids circular dep)
+    val code: String               // unique display code, e.g. "SBJ00001"
 )
 
 // ─── Teacher ──────────────────────────────────────────────────────────────────

@@ -114,18 +114,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── Subjects ─────────────────────────────────────────────────────────────
 
-    fun addSubject(name: String, color: Long, teacherId: Long?) {
+    fun addSubject(name: String, color: Long, teacherId: Long?, code: String = "") {
+        val c = code.ifBlank { genCode("SBJ") }
         viewModelScope.launch {
-            repo.addSubject(Subject(System.currentTimeMillis(), name, color, teacherId))
+            repo.addSubject(Subject(System.currentTimeMillis(), name, color, teacherId, c))
         }
     }
 
     fun updateSubject(s: Subject) {
         viewModelScope.launch {
             repo.updateSubject(s)
-            // No manual cascade needed — Room FK (SET_NULL) + FK-based UI lookups
-            // handle display automatically. Class.subject string is a display fallback;
-            // sync it here so legacy code paths still work.
+            // Class.subject string is a display fallback; keep it in sync so
+            // legacy code paths (attndance form, schedule form) still resolve correctly.
             val updatedClasses = state.value.classes.filter { it.subjectId == s.id }
             updatedClasses.forEach { cls ->
                 repo.updateSchoolClass(cls.copy(subject = s.name))
@@ -189,7 +189,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun updateSchoolClass(c: SchoolClass) {
-        // Keep subject display string in sync with subjectId FK
+        // Keep subject display string in sync with subjectId FK.
+        // This does NOT delete+reinsert (repo.updateSchoolClass calls @Update),
+        // so schedule rows for this class are never cascade-deleted.
         val resolved = c.subjectId?.let { sid ->
             state.value.subjects.find { it.id == sid }?.name ?: c.subject
         } ?: c.subject
