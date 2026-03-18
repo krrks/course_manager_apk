@@ -302,7 +302,76 @@ jobs:
             echo "No apply.sh found — skipping"
           fi
 
-      # ── 4. Compute next version tag ───────────────────────────────────────
+      # ── 4. Commit patch changes & clean up (before compilation) ─────────
+      #   Runs immediately after extract+apply so the source changes are always
+      #   committed even if the build step later fails.
+      - name: Commit patch changes & clean up
+        if: needs.check.outputs.patch_found == 'true'
+        env:
+          COMPILE_APK: ${{ needs.check.outputs.compile_apk }}
+        run: |
+          rm -f zip_update/patches/*.zip
+          rm -f zip_update/patches/apply.sh
+          echo "Removed patch zip and apply.sh from zip_update/patches/ (directory preserved)"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            CHANGELOG="zip_update/CHANGELOG.md"
+            if [ -f "$CHANGELOG" ]; then
+              NOTE=$(grep -v '^#!' "$CHANGELOG" | head -80)
+              if [ "$COMPILE_APK" = "true" ]; then
+                COMMIT_MSG=$(printf 'apply patch [skip ci]\n\n%s' "$NOTE")
+              else
+                COMMIT_MSG=$(printf 'apply patch (no-build) [skip ci]\n\n%s' "$NOTE")
+              fi
+            else
+              COMMIT_MSG="apply patch [skip ci]"
+            fi
+            git commit -m "$COMMIT_MSG"
+            git push origin HEAD
+            echo "✅ Commit pushed"
+          fi
+
+      # ── 4b. Update repo snapshot (before compilation) ────────────────────
+      - name: Update repo snapshot
+        if: needs.check.outputs.patch_found == 'true'
+        run: |
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          SHA=$(git rev-parse HEAD)
+          {
+            echo "# Repository Snapshot"
+            echo ""
+            echo "> Updated: \`$NOW\`"
+            echo "> Commit:  \`$SHA\`"
+            echo ""
+            echo '```'
+            find . -type f \
+              ! -path './.git/*' \
+              ! -path './build/*' \
+              ! -path './.gradle/*' \
+              ! -path './app/build/*' \
+              ! -name '*.zip' \
+              | sort
+            echo '```'
+          } > zip_update/repo_snapshot.md
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add zip_update/repo_snapshot.md
+          if git diff --cached --quiet; then
+            echo "repo_snapshot.md unchanged"
+          else
+            git commit -m "update repo_snapshot.md [skip ci]"
+            git push origin HEAD
+            echo "✅ repo_snapshot.md updated"
+          fi
+
+      # ── 5. Compute next version tag ───────────────────────────────────────
       - name: Compute next version tag
         id: version
         if: needs.check.outputs.compile_apk == 'true'
@@ -388,21 +457,47 @@ jobs:
         if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_release == 'true'
         run: |
           PROPS="keys/keystore.properties"
+          KEYSTORE_OK=true
+
           if [ ! -f "$PROPS" ]; then
-            echo "⚠️  $PROPS not found — release APK will use debug key"
-            exit 0
+            KEYSTORE_OK=false
+            echo "::warning::keystore.properties not found"
+          else
+            # Parse key=value lines, export each to GITHUB_ENV (mask passwords)
+            while IFS='=' read -r key value; do
+              [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+              key=$(echo "$key" | xargs)
+              value=$(echo "$value" | xargs)
+              echo "::add-mask::$value"
+              echo "${key}=${value}" >> "$GITHUB_ENV"
+            done < "$PROPS"
+
+            # Verify the keystore file itself exists
+            JKS="keys/release.jks"
+            if [ ! -f "$JKS" ]; then
+              KEYSTORE_OK=false
+              echo "::warning::release.jks not found"
+            fi
           fi
 
-          # Parse key=value lines, export each to GITHUB_ENV (mask passwords)
-          while IFS='=' read -r key value; do
-            [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
-            key=$(echo "$key" | xargs)
-            value=$(echo "$value" | xargs)
-            echo "::add-mask::$value"
-            echo "${key}=${value}" >> "$GITHUB_ENV"
-          done < "$PROPS"
-
-          echo "✅ Keystore credentials loaded from $PROPS"
+          if [ "$KEYSTORE_OK" = "false" ]; then
+            echo ""
+            echo "##################################################"
+            echo "#                                                #"
+            echo "#   ⚠️  WARNING: RELEASE KEY LOAD FAILED  ⚠️    #"
+            echo "#                                                #"
+            echo "#   The release APK will be signed with the     #"
+            echo "#   DEBUG key. It cannot be published to the    #"
+            echo "#   Play Store and should NOT be distributed.   #"
+            echo "#                                                #"
+            echo "#   To fix: ensure keys/keystore.properties     #"
+            echo "#   and keys/release.jks are present.           #"
+            echo "#                                                #"
+            echo "##################################################"
+            echo ""
+          else
+            echo "✅ Keystore credentials loaded from $PROPS"
+          fi
 
       # ── 12. Build Release APK ─────────────────────────────────────────────
       - name: Build Release APK
@@ -429,76 +524,7 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk
 
-      # ── 14. Commit changes, clean up patch files ──────────────────────────
-      #   Deletes the zip and apply.sh from patches/, but keeps the patches/
-      #   directory itself so the folder remains tracked in git.
-      - name: Commit patch changes & clean up
-        if: needs.check.outputs.patch_found == 'true'
-        env:
-          COMPILE_APK: ${{ needs.check.outputs.compile_apk }}
-        run: |
-          rm -f zip_update/patches/*.zip
-          rm -f zip_update/patches/apply.sh
-          echo "Removed patch zip and apply.sh from zip_update/patches/ (directory preserved)"
-
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-
-          if git diff --cached --quiet; then
-            echo "Nothing to commit"
-          else
-            CHANGELOG="zip_update/CHANGELOG.md"
-            if [ -f "$CHANGELOG" ]; then
-              NOTE=$(grep -v '^#!' "$CHANGELOG" | head -80)
-              if [ "$COMPILE_APK" = "true" ]; then
-                COMMIT_MSG=$(printf 'apply patch [skip ci]\n\n%s' "$NOTE")
-              else
-                COMMIT_MSG=$(printf 'apply patch (no-build) [skip ci]\n\n%s' "$NOTE")
-              fi
-            else
-              COMMIT_MSG="apply patch [skip ci]"
-            fi
-            git commit -m "$COMMIT_MSG"
-            git push origin HEAD
-            echo "✅ Commit pushed"
-          fi
-
-      # ── 15. Update repo snapshot ──────────────────────────────────────────
-      - name: Update repo snapshot
-        if: needs.check.outputs.patch_found == 'true'
-        run: |
-          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          SHA=$(git rev-parse HEAD)
-          {
-            echo "# Repository Snapshot"
-            echo ""
-            echo "> Updated: \`$NOW\`"
-            echo "> Commit:  \`$SHA\`"
-            echo ""
-            echo '```'
-            find . -type f \
-              ! -path './.git/*' \
-              ! -path './build/*' \
-              ! -path './.gradle/*' \
-              ! -path './app/build/*' \
-              ! -name '*.zip' \
-              | sort
-            echo '```'
-          } > zip_update/repo_snapshot.md
-
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add zip_update/repo_snapshot.md
-          if git diff --cached --quiet; then
-            echo "repo_snapshot.md unchanged"
-          else
-            git commit -m "update repo_snapshot.md [skip ci]"
-            git push origin HEAD
-            echo "✅ repo_snapshot.md updated"
-          fi
-
-      # ── 16. Create GitHub Release ─────────────────────────────────────────
+      # ── 14. Create GitHub Release ─────────────────────────────────────────
       #   Skipped when compile_apk=false (#!no-build mode).
       - name: Create GitHub Release
         if: needs.check.outputs.compile_apk == 'true'
