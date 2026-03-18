@@ -17,7 +17,7 @@ data class Teacher(
     val name: String,
     val gender: String,
     val phone: String,
-    val subjectIds: List<Long> = emptyList(),
+    // subjectIds removed — derived dynamically from Subject.teacherId
     val avatarUri: String? = null,
     val code: String = ""
 )
@@ -28,7 +28,9 @@ data class SchoolClass(
     val grade: String,
     val count: Int,
     val headTeacherId: Long?,
-    val subject: String = "",
+    // subjectId is the canonical FK; subject string kept for legacy JSON compat
+    val subjectId: Long? = null,
+    val subject: String = "",          // legacy / display fallback
     val code: String = ""
 )
 
@@ -89,7 +91,6 @@ val SUBJECT_COLORS = listOf(
 
 val GRADES = listOf("高一","高二","高三","初一","初二","初三")
 
-// ── 改动：去掉"周"字，选项更短，在窄 dropdown 中不换行 ──────────────────────────
 val DAYS   = listOf("一","二","三","四","五","六","日")
 
 val PERIOD_TIMES     = listOf("08:00","09:00","10:00","11:00","14:00","15:00","16:00","19:00")
@@ -117,10 +118,19 @@ fun Attendance.resolvedStart(): String =
 fun Attendance.resolvedEnd(): String =
     endTime.ifBlank { PERIOD_END_TIMES.getOrElse(period - 1) { "" } }
 
+/** Resolve subject name: prefer FK lookup, fall back to legacy string */
 fun Schedule.resolvedSubjectName(subjects: List<Subject>, classes: List<SchoolClass>): String =
     subjects.find { it.id == subjectId }?.name
-        ?: classes.find { it.id == classId }?.subject?.takeIf { it.isNotBlank() }
+        ?: classes.find { it.id == classId }?.let { cls ->
+            subjects.find { it.id == cls.subjectId }?.name
+                ?: cls.subject.takeIf { it.isNotBlank() }
+        }
         ?: "?"
+
+/** Resolve the canonical subject for a class */
+fun SchoolClass.resolvedSubject(subjects: List<Subject>): Subject? =
+    subjects.find { it.id == subjectId }
+        ?: subjects.find { it.name == subject }
 
 fun genCode(prefix: String): String {
     val t = System.currentTimeMillis()
@@ -138,16 +148,16 @@ val sampleSubjects = listOf(
 )
 
 val sampleTeachers = listOf(
-    Teacher(1, "王老师", "男", "138****0001", listOf(1,4), code = "T00001"),
-    Teacher(2, "李老师", "女", "139****0002", listOf(2),   code = "T00002"),
-    Teacher(3, "张老师", "女", "137****0003", listOf(3),   code = "T00003"),
-    Teacher(4, "刘老师", "男", "136****0004", listOf(5),   code = "T00004"),
+    Teacher(1, "王老师", "男", "138****0001", code = "T00001"),
+    Teacher(2, "李老师", "女", "139****0002", code = "T00002"),
+    Teacher(3, "张老师", "女", "137****0003", code = "T00003"),
+    Teacher(4, "刘老师", "男", "136****0004", code = "T00004"),
 )
 
 val sampleClasses = listOf(
-    SchoolClass(1, "高一(1)班", "高一", 45, 1, subject = "数学", code = "C00001"),
-    SchoolClass(2, "高一(2)班", "高一", 43, 2, subject = "语文", code = "C00002"),
-    SchoolClass(3, "高二(1)班", "高二", 47, 3, subject = "英语", code = "C00003"),
+    SchoolClass(1, "高一(1)班", "高一", 45, 1, subjectId = 1, subject = "数学", code = "C00001"),
+    SchoolClass(2, "高一(2)班", "高一", 43, 2, subjectId = 2, subject = "语文", code = "C00002"),
+    SchoolClass(3, "高二(1)班", "高二", 47, 3, subjectId = 3, subject = "英语", code = "C00003"),
 )
 
 val sampleStudents = listOf(

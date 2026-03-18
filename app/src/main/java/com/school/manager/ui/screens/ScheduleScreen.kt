@@ -447,11 +447,15 @@ private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -
     var endTime     by remember { mutableStateOf("09:00") }
     var code        by remember { mutableStateOf(genCode("SCH")) }
 
-    val classSubject = state.classes.firstOrNull { it.name == className }?.subject ?: ""
+    val _selClass = state.classes.firstOrNull { it.name == className }
+    val classSubject = _selClass?.let { cls ->
+        state.subjects.find { it.id == cls.subjectId }?.name ?: cls.subject.ifBlank { null }
+    } ?: ""
 
     FluentDialog(title = "添加课程", onDismiss = onDismiss, onConfirm = {
         val cls = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
-        val sId = state.subjects.firstOrNull { it.name == cls.subject }?.id
+        val sId = cls.subjectId
+            ?: state.subjects.firstOrNull { it.name == cls.subject }?.id
             ?: state.subjects.firstOrNull()?.id ?: return@FluentDialog
         val tId = state.teachers.firstOrNull { it.name == teacherName }?.id
         val d   = DAYS.indexOf(day) + 1
@@ -513,7 +517,8 @@ private fun EditScheduleDialog(
 
     FluentDialog(title = "编辑课程", onDismiss = onDismiss, onConfirm = {
         val cls = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
-        val sId = state.subjects.firstOrNull { it.name == cls.subject }?.id
+        val sId = cls.subjectId
+            ?: state.subjects.firstOrNull { it.name == cls.subject }?.id
             ?: state.subjects.firstOrNull()?.id ?: return@FluentDialog
         val tId = state.teachers.firstOrNull { it.name == teacherName }?.id
         val d   = DAYS.indexOf(day) + 1

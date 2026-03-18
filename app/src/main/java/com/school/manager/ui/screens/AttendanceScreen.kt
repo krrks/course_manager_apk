@@ -525,7 +525,8 @@ internal fun AttendanceFormDialog(
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         val cls  = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
-        val sId  = state.subjects.firstOrNull { it.name == cls.subject }?.id
+        val sId  = cls.subjectId
+                   ?: state.subjects.firstOrNull { it.name == cls.subject }?.id
                    ?: initial?.subjectId ?: state.subjects.firstOrNull()?.id ?: 1L
         val tId  = state.teachers.firstOrNull { it.name == teacherName }?.id
         val newId = if (initial != null && initial.id != 0L) initial.id else System.currentTimeMillis()
@@ -563,10 +564,13 @@ internal fun AttendanceFormDialog(
         }
 
         // ── 科目 badge ────────────────────────────────────────────────
-        if (selectedClass?.subject?.isNotBlank() == true) {
+        val resolvedSubjectName = selectedClass?.let { cls ->
+            state.subjects.find { it.id == cls.subjectId }?.name ?: cls.subject.ifBlank { null }
+        }
+        if (resolvedSubjectName?.isNotBlank() == true) {
             Surface(shape = RoundedCornerShape(8.dp), color = FluentPurple.copy(alpha = 0.1f)) {
                 Text(
-                    "科目：${selectedClass.subject}",
+                    "科目：$resolvedSubjectName",
                     style      = MaterialTheme.typography.bodySmall,
                     color      = FluentPurple,
                     fontWeight = FontWeight.SemiBold,
