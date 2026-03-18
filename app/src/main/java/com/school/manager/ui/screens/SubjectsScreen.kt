@@ -28,9 +28,9 @@ fun SubjectsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
     Scaffold(
         floatingActionButton = {
             ScreenSpeedDialFab(
-                addLabel    = "添加科目",
-                addIcon     = Icons.Default.Add,
-                onAdd       = { showAdd = true },
+                addLabel     = "添加科目",
+                addIcon      = Icons.Default.Add,
+                onAdd        = { showAdd = true },
                 onOpenDrawer = onOpenDrawer
             )
         }
@@ -48,10 +48,7 @@ fun SubjectsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                 item { EmptyState("📚", "暂无科目") }
             } else {
                 items(state.subjects, key = { it.id }) { s ->
-                    SubjectRow(s, state, vm,
-                        onView = { viewing = s },
-                        onEdit = { editing = s }
-                    )
+                    SubjectRow(s, state, vm, onView = { viewing = s }, onEdit = { editing = s })
                 }
             }
         }
@@ -93,8 +90,8 @@ private fun SubjectRow(
 
     FluentCard(modifier = Modifier.fillMaxWidth(), onClick = onView) {
         Row(
-            modifier            = Modifier.padding(14.dp),
-            verticalAlignment   = Alignment.CenterVertically,
+            modifier              = Modifier.padding(14.dp),
+            verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Color strip
@@ -109,8 +106,8 @@ private fun SubjectRow(
             // Main info
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(
-                    verticalAlignment      = Alignment.CenterVertically,
-                    horizontalArrangement  = Arrangement.spacedBy(8.dp)
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         "📚 ${s.name}",
@@ -153,10 +150,10 @@ private fun SubjectStatChip(label: String, color: Color) {
     Surface(shape = RoundedCornerShape(8.dp), color = color.copy(alpha = 0.10f)) {
         Text(
             label,
-            style    = MaterialTheme.typography.labelSmall,
-            color    = color,
+            style      = MaterialTheme.typography.labelSmall,
+            color      = color,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+            modifier   = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
     }
 }
@@ -220,7 +217,7 @@ private fun SubjectFormDialog(
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         if (name.isNotBlank()) {
-            val tId = state.teachers.firstOrNull { it.name == teacher }?.id
+            val tId       = state.teachers.firstOrNull { it.name == teacher }?.id
             val subjectId = initial?.id ?: System.currentTimeMillis()
             onSave(Subject(subjectId, name.trim(), SUBJECT_COLORS[colorIdx], tId, code.trim()))
         }
@@ -231,13 +228,10 @@ private fun SubjectFormDialog(
         // 科目名称
         FluentTextField("科目名称", name, { name = it })
 
-        // 主讲教师
-        DropdownField(
-            label    = "主讲教师",
-            value    = teacher,
-            options  = listOf("") + state.teachers.map { it.name },
-            onSelect = { teacher = it }
-        )
+        // 主讲教师 — positional args, matching the signature used in ClassesScreen
+        DropdownField("主讲教师", teacher, listOf("") + state.teachers.map { it.name }) {
+            teacher = it
+        }
 
         // 颜色选择
         SectionHeader("颜色")
@@ -247,17 +241,18 @@ private fun SubjectFormDialog(
             verticalArrangement   = Arrangement.spacedBy(8.dp)
         ) {
             SUBJECT_COLORS.forEachIndexed { idx, packed ->
-                val col = packedToColor(packed)
-                val selected = idx == colorIdx
+                val col      = packedToColor(packed)
+                val isSelected = idx == colorIdx
                 Box(
-                    modifier = Modifier
+                    Modifier
                         .size(32.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(col)
                         .clickable { colorIdx = idx }
                         .then(
-                            if (selected) Modifier.border(
-                                3.dp, MaterialTheme.colorScheme.onSurface,
+                            if (isSelected) Modifier.border(
+                                3.dp,
+                                MaterialTheme.colorScheme.onSurface,
                                 RoundedCornerShape(8.dp)
                             ) else Modifier
                         )

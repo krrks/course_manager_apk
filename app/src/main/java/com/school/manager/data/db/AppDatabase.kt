@@ -2,6 +2,7 @@ package com.school.manager.data.db
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
@@ -32,7 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
         // Adds the `code` column to the subjects table.
         // All existing subjects get an empty string as their initial code value;
         // the ViewModel will keep generating codes for new subjects automatically.
-        val MIGRATION_1_2 = object : Migration(1, 2) {
+        val MIGRATION_1_2: Migration = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE subjects ADD COLUMN code TEXT NOT NULL DEFAULT ''")
             }
