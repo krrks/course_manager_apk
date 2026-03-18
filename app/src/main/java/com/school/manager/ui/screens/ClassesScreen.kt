@@ -42,9 +42,7 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                 items(state.classes) { cls ->
                     val sts      = state.students.filter { s -> s.classIds.contains(cls.id) }
                     val gradeCol = gradeColor(cls.grade)
-                    // BUG-4 display fix: resolve subject via FK, fall back to legacy string
                     val subjectDisplay = cls.resolvedSubject(state.subjects)?.name
-                        ?: cls.subject.ifBlank { null }
                     FluentCard(
                         accentColor = gradeCol,
                         modifier    = Modifier.fillMaxWidth(),
@@ -62,7 +60,6 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                                 Text(cls.name,
                                     style      = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold)
-                                // Use ColorChip as grade badge (GradeBadge does not exist)
                                 ColorChip(cls.grade, gradeCol)
                             }
                             Text(
@@ -100,7 +97,7 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
 
     if (showAdd) {
         ClassFormDialog("添加班级", null, state, vm, onDismiss = { showAdd = false }) { c ->
-            vm.addSchoolClass(c.name, c.grade, c.count, c.headTeacherId, c.subjectId, c.subject, c.code)
+            vm.addSchoolClass(c.name, c.grade, c.count, c.headTeacherId, c.subjectId, code = c.code)
             showAdd = false
         }
     }
@@ -120,9 +117,10 @@ private fun ClassDetailDialog(
     cls: SchoolClass, state: AppState, vm: AppViewModel,
     onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
-    val ht  = vm.teacher(cls.headTeacherId)
-    val sts = state.students.filter { s -> s.classIds.contains(cls.id) }
-    val subjectDisplay = cls.resolvedSubject(state.subjects)?.name ?: cls.subject.ifBlank { null }
+    val ht             = vm.teacher(cls.headTeacherId)
+    val sts            = state.students.filter { s -> s.classIds.contains(cls.id) }
+    val subjectDisplay = cls.resolvedSubject(state.subjects)?.name
+
     FluentDialog(title = "班级详情", onDismiss = onDismiss) {
         if (cls.code.isNotBlank()) DetailRow("编号", cls.code)
         DetailRow("班级名称", cls.name)
@@ -162,13 +160,8 @@ private fun ClassFormDialog(
         state.teachers.firstOrNull { it.id == initial?.headTeacherId }?.name ?: "") }
     var code    by remember { mutableStateOf(initial?.code    ?: genCode("C")) }
 
-    // BUG-3 FIX: Subject is selected only from the existing Subject list via FK id.
-    // Free-text entry removed to prevent subjectId from being silently dropped.
     val initialSubject: Subject? = remember(state.subjects, initial) {
-        initial?.let { cls ->
-            state.subjects.find { it.id == cls.subjectId }
-                
-        }
+        initial?.let { cls -> state.subjects.find { it.id == cls.subjectId } }
     }
     var selectedSubjectId by remember { mutableStateOf(initialSubject?.id) }
     val selectedSubjectName = state.subjects.find { it.id == selectedSubjectId }?.name ?: ""
@@ -182,9 +175,14 @@ private fun ClassFormDialog(
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         if (name.isNotBlank()) {
             val tId = state.teachers.firstOrNull { it.name == teacher }?.id
-            val chosenSubject = state.subjects.find { it.id == selectedSubjectId }
             val savedClass = SchoolClass(
-                id            = initial?.id ?: System.currentTimeMillis(), name          = name.trim(), grade         = grade, count         = count.toIntOrNull() ?: 0, headTeacherId = tId, subjectId = chosenSubject?.id, code = code.trim()
+                id            = initial?.id ?: System.currentTimeMillis(),
+                name          = name.trim(),
+                grade         = grade,
+                count         = count.toIntOrNull() ?: 0,
+                headTeacherId = tId,
+                subjectId     = selectedSubjectId,
+                code          = code.trim()
             )
             if (initial != null) {
                 val classId = initial.id
@@ -208,7 +206,6 @@ private fun ClassFormDialog(
         DropdownField("班主任", teacher,
             listOf("") + state.teachers.map { it.name }) { teacher = it }
 
-        // BUG-3 FIX: pure dropdown bound to Subject.id — no free-text entry
         if (state.subjects.isNotEmpty()) {
             DropdownField(
                 label    = "科目",

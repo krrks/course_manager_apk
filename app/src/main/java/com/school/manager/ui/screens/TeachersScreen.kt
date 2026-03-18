@@ -46,7 +46,6 @@ fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                 item { EmptyState("👩‍🏫", "暂无教师") }
             } else {
                 items(state.teachers) { t ->
-                    // Derive subjects from Subject.teacherId (single source of truth)
                     val teacherSubjects = state.subjects.filter { it.teacherId == t.id }
                     val lessonCount = state.attendance.count { it.teacherId == t.id && it.status == "completed" }
                     val teacherClasses = state.classes.filter { c ->
@@ -84,8 +83,8 @@ fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                                             ColorChip(sub.name, FluentBlue)
                                         }
                                         teacherClasses.take(3).forEach { c ->
-                                            val subjectDisplay = c.resolvedSubject(state.subjects)?.name
-                                                ?: c.subject.ifBlank { c.name }
+                                            // subject name derived from FK only
+                                            val subjectDisplay = c.resolvedSubject(state.subjects)?.name ?: c.name
                                             ColorChip(subjectDisplay, FluentGreen)
                                         }
                                     }
@@ -129,7 +128,6 @@ private fun TeacherDetailDialog(
     val teacherClasses = state.classes.filter { c ->
         state.schedule.any { s -> s.teacherId == t.id && s.classId == c.id }
     }
-    // Subjects derived from canonical FK
     val teacherSubjects = state.subjects.filter { it.teacherId == t.id }
 
     FluentDialog(title = "教师详情", onDismiss = onDismiss) {
@@ -156,9 +154,8 @@ private fun TeacherDetailDialog(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 teacherClasses.forEach { c ->
                     val subjectDisplay = c.resolvedSubject(state.subjects)?.name
-                        ?: c.subject.ifBlank { c.name }
                     ColorChip(
-                        if (c.subject.isNotBlank()) "${c.name}·$subjectDisplay" else c.name,
+                        if (subjectDisplay != null) "${c.name}·$subjectDisplay" else c.name,
                         FluentGreen
                     )
                 }

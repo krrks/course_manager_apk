@@ -47,10 +47,7 @@ private val totalCalHeightDp: Float get() = (CAL_END_HOUR - CAL_START_HOUR) * DP
 
 private fun packedToColor(packed: Long): Color = Color(packed.toInt())
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-
-// ── Time helpers (mirrors of ScheduleScreen private helpers) ─────────────────
+// ── Time helpers ──────────────────────────────────────────────────────────────
 private fun addMinutesToTime(hhmm: String, minutes: Int): String {
     val base  = if (hhmm.isBlank()) 8 * 60 else timeToMinutes(hhmm)
     val total = (base + minutes).coerceIn(0, 23 * 60 + 59)
@@ -92,7 +89,6 @@ fun AttendanceScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     ) { inner ->
         Column(modifier = Modifier.fillMaxSize()
             .padding(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding())) {
-            // View-mode chips
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -108,7 +104,6 @@ fun AttendanceScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                         "排序", tint = FluentBlue)
                 }
             }
-            // Filter chips
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp),
@@ -119,10 +114,10 @@ fun AttendanceScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
             }
 
             when (view) {
-                "list"  -> ListView(records, vm)     { viewing = it }
-                "week"  -> WeekView(records, calDate, { calDate = it }, vm) { viewing = it }
-                "month" -> MonthView(records, calDate, { calDate = it }, vm) { viewing = it }
-                "day"   -> DayView(records,  calDate, { calDate = it }, vm) { viewing = it }
+                "list"  -> ListView(records, vm, state) { viewing = it }
+                "week"  -> WeekView(records, calDate, { calDate = it }, vm, state) { viewing = it }
+                "month" -> MonthView(records, calDate, { calDate = it }, vm, state) { viewing = it }
+                "day"   -> DayView(records,  calDate, { calDate = it }, vm, state) { viewing = it }
             }
         }
     }
@@ -142,8 +137,9 @@ fun AttendanceScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
         AttendanceFormDialog("添加记录", null, state, vm,
             onDismiss = { showAdd = false },
             onSave    = { a ->
-                vm.addAttendance(a.classId, a.subjectId, a.teacherId, a.date,
-                    a.startTime, a.endTime, a.topic, a.status, a.notes, a.attendees)
+                vm.addAttendance(a.classId, teacherId = a.teacherId, date = a.date,
+                    startTime = a.startTime, endTime = a.endTime,
+                    topic = a.topic, status = a.status, notes = a.notes, attendees = a.attendees)
                 showAdd = false
             })
     }
@@ -152,21 +148,26 @@ fun AttendanceScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
 // ── List view ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ListView(records: List<Attendance>, vm: AppViewModel, onClick: (Attendance) -> Unit) {
+private fun ListView(
+    records: List<Attendance>,
+    vm: AppViewModel,
+    state: AppState,
+    onClick: (Attendance) -> Unit
+) {
     LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()) {
         if (records.isEmpty()) item { EmptyState("📋", "暂无上课记录") }
-        else items(records) { rec -> AttendanceCard(rec, vm) { onClick(rec) } }
+        else items(records) { rec -> AttendanceCard(rec, vm, state) { onClick(rec) } }
         item { Spacer(Modifier.height(80.dp)) }
     }
 }
 
 @Composable
-private fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Unit) {
-    val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
+private fun AttendanceCard(rec: Attendance, vm: AppViewModel, state: AppState, onClick: () -> Unit) {
+    val sub      = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
     val te       = vm.teacher(rec.teacherId)
     val cl       = vm.schoolClass(rec.classId)
-    val colorIdx = (vm.state.value.subjects.indexOfFirst { it.id == rec.subjectId }.takeIf { it >= 0 }
+    val colorIdx = (state.subjects.indexOf(sub).takeIf { it >= 0 }
         ?: (rec.classId % SUBJECT_COLORS.size).toInt())
     val color    = Color(SUBJECT_COLORS[colorIdx % SUBJECT_COLORS.size])
     val startStr = rec.resolvedStart()
@@ -176,8 +177,7 @@ private fun AttendanceCard(rec: Attendance, vm: AppViewModel, onClick: () -> Uni
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    // BUG-5 FIX: resolve via subjectId FK first
-                    Text(rec.subjectName(vm.state.value.classes, vm.state.value.subjects),
+                    Text(rec.subjectName(state.classes, state.subjects),
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
                     Text("· ${cl?.name ?: "?"}",
                         style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
@@ -207,6 +207,7 @@ private fun WeekView(
     current: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     vm: AppViewModel,
+    state: AppState,
     onRecordClick: (Attendance) -> Unit
 ) {
     val monday = current.with(DayOfWeek.MONDAY)
@@ -214,7 +215,6 @@ private fun WeekView(
     val fmt    = DateTimeFormatter.ofPattern("M/d")
 
     Column(Modifier.fillMaxSize()) {
-        // Header nav
         Row(Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
@@ -226,10 +226,8 @@ private fun WeekView(
             IconButton(onClick = { onDateChange(current.plusWeeks(1)) }) {
                 Icon(Icons.Default.ChevronRight, null, tint = Color.White) }
         }
-        // Day columns
         val scrollV = rememberScrollState()
         Row(Modifier.fillMaxSize()) {
-            // Fixed time column
             Box(Modifier.width(TIME_COL_W.dp).verticalScroll(scrollV)
                 .background(MaterialTheme.colorScheme.surfaceVariant)) {
                 Box(Modifier.height((totalCalHeightDp + CAL_V_PAD * 2).dp)) {
@@ -240,7 +238,6 @@ private fun WeekView(
                     }
                 }
             }
-            // Scrollable day columns
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
                 days.forEach { day ->
                     val dayRecs = records.filter { it.date == day.toString() }
@@ -266,8 +263,7 @@ private fun WeekView(
                                 val startStr = rec.resolvedStart()
                                 val endStr   = rec.resolvedEnd()
                                 if (startStr.isBlank()) return@forEach
-                                val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
-                                val cl    = vm.schoolClass(rec.classId)
+                                val sub   = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
                                 val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
                                 Box(Modifier
                                     .offset(y = (minuteOffsetDp(startStr) + CAL_V_PAD).dp)
@@ -279,8 +275,7 @@ private fun WeekView(
                                     .clickable { onRecordClick(rec) }
                                     .padding(4.dp)) {
                                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                        // BUG-5 FIX: use resolvedSubjectName (Attendance extension in Models.kt)
-                    Text(rec.subjectName(vm.state.value.classes, vm.state.value.subjects),
+                                        Text(rec.subjectName(state.classes, state.subjects),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold, color = color, maxLines = 1)
                                         Text("$startStr–$endStr",
@@ -304,6 +299,7 @@ private fun MonthView(
     current: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     vm: AppViewModel,
+    state: AppState,
     onRecordClick: (Attendance) -> Unit
 ) {
     val ym     = YearMonth.from(current)
@@ -322,14 +318,12 @@ private fun MonthView(
             IconButton(onClick = { onDateChange(current.plusMonths(1)) }) {
                 Icon(Icons.Default.ChevronRight, null, tint = Color.White) }
         }
-        // Day-of-week header
         Row(Modifier.fillMaxWidth()) {
             listOf("日","一","二","三","四","五","六").forEach { d ->
                 Text(d, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
                     color = FluentMuted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
-        // Grid
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             val cells = offset + days
             val rows  = (cells + 6) / 7
@@ -352,10 +346,9 @@ private fun MonthView(
                                         fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
                                         color = if (day == LocalDate.now()) FluentBlue else FluentMuted)
                                     dayRecs.take(3).forEach { rec ->
-                                        val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
-                                        val cl  = vm.schoolClass(rec.classId)
+                                        val sub   = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
                                         val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
-                                        Text(rec.subjectName(vm.state.value.classes, vm.state.value.subjects),
+                                        Text(rec.subjectName(state.classes, state.subjects),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = color, maxLines = 1,
                                             modifier = Modifier
@@ -383,9 +376,10 @@ private fun DayView(
     current: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     vm: AppViewModel,
+    state: AppState,
     onRecordClick: (Attendance) -> Unit
 ) {
-    val dow    = listOf("","一","二","三","四","五","六","日")[current.dayOfWeek.value]
+    val dow     = listOf("","一","二","三","四","五","六","日")[current.dayOfWeek.value]
     val dayRecs = records.filter { it.date == current.toString() }
 
     Column(Modifier.fillMaxSize()) {
@@ -401,7 +395,6 @@ private fun DayView(
 
         val scrollV = rememberScrollState()
         Row(Modifier.fillMaxSize()) {
-            // Fixed time column
             Box(Modifier.width(TIME_COL_W.dp).verticalScroll(scrollV)
                 .background(MaterialTheme.colorScheme.surfaceVariant)) {
                 Box(Modifier.height((totalCalHeightDp + CAL_V_PAD * 2).dp)) {
@@ -412,7 +405,6 @@ private fun DayView(
                     }
                 }
             }
-            // Event column
             Box(Modifier.weight(1f).verticalScroll(scrollV)
                 .height((totalCalHeightDp + CAL_V_PAD * 2).dp).border(0.5.dp, FluentBorder)) {
                 for (h in CAL_START_HOUR..CAL_END_HOUR) {
@@ -423,7 +415,7 @@ private fun DayView(
                     val startStr = rec.resolvedStart()
                     val endStr   = rec.resolvedEnd()
                     if (startStr.isBlank()) return@forEach
-                    val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
+                    val sub   = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
                     val cl    = vm.schoolClass(rec.classId)
                     val te    = vm.teacher(rec.teacherId)
                     val color = packedToColor(sub?.color ?: SUBJECT_COLORS[0])
@@ -440,7 +432,6 @@ private fun DayView(
                             Text("${sub?.name ?: "?"} · ${cl?.name ?: "?"}",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold, color = color, maxLines = 1)
-                            // FIX: show start-end times in day event block
                             Text("$startStr – $endStr  👩‍🏫${te?.name ?: "─"}",
                                 style = MaterialTheme.typography.labelSmall, color = FluentMuted, maxLines = 1)
                             StatusBadge(rec.status)
@@ -459,7 +450,7 @@ private fun AttendanceDetailDialog(
     rec: Attendance, state: AppState, vm: AppViewModel,
     onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
-    val sub = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
+    val sub  = vm.schoolClass(rec.classId)?.resolvedSubject(state.subjects)
     val te   = vm.teacher(rec.teacherId)
     val cl   = vm.schoolClass(rec.classId)
     val ats  = rec.attendees.mapNotNull { vm.student(it) }
@@ -525,35 +516,26 @@ internal fun AttendanceFormDialog(
     val classStudents  = state.students.filter { s -> s.classIds.contains(selectedClass?.id) }
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
-        val cls  = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
-        val sId  = cls.subjectId
-                   ?: state.subjects.firstOrNull { it.name == cls.subject }?.id
-                   ?: initial?.subjectId ?: state.subjects.firstOrNull()?.id ?: 1L
-        val tId  = state.teachers.firstOrNull { it.name == teacherName }?.id
+        val cls   = state.classes.firstOrNull { it.name == className } ?: return@FluentDialog
+        val tId   = state.teachers.firstOrNull { it.name == teacherName }?.id
         val newId = if (initial != null && initial.id != 0L) initial.id else System.currentTimeMillis()
         onSave(Attendance(newId, cls.id, tId, date, 0, startTime, endTime,
                           topic, status, notes, attendees, code.trim().ifBlank { genCode("ATT") }))
     }) {
-        // ── 行1：编号½ + 状态½ ────────────────────────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth(),
+        // 行1：编号½ + 状态½
+        Row(modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Box(Modifier.weight(1f)) {
-                FormTextField("编号", code, { code = it }, "自动生成")
-            }
+            verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f)) { FormTextField("编号", code, { code = it }, "自动生成") }
             Box(Modifier.weight(1f)) {
                 FormDropdown("状态", status, listOf("completed", "cancelled", "pending")) { status = it }
             }
         }
 
-        // ── 行2：班级½ + 教师½ ────────────────────────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth(),
+        // 行2：班级½ + 教师½
+        Row(modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top
-        ) {
+            verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) {
                 FormDropdown("班级", className, state.classes.map { it.name }) {
                     className = it; attendees = emptyList()
@@ -564,10 +546,8 @@ internal fun AttendanceFormDialog(
             }
         }
 
-        // ── 科目 badge ────────────────────────────────────────────────
-        val resolvedSubjectName = selectedClass?.let { cls ->
-            state.subjects.find { it.id == cls.subjectId }?.name ?: cls.subject.ifBlank { null }
-        }
+        // 科目 badge（只读，来自班级）
+        val resolvedSubjectName = selectedClass?.resolvedSubject(state.subjects)?.name
         if (resolvedSubjectName?.isNotBlank() == true) {
             Surface(shape = RoundedCornerShape(8.dp), color = FluentPurple.copy(alpha = 0.1f)) {
                 Text(
@@ -580,15 +560,11 @@ internal fun AttendanceFormDialog(
             }
         }
 
-        // ── 行3：日期½ + 开始时间½ ────────────────────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth(),
+        // 行3：日期½ + 开始时间½
+        Row(modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Box(Modifier.weight(1f)) {
-                DatePickerField("日期", date) { date = it }
-            }
+            verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f)) { DatePickerField("日期", date) { date = it } }
             Box(Modifier.weight(1f)) {
                 StartTimeCompact(startTime) { newStart ->
                     val dur = minutesBetween(startTime, endTime).coerceAtLeast(30)
@@ -598,13 +574,9 @@ internal fun AttendanceFormDialog(
             }
         }
 
-        // ── 时长（独立行）────────────────────────────────────────────
         DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
-
-        // ── 课题（独立行）────────────────────────────────────────────
         FormTextField("课题", topic, { topic = it }, "本节课主题")
 
-        // ── 出勤学生 ─────────────────────────────────────────────────
         if (classStudents.isNotEmpty()) {
             SectionHeader("出勤学生")
             androidx.compose.foundation.layout.FlowRow(
@@ -620,7 +592,6 @@ internal fun AttendanceFormDialog(
             }
         }
 
-        // ── 备注 ─────────────────────────────────────────────────────
         FormTextField("备注", notes, { notes = it }, "可选")
     }
 }

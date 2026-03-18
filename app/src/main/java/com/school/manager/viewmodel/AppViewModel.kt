@@ -311,8 +311,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return gson.toJson(list)
     }
 
-    fun exportFullBackupZip(context: Context): ByteArray? = try {
-        val json  = gson.toJson(repo.snapshot().also { })
+    fun exportFullBackupZip(context: Context): ByteArray? {
+        return try {
+        val json  = gson.toJson(state.value)
         val baos  = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zip ->
             zip.putNextEntry(ZipEntry("state.json"))
@@ -329,7 +330,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         baos.toByteArray()
-    } catch (_: Exception) { null }
+        } catch (_: Exception) { null }
+    }
 
     fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean = try {
         var json: String? = null
