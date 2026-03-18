@@ -1,84 +1,69 @@
 package com.school.manager.ui.screens
 
-import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.*
+import androidx.compose.ui.unit.dp
 import com.school.manager.data.*
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
 
-private val GRADES = listOf("初一","初二","初三","高一","高二","高三")
-
 @Composable
-fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
+fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
     val state   by vm.state.collectAsState()
-    var viewing  by remember { mutableStateOf<SchoolClass?>(null) }
-    var editing  by remember { mutableStateOf<SchoolClass?>(null) }
-    var showAdd  by remember { mutableStateOf(false) }
+    var showAdd by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<SchoolClass?>(null) }
+    var editing by remember { mutableStateOf<SchoolClass?>(null) }
 
     Scaffold(
         floatingActionButton = {
-            ScreenSpeedDialFab(
-                addLabel    = "添加班级",
-                addIcon     = Icons.Default.Add,
-                onAdd       = { showAdd = true },
-                onOpenDrawer = onOpenDrawer
-            )
+            ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer)
         }
     ) { inner ->
         LazyColumn(
             contentPadding = PaddingValues(
-                start  = 12.dp, end = 12.dp,
                 top    = inner.calculateTopPadding() + 8.dp,
-                bottom = inner.calculateBottomPadding() + 80.dp
+                bottom = inner.calculateBottomPadding() + 80.dp,
+                start  = 12.dp, end = 12.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxSize()
         ) {
             if (state.classes.isEmpty()) {
-                item {
-                    Box(Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.Center) {
-                        Text("暂无班级，点击右下角按钮添加", color = FluentMuted,
-                            style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-            items(state.classes) { cls ->
-                val ht      = vm.teacher(cls.headTeacherId)
-                val sts     = state.students.filter { s -> s.classIds.contains(cls.id) }
-                val gradeCol = gradeColor(cls.grade)
+                item { EmptyState("🏫", "暂无班级") }
+            } else {
+                items(state.classes) { cls ->
+                    val sts      = state.students.filter { s -> s.classIds.contains(cls.id) }
+                    val gradeCol = gradeColor(cls.grade)
+                    // Resolve subject name via FK, fall back to legacy string
+                    val subjectDisplay = cls.resolvedSubject(state.subjects)?.name
+                        ?: cls.subject.ifBlank { null }
 
-                Surface(
-                    shape           = RoundedCornerShape(16.dp),
-                    color           = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 3.dp,
-                    modifier        = Modifier.fillMaxWidth().clickable { viewing = cls }
-                ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Surface(shape = RoundedCornerShape(12.dp), color = gradeCol.copy(alpha = 0.12f)) {
-                            Text(cls.grade.take(2), modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold, color = gradeCol)
-                        }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    FluentCard(modifier = Modifier.fillMaxWidth(), onClick = { viewing = cls }) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically) {
-                                Text(cls.name, style = MaterialTheme.typography.titleMedium,
+                                Text(cls.name,
+                                    style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold)
-                                if (cls.subject.isNotBlank()) ColorChip(cls.subject, FluentPurple)
+                                Surface(shape = RoundedCornerShape(8.dp),
+                                    color = gradeCol.copy(alpha = 0.15f)) {
+                                    Text(cls.grade,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = gradeCol,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                                }
                             }
-                            Text("班主任：${ht?.name ?: "未设置"}",
+                            Text("👩‍🏫 班主任：${vm.teacher(cls.headTeacherId)?.name ?: "未设置"}" +
+                                if (subjectDisplay != null) "   📚 $subjectDisplay" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
                             LinearProgressIndicator(
                                 progress = { if (cls.count > 0) sts.size.toFloat() / cls.count else 0f },
@@ -111,7 +96,7 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
 
     if (showAdd) {
         ClassFormDialog("添加班级", null, state, vm, onDismiss = { showAdd = false }) { c ->
-            vm.addSchoolClass(c.name, c.grade, c.count, c.headTeacherId, c.subject, c.code)
+            vm.addSchoolClass(c.name, c.grade, c.count, c.headTeacherId, c.subjectId, c.subject, c.code)
             showAdd = false
         }
     }
@@ -133,17 +118,18 @@ private fun ClassDetailDialog(
 ) {
     val ht  = vm.teacher(cls.headTeacherId)
     val sts = state.students.filter { s -> s.classIds.contains(cls.id) }
+    val subjectDisplay = cls.resolvedSubject(state.subjects)?.name ?: cls.subject.ifBlank { null }
     FluentDialog(title = "班级详情", onDismiss = onDismiss) {
         if (cls.code.isNotBlank()) DetailRow("编号", cls.code)
         DetailRow("班级名称", cls.name)
         DetailRow("年级",     cls.grade)
-        if (cls.subject.isNotBlank()) DetailRow("科目", cls.subject)
+        if (subjectDisplay != null) DetailRow("科目", subjectDisplay)
         DetailRow("班主任",   ht?.name ?: "未设置")
         DetailRow("编制人数", "${cls.count} 人")
         DetailRow("在籍学生", "${sts.size} 人")
         if (sts.isNotEmpty()) {
             SectionHeader("班级学生")
-            FlowRow(Modifier.padding(horizontal = 16.dp),
+            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 sts.forEach { s -> ColorChip(s.name, FluentBlue) }
             }
@@ -165,22 +151,22 @@ private fun ClassFormDialog(
     state: AppState, vm: AppViewModel,
     onDismiss: () -> Unit, onSave: (SchoolClass) -> Unit
 ) {
-    val existingSubjects = remember(state) {
-        (state.subjects.map { it.name } +
-         state.classes.map { it.subject }.filter { it.isNotBlank() })
-            .distinct().sorted()
-    }
-
     var name    by remember { mutableStateOf(initial?.name    ?: "") }
     var grade   by remember { mutableStateOf(initial?.grade   ?: GRADES[0]) }
     var count   by remember { mutableStateOf(initial?.count?.toString() ?: "") }
     var teacher by remember { mutableStateOf(
         state.teachers.firstOrNull { it.id == initial?.headTeacherId }?.name ?: "") }
-    var subject by remember { mutableStateOf(initial?.subject ?: "") }
     var code    by remember { mutableStateOf(initial?.code    ?: genCode("C")) }
 
+    // ── Subject: resolved via FK, fall back to legacy string match ────────────
+    val initialSubject = remember(state, initial) {
+        initial?.resolvedSubject(state.subjects) ?: state.subjects.find { it.name == initial?.subject }
+    }
+    var selectedSubjectName by remember {
+        mutableStateOf(initialSubject?.name ?: initial?.subject ?: "")
+    }
+
     // ── Student membership for this class ────────────────────────────────────
-    // Only shown when editing an existing class (initial != null).
     val initialStudentIds = remember(state, initial) {
         if (initial == null) emptySet()
         else state.students.filter { it.classIds.contains(initial.id) }.map { it.id }.toSet()
@@ -190,13 +176,15 @@ private fun ClassFormDialog(
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         if (name.isNotBlank()) {
             val tId = state.teachers.firstOrNull { it.name == teacher }?.id
+            val chosenSubject = state.subjects.firstOrNull { it.name == selectedSubjectName }
             val savedClass = SchoolClass(
                 id            = initial?.id ?: System.currentTimeMillis(),
                 name          = name.trim(),
                 grade         = grade,
                 count         = count.toIntOrNull() ?: 0,
                 headTeacherId = tId,
-                subject       = subject.trim(),
+                subjectId     = chosenSubject?.id,
+                subject       = chosenSubject?.name ?: selectedSubjectName.trim(),
                 code          = code.trim()
             )
             // Apply student membership changes when editing
@@ -221,7 +209,19 @@ private fun ClassFormDialog(
         FluentTextField("编制人数", count, { count = it })
         DropdownField("班主任", teacher,
             listOf("") + state.teachers.map { it.name }) { teacher = it }
-        AutocompleteTextField("科目", subject, existingSubjects) { subject = it }
+
+        // ── 科目：优先从 Subject 列表选择，兼容手动输入 ────────────────────
+        if (state.subjects.isNotEmpty()) {
+            AutocompleteTextField(
+                label         = "科目",
+                value         = selectedSubjectName,
+                suggestions   = state.subjects.map { it.name },
+                onValueChange = { selectedSubjectName = it }
+            )
+        } else {
+            FluentTextField("科目", selectedSubjectName, { selectedSubjectName = it })
+        }
+
         FluentTextField("班级编号", code, { code = it })
 
         // Student section (edit mode only)
@@ -233,7 +233,7 @@ private fun ClassFormDialog(
                 color    = FluentMuted,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
-            FlowRow(
+            androidx.compose.foundation.layout.FlowRow(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement   = Arrangement.spacedBy(4.dp)
