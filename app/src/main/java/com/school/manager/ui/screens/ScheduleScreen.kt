@@ -429,15 +429,13 @@ private fun ScheduleListView(slots: List<Schedule>, state: AppState, vm: AppView
 // ── 改动说明（AddScheduleDialog & EditScheduleDialog）──────────────────────────
 //
 //  行布局（从上到下）：
-//    行1: 班级(1/2) + 教师(1/2)          ← weight 改为 1:1，教师标签改为"教师"
+//    行1: 班级(1/2) + 教师(1/2)
 //    行2: 科目 badge（自动）
-//    行3: 课程编号(2/3) + 开始时间(1/3)   ← 对调位置：编号在左占宽，时间在右
-//    行4: 星期(1/3) + TimeRangeRow       ← 星期独立成左列，时长在右
-//         注：实际时长 UI 在 TimeRangeRow 内部，星期仅占左侧一列
+//    行3: 课程编号(1/2) + 开始时间(1/2)
+//    行4: 星期（全宽）                    ← 拆出独立行，避免与时长挤压
+//    行5: 时长（全宽）                    ← DurationChipsCompact 独占全宽
 //
-//  注：考虑到星期下拉选项已改为单字（一/二/三…），宽度够用；
-//      教师字段标签去掉"（可选）"，文字更短不换行；
-//      课程编号占 2/3 宽，足够显示完整编号字符串。
+//  注：星期与时长分开为两行，保证 +/- 按钮完整显示。
 // ──────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -493,16 +491,11 @@ private fun AddScheduleDialog(state: AppState, vm: AppViewModel, onDismiss: () -
             }
         }
 
-        // 行3：星期 1/3 + 时长 chips 2/3
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top) {
-            Box(Modifier.weight(1f)) {
-                FormDropdown("星期", day, DAYS) { day = it }
-            }
-            Box(Modifier.weight(2f)) {
-                DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
-            }
-        }
+        // 行4：星期（全宽）
+        FormDropdown("星期", day, DAYS) { day = it }
+
+        // 行5：时长（全宽）
+        DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
     }
 }
 
@@ -553,16 +546,11 @@ private fun EditScheduleDialog(
             }
         }
 
-        // 行3：星期 1/3 + 时长 chips 2/3
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top) {
-            Box(Modifier.weight(1f)) {
-                FormDropdown("星期", day, DAYS) { day = it }
-            }
-            Box(Modifier.weight(2f)) {
-                DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
-            }
-        }
+        // 行4：星期（全宽）
+        FormDropdown("星期", day, DAYS) { day = it }
+
+        // 行5：时长（全宽）
+        DurationChipsCompact(startTime = startTime, endTime = endTime) { endTime = it }
 
         if (!confirmDel) {
             OutlinedButton(onClick = { confirmDel = true },
