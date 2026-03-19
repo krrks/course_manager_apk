@@ -26,18 +26,15 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
-    val context  = LocalContext.current
-    val state    by vm.state.collectAsState()
-    var toast    by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val state   by vm.state.collectAsState()
+    var toast   by remember { mutableStateOf<String?>(null) }
 
-    // 运行时读取版本号，与 build.gradle.kts 中的 versionName 始终一致
     val appVersion = remember {
         try {
             val pi = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
                 context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
-            else
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(context.packageName, 0)
+            else @Suppress("DEPRECATION") context.packageManager.getPackageInfo(context.packageName, 0)
             pi.versionName ?: "─"
         } catch (_: Exception) { "─" }
     }
@@ -89,52 +86,49 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     }
 
     var selectedTeacherId by remember { mutableLongStateOf(0L) }
-    val selectedTeacher = state.teachers.firstOrNull { it.id == selectedTeacherId }
+    val selectedTeacher   = state.teachers.firstOrNull { it.id == selectedTeacherId }
 
-    Scaffold(
-        floatingActionButton = {
-            ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer)
-        }
-    ) { inner ->
+    Scaffold(floatingActionButton = { ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer) }) { inner ->
         Column(
             modifier = Modifier.fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(top = inner.calculateTopPadding() + 8.dp,
-                         bottom = inner.calculateBottomPadding() + 80.dp,
-                         start = 16.dp, end = 16.dp),
+                .padding(
+                    top    = inner.calculateTopPadding() + 8.dp,
+                    bottom = inner.calculateBottomPadding() + 80.dp,
+                    start  = 16.dp, end = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // ── ZIP backup ───────────────────────────────────────────────────
+            // ── ZIP backup ────────────────────────────────────────────────
             Text("📦 ZIP 完整备份（推荐）",
                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("将课表、记录、教师、学生及所有头像图片打包成一个 ZIP 文件，可在新设备还原。",
+            Text("将课次、教师、学生及所有头像打包成 ZIP，可在新设备还原。",
                 style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
             FilenameField("备份文件名", zipFilename, "school_backup.zip") {
                 zipFilename = it.trim().ifBlank { "school_backup.zip" }
             }
             IoCard(Icons.Default.FolderZip, "导出 ZIP 完整备份", FluentBlue,
-                "包含全部数据 + 头像图片（state.json + avatars/）") {
+                "包含全部数据 + 头像图片") {
                 val bytes = vm.exportFullBackupZip(context)
                 if (bytes != null) { pendingZipBytes = bytes; createZipLauncher.launch(zipFilename) }
                 else toast = "❌ 生成备份失败"
             }
             IoCard(Icons.Default.Unarchive, "导入 ZIP 完整备份", FluentOrange,
-                "选择本应用导出的 ZIP 文件，按 ID 合并恢复数据与头像") {
-                openZipLauncher.launch(arrayOf("application/zip","application/octet-stream","*/*"))
+                "选择本应用导出的 ZIP 文件，按 ID 合并恢复") {
+                openZipLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
             }
 
             HorizontalDivider(color = FluentBorder)
 
-            // ── JSON backup ──────────────────────────────────────────────────
+            // ── JSON backup ───────────────────────────────────────────────
             Text("🗂 JSON 数据备份",
                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("仅导出结构化数据（不含头像图片），体积小，方便查阅和编辑。",
+            Text("仅导出结构化数据（不含头像），体积小，方便查阅和编辑。",
                 style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
             FilenameField("JSON 文件名", jsonFilename, "school_backup.json") {
                 jsonFilename = it.trim().ifBlank { "school_backup.json" }
             }
             IoCard(Icons.Default.Backup, "导出完整数据（JSON）", FluentBlue,
-                "全部科目、教师、班级、学生、课表、记录") {
+                "全部科目、教师、班级、学生、课次") {
                 exportWith(vm.exportFullStateJson(), jsonFilename)
             }
 
@@ -149,40 +143,36 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                 }
             }
 
-            IoCard(Icons.Outlined.CalendarMonth, "导出课表（JSON）", FluentGreen,
-                if (selectedTeacher != null) "筛选：${selectedTeacher.name}" else "全部课表") {
-                exportWith(vm.exportScheduleJson(selectedTeacherId.takeIf { it != 0L }),
-                    jsonFilename.replace(".json","_schedule.json"))
-            }
-            IoCard(Icons.AutoMirrored.Outlined.EventNote, "导出上课记录（JSON）", FluentPurple,
-                if (selectedTeacher != null) "筛选：${selectedTeacher.name}" else "全部记录") {
-                exportWith(vm.exportAttendanceJson(selectedTeacherId.takeIf { it != 0L }),
-                    jsonFilename.replace(".json","_attendance.json"))
+            IoCard(Icons.AutoMirrored.Outlined.EventNote, "导出课次记录（JSON）", FluentPurple,
+                if (selectedTeacher != null) "筛选：${selectedTeacher.name}" else "全部课次") {
+                exportWith(
+                    vm.exportLessonsJson(selectedTeacherId.takeIf { it != 0L }),
+                    jsonFilename.replace(".json", "_lessons.json")
+                )
             }
 
             HorizontalDivider(color = FluentBorder)
 
-            // ── Import JSON ──────────────────────────────────────────────────
+            // ── Import JSON ───────────────────────────────────────────────
             Text("📥 导入数据",
                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             IoCard(Icons.Default.FileOpen, "导入 JSON 数据", FluentAmber,
                 "选择本应用导出的 JSON 文件，按 ID 合并") {
-                openFileLauncher.launch(arrayOf("application/json","text/plain","*/*"))
+                openFileLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
             }
 
             HorizontalDivider(color = FluentBorder)
 
-            // ── Danger zone ──────────────────────────────────────────────────
+            // ── Danger zone ───────────────────────────────────────────────
             Text("⚠️ 危险操作",
                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-
             var confirmReset by remember { mutableStateOf(false) }
             if (!confirmReset) {
                 IoCard(Icons.Default.DeleteForever, "重置为示例数据", Color(0xFFE53935),
                     "清空所有数据并恢复为预设示例（不可撤销）") { confirmReset = true }
             } else {
-                Surface(shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFFFEBEE), modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFFFEBEE),
+                    modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("确定要清空所有数据吗？此操作不可撤销。",
                             style = MaterialTheme.typography.bodyMedium,
@@ -193,25 +183,19 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                             Button(onClick = { vm.resetToSampleData(); confirmReset = false },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))) {
-                                Text("确认重置", color = Color.White)
-                            }
+                                Text("确认重置", color = Color.White) }
                         }
                     }
                 }
             }
 
-            // ── 版本信息 ─────────────────────────────────────────────────────
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = "智慧课务管理  v$appVersion",
-                style = MaterialTheme.typography.bodySmall,
-                color = FluentMuted,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Text("智慧课务管理  v$appVersion",
+                style = MaterialTheme.typography.bodySmall, color = FluentMuted,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
 
-        // ── Toast ────────────────────────────────────────────────────────────
+        // Toast
         toast?.let { msg ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 Surface(modifier = Modifier.padding(bottom = 100.dp).widthIn(max = 320.dp),
@@ -236,8 +220,7 @@ private fun FilenameField(label: String, value: String, placeholder: String, onV
 }
 
 @Composable
-private fun IoCard(icon: ImageVector, title: String,
-                   color: Color, subtitle: String, onClick: () -> Unit) {
+private fun IoCard(icon: ImageVector, title: String, color: Color, subtitle: String, onClick: () -> Unit) {
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface,
         shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,

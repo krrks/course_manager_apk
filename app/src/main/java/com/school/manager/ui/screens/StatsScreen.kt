@@ -22,71 +22,68 @@ import com.school.manager.viewmodel.AppViewModel
 fun StatsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val state by vm.state.collectAsState()
 
-    var dim        by remember { mutableStateOf("teacher") }
-    var fTeachers  by remember { mutableStateOf(emptySet<Long>()) }
-    var fGrades    by remember { mutableStateOf(emptySet<String>()) }
-    var fCountMin  by remember { mutableStateOf("") }
-    var fCountMax  by remember { mutableStateOf("") }
+    var dim       by remember { mutableStateOf("teacher") }
+    var fTeachers by remember { mutableStateOf(emptySet<Long>()) }
+    var fGrades   by remember { mutableStateOf(emptySet<String>()) }
     var showFilters by remember { mutableStateOf(true) }
 
-    val minC = fCountMin.toIntOrNull() ?: Int.MIN_VALUE
-    val maxC = fCountMax.toIntOrNull() ?: Int.MAX_VALUE
+    // Completed lessons are the base for all stats
+    val completed = state.lessons.filter { it.status == "completed" }
 
-    fun classPassCount(cid: Long): Boolean {
-        val cl = vm.schoolClass(cid) ?: return true
-        return cl.count >= minC && cl.count <= maxC
+    // Helper: resolve teacher for a lesson via its class
+    fun lessonTeacherId(l: Lesson): Long? =
+        state.classes.find { it.id == l.classId }?.headTeacherId
+
+    fun lessonGrade(l: Lesson): String? =
+        state.classes.find { it.id == l.classId }?.grade
+
+    val scopedRecs = completed.filter { l ->
+        (fTeachers.isEmpty() || fTeachers.contains(lessonTeacherId(l))) &&
+        (fGrades.isEmpty()   || fGrades.contains(lessonGrade(l)))
     }
 
-    val completed = state.attendance.filter { it.status == "completed" }
-
-    val scopedRecs = completed.filter { r ->
-        (fTeachers.isEmpty() || fTeachers.contains(r.teacherId)) &&
-        (fGrades.isEmpty() || vm.schoolClass(r.classId)?.grade?.let { fGrades.contains(it) } == true) &&
-        classPassCount(r.classId)
-    }
     val totalLessons   = scopedRecs.size
-    val totalHours     = String.format("%.1f", totalLessons * PERIOD_HOURS)
-    val activeTeachers = scopedRecs.mapNotNull { it.teacherId }.toSet().size
+    val totalHours     = String.format("%.1f", scopedRecs.sumOf { it.durationMinutes() } / 60.0)
+    val activeTeachers = scopedRecs.mapNotNull { lessonTeacherId(it) }.toSet().size
     val activeStudents = scopedRecs.flatMap { it.attendees }.toSet().size
 
+    // Per-teacher rows
     val teacherRows = state.teachers
         .filter { t -> fTeachers.isEmpty() || fTeachers.contains(t.id) }
         .map { t ->
-            val recs = completed.filter { r ->
-                r.teacherId == t.id &&
-                (fGrades.isEmpty() || vm.schoolClass(r.classId)?.grade?.let { fGrades.contains(it) } == true) &&
-                classPassCount(r.classId)
+            val recs = completed.filter { l ->
+                lessonTeacherId(l) == t.id &&
+                (fGrades.isEmpty() || fGrades.contains(lessonGrade(l)))
             }
-            Triple(t, recs.size, (recs.size * PERIOD_HOURS))
+            val hrs = recs.sumOf { it.durationMinutes() } / 60.0
+            Triple(t, recs.size, hrs)
         }.sortedByDescending { it.second }
     val maxTeacher = teacherRows.maxOfOrNull { it.second } ?: 1
 
+    // Per-grade rows
     val gradeRows = GRADES.map { g ->
-        val recs = completed.filter { r ->
-            vm.schoolClass(r.classId)?.grade == g &&
-            (fTeachers.isEmpty() || fTeachers.contains(r.teacherId)) &&
-            classPassCount(r.classId)
+        val recs = completed.filter { l ->
+            lessonGrade(l) == g &&
+            (fTeachers.isEmpty() || fTeachers.contains(lessonTeacherId(l)))
         }
-        Triple(g, recs.size, (recs.size * PERIOD_HOURS))
+        val hrs = recs.sumOf { it.durationMinutes() } / 60.0
+        Triple(g, recs.size, hrs)
     }.filter { it.second > 0 }.sortedByDescending { it.second }
     val maxGrade = gradeRows.maxOfOrNull { it.second } ?: 1
 
+    // Per-student rows
     val studentRows = state.students.map { s ->
-        val cnt = completed.count { r ->
-            r.attendees.contains(s.id) &&
-            (fTeachers.isEmpty() || fTeachers.contains(r.teacherId)) &&
-            (fGrades.isEmpty() || vm.schoolClass(r.classId)?.grade?.let { fGrades.contains(it) } == true) &&
-            classPassCount(r.classId)
+        val cnt = completed.count { l ->
+            l.attendees.contains(s.id) &&
+            (fTeachers.isEmpty() || fTeachers.contains(lessonTeacherId(l))) &&
+            (fGrades.isEmpty()   || fGrades.contains(lessonGrade(l)))
         }
         s to cnt
     }.filter { it.second > 0 }.sortedByDescending { it.second }
     val maxStudent = studentRows.maxOfOrNull { it.second } ?: 1
 
     Scaffold(
-        floatingActionButton = {
-            // Stats screen has no add action — FAB opens nav only
-            ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer)
-        }
+        floatingActionButton = { ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer) }
     ) { inner ->
         LazyColumn(
             contentPadding      = PaddingValues(
@@ -98,10 +95,10 @@ fun StatsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
             // Summary cards
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryCard("📚", "$totalLessons", "课次", FluentBlue,  Modifier.weight(1f))
-                    SummaryCard("⏱️", totalHours,      "课时", FluentGreen, Modifier.weight(1f))
-                    SummaryCard("👩‍🏫", "$activeTeachers","教师", FluentPurple,Modifier.weight(1f))
-                    SummaryCard("👥", "$activeStudents","学生", FluentAmber, Modifier.weight(1f))
+                    SummaryCard("📚", "$totalLessons",   "课次", FluentBlue,   Modifier.weight(1f))
+                    SummaryCard("⏱️", totalHours,        "课时", FluentGreen,  Modifier.weight(1f))
+                    SummaryCard("👩‍🏫", "$activeTeachers", "教师", FluentPurple, Modifier.weight(1f))
+                    SummaryCard("👥", "$activeStudents",  "学生", FluentAmber,  Modifier.weight(1f))
                 }
             }
 
@@ -118,7 +115,7 @@ fun StatsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("教师筛选", style = MaterialTheme.typography.labelSmall, color = FluentMuted,
                             modifier = Modifier.padding(horizontal = 4.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             state.teachers.forEach { t ->
                                 FilterChip(selected = fTeachers.contains(t.id), onClick = {
                                     fTeachers = if (fTeachers.contains(t.id)) fTeachers - t.id else fTeachers + t.id
@@ -127,7 +124,7 @@ fun StatsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                         }
                         Text("年级筛选", style = MaterialTheme.typography.labelSmall, color = FluentMuted,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             GRADES.forEach { g ->
                                 FilterChip(selected = fGrades.contains(g), onClick = {
                                     fGrades = if (fGrades.contains(g)) fGrades - g else fGrades + g
@@ -161,7 +158,7 @@ fun StatsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                         chips    = emptyList()
                     )
                 }
-                "grade"   -> items(gradeRows) { (g, cnt, hrs) ->
+                "grade" -> items(gradeRows) { (g, cnt, hrs) ->
                     StatCard(
                         avatar   = { AvatarCircle(g.take(1), FluentGreen, 40.dp) },
                         title    = g,
@@ -218,10 +215,10 @@ private fun StatCard(
             avatar()
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(sub1, style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
+                Text(sub1,  style = MaterialTheme.typography.bodyMedium,  color = FluentMuted)
                 if (sub2.isNotBlank())
-                    Text(sub2, style = MaterialTheme.typography.bodyMedium, color = color,
-                        fontWeight = FontWeight.SemiBold)
+                    Text(sub2, style = MaterialTheme.typography.bodyMedium,
+                        color = color, fontWeight = FontWeight.SemiBold)
                 FluentProgressBar(progress, color, Modifier.fillMaxWidth())
                 if (chips.isNotEmpty()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -28,24 +28,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            SchoolManagerTheme {
-                SchoolManagerApp()
-            }
-        }
+        setContent { SchoolManagerTheme { SchoolManagerApp() } }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchoolManagerApp() {
-    val vm: AppViewModel = viewModel()
-    val navController   = rememberNavController()
-    val drawerState     = rememberDrawerState(DrawerValue.Closed)
-    val scope           = rememberCoroutineScope()
-    val navBackStack    by navController.currentBackStackEntryAsState()
-    val currentRoute    = navBackStack?.destination?.route ?: Screen.Schedule.route
-
+    val vm: AppViewModel      = viewModel()
+    val navController         = rememberNavController()
+    val drawerState           = rememberDrawerState(DrawerValue.Closed)
+    val scope                 = rememberCoroutineScope()
+    val navBackStack          by navController.currentBackStackEntryAsState()
+    val currentRoute          = navBackStack?.destination?.route ?: Screen.Lesson.route
     val openDrawer: () -> Unit = { scope.launch { drawerState.open() } }
 
     ModalNavigationDrawer(
@@ -55,11 +50,9 @@ fun SchoolManagerApp() {
                 drawerShape          = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
             ) {
-                // ── Drawer header ──
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp)
+                        .fillMaxWidth().height(140.dp)
                         .background(Brush.linearGradient(listOf(FluentBlue, FluentBlueDark)))
                         .padding(20.dp),
                     contentAlignment = Alignment.BottomStart
@@ -73,10 +66,7 @@ fun SchoolManagerApp() {
                             style = MaterialTheme.typography.labelSmall)
                     }
                 }
-
                 Spacer(Modifier.height(8.dp))
-
-                // ── Nav items ──
                 ALL_SCREENS.forEach { screen ->
                     val selected = currentRoute == screen.route
                     NavigationDrawerItem(
@@ -87,12 +77,11 @@ fun SchoolManagerApp() {
                             scope.launch { drawerState.close() }
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState    = true
+                                launchSingleTop = true; restoreState = true
                             }
                         },
-                        shape    = RoundedCornerShape(12.dp),
-                        colors   = NavigationDrawerItemDefaults.colors(
+                        shape  = RoundedCornerShape(12.dp),
+                        colors = NavigationDrawerItemDefaults.colors(
                             selectedContainerColor = FluentBlueLight,
                             selectedIconColor      = FluentBlue,
                             selectedTextColor      = FluentBlue,
@@ -105,25 +94,23 @@ fun SchoolManagerApp() {
             }
         }
     ) {
-        // Each screen manages its own FAB that merges navigation + add actions.
         Scaffold(containerColor = MaterialTheme.colorScheme.background) { _ ->
             NavHost(
-                navController       = navController,
-                startDestination    = Screen.Schedule.route,
-                modifier            = Modifier.fillMaxSize().animateContentSize(),
-                enterTransition     = { slideInHorizontally { it / 6 } + fadeIn() },
-                exitTransition      = { slideOutHorizontally { -it / 6 } + fadeOut() },
+                navController    = navController,
+                startDestination = Screen.Lesson.route,
+                modifier         = Modifier.fillMaxSize().animateContentSize(),
+                enterTransition  = { slideInHorizontally { it / 6 } + fadeIn() },
+                exitTransition   = { slideOutHorizontally { -it / 6 } + fadeOut() },
                 popEnterTransition  = { slideInHorizontally { -it / 6 } + fadeIn() },
                 popExitTransition   = { slideOutHorizontally { it / 6 } + fadeOut() },
             ) {
-                composable(Screen.Schedule.route)   { ScheduleScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Attendance.route) { AttendanceScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Classes.route)    { ClassesScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Teachers.route)   { TeachersScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Students.route)   { StudentsScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Subjects.route)   { SubjectsScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Stats.route)      { StatsScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Export.route)     { ExportScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Lesson.route)   { LessonScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Classes.route)  { ClassesScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Teachers.route) { TeachersScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Students.route) { StudentsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Subjects.route) { SubjectsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Stats.route)    { StatsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Export.route)   { ExportScreen(vm, onOpenDrawer = openDrawer) }
             }
         }
     }

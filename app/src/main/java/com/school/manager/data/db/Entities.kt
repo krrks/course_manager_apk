@@ -2,8 +2,6 @@ package com.school.manager.data.db
 
 import androidx.room.*
 
-// ─── Subject ──────────────────────────────────────────────────────────────────
-
 @Entity(tableName = "subjects")
 data class SubjectEntity(
     @PrimaryKey val id: Long,
@@ -12,8 +10,6 @@ data class SubjectEntity(
     val teacherId: Long?,
     val code: String
 )
-
-// ─── Teacher ──────────────────────────────────────────────────────────────────
 
 @Entity(tableName = "teachers")
 data class TeacherEntity(
@@ -25,27 +21,11 @@ data class TeacherEntity(
     val code: String
 )
 
-// ─── SchoolClass ──────────────────────────────────────────────────────────────
-//  FK constraints:
-//    subjectId     → subjects.id   ON DELETE SET NULL
-//    headTeacherId → teachers.id   ON DELETE SET NULL
-//  `subject` string field removed — subjectId is the single source of truth.
-
 @Entity(
     tableName = "classes",
     foreignKeys = [
-        ForeignKey(
-            entity        = SubjectEntity::class,
-            parentColumns = ["id"],
-            childColumns  = ["subjectId"],
-            onDelete      = ForeignKey.SET_NULL
-        ),
-        ForeignKey(
-            entity        = TeacherEntity::class,
-            parentColumns = ["id"],
-            childColumns  = ["headTeacherId"],
-            onDelete      = ForeignKey.SET_NULL
-        )
+        ForeignKey(SubjectEntity::class, ["id"], ["subjectId"],  onDelete = ForeignKey.SET_NULL),
+        ForeignKey(TeacherEntity::class, ["id"], ["headTeacherId"], onDelete = ForeignKey.SET_NULL)
     ],
     indices = [Index("subjectId"), Index("headTeacherId")]
 )
@@ -59,8 +39,6 @@ data class ClassEntity(
     val code: String
 )
 
-// ─── Student ──────────────────────────────────────────────────────────────────
-
 @Entity(tableName = "students")
 data class StudentEntity(
     @PrimaryKey val id: Long,
@@ -72,76 +50,28 @@ data class StudentEntity(
     val avatarUri: String?
 )
 
-// ─── Schedule ─────────────────────────────────────────────────────────────────
-//  FK constraints:
-//    classId   → classes.id    ON DELETE CASCADE
-//    teacherId → teachers.id   ON DELETE SET NULL
-//
-//  subjectId removed — subject is always resolved via classId JOIN classes.subjectId.
-//  This eliminates the class-of-truth split and removes all manual cascade logic.
-
+/**
+ * Lesson replaces both Schedule and Attendance.
+ * classId → classes ON DELETE CASCADE: deleting a class wipes all its lessons.
+ * Teacher is resolved via classes.headTeacherId (no direct FK here).
+ */
 @Entity(
-    tableName = "schedule",
+    tableName = "lessons",
     foreignKeys = [
-        ForeignKey(
-            entity        = ClassEntity::class,
-            parentColumns = ["id"],
-            childColumns  = ["classId"],
-            onDelete      = ForeignKey.CASCADE
-        ),
-        ForeignKey(
-            entity        = TeacherEntity::class,
-            parentColumns = ["id"],
-            childColumns  = ["teacherId"],
-            onDelete      = ForeignKey.SET_NULL
-        )
+        ForeignKey(ClassEntity::class, ["id"], ["classId"], onDelete = ForeignKey.CASCADE)
     ],
-    indices = [Index("classId"), Index("teacherId")]
+    indices = [Index("classId"), Index("date")]
 )
-data class ScheduleEntity(
+data class LessonEntity(
     @PrimaryKey val id: Long,
     val classId: Long,
-    val teacherId: Long?,
-    val day: Int,
-    val period: Int,
+    val date: String,          // YYYY-MM-DD
     val startTime: String,
     val endTime: String,
-    val code: String
-)
-
-// ─── Attendance ───────────────────────────────────────────────────────────────
-//  FK constraints: same pattern as Schedule
-//  subjectId removed — resolved at display time via classId → classes.subjectId.
-
-@Entity(
-    tableName = "attendance",
-    foreignKeys = [
-        ForeignKey(
-            entity        = ClassEntity::class,
-            parentColumns = ["id"],
-            childColumns  = ["classId"],
-            onDelete      = ForeignKey.CASCADE
-        ),
-        ForeignKey(
-            entity        = TeacherEntity::class,
-            parentColumns = ["id"],
-            childColumns  = ["teacherId"],
-            onDelete      = ForeignKey.SET_NULL
-        )
-    ],
-    indices = [Index("classId"), Index("teacherId")]
-)
-data class AttendanceEntity(
-    @PrimaryKey val id: Long,
-    val classId: Long,
-    val teacherId: Long?,
-    val date: String,
-    val period: Int,
-    val startTime: String,
-    val endTime: String,
+    val status: String,        // pending/completed/absent/cancelled/postponed
     val topic: String,
-    val status: String,
     val notes: String,
     val attendeesJson: String,
+    val isModified: Boolean,
     val code: String
 )

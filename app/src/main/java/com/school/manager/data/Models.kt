@@ -22,13 +22,17 @@ data class Teacher(
     val code: String = ""
 )
 
+/**
+ * One SchoolClass = one fixed time-slot teaching unit.
+ * headTeacherId is the fixed teacher for every Lesson in this class.
+ * subjectId is the fixed subject. classId == groupId for batch operations.
+ */
 data class SchoolClass(
     val id: Long,
     val name: String,
     val grade: String,
     val count: Int,
     val headTeacherId: Long?,
-    // subjectId is the single source of truth — no redundant subject string
     val subjectId: Long? = null,
     val code: String = ""
 )
@@ -44,95 +48,87 @@ data class Student(
     val code: String = ""
 )
 
-// Schedule no longer owns subjectId — subject is resolved via classId → classes.subjectId
-data class Schedule(
+/**
+ * A single concrete lesson instance.
+ * status: pending / completed / absent / cancelled / postponed
+ * isModified: true when this row was individually edited (not batch-generated),
+ *             used by batch-modify to optionally skip it.
+ */
+data class Lesson(
     val id: Long,
     val classId: Long,
-    val teacherId: Long?,
-    val day: Int,
-    val period: Int = 0,
-    val startTime: String = "",
-    val endTime: String = "",
-    val code: String = ""
-)
-
-// Attendance no longer owns subjectId — resolved via classId at query / display time
-data class Attendance(
-    val id: Long,
-    val classId: Long,
-    val teacherId: Long?,
-    val date: String,
-    val period: Int = 0,
-    val startTime: String = "",
-    val endTime: String = "",
-    val topic: String,
-    val status: String,
-    val notes: String,
+    val date: String,                   // YYYY-MM-DD
+    val startTime: String = "",         // HH:mm
+    val endTime: String = "",           // HH:mm
+    val status: String = "pending",
+    val topic: String = "",
+    val notes: String = "",
     val attendees: List<Long> = emptyList(),
+    val isModified: Boolean = false,
     val code: String = ""
 )
 
 // ─── App State ────────────────────────────────────────────────────────────────
+
 data class AppState(
-    val subjects:   List<Subject>     = emptyList(),
-    val teachers:   List<Teacher>     = emptyList(),
-    val classes:    List<SchoolClass> = emptyList(),
-    val students:   List<Student>     = emptyList(),
-    val schedule:   List<Schedule>    = emptyList(),
-    val attendance: List<Attendance>  = emptyList()
+    val subjects:  List<Subject>     = emptyList(),
+    val teachers:  List<Teacher>     = emptyList(),
+    val classes:   List<SchoolClass> = emptyList(),
+    val students:  List<Student>     = emptyList(),
+    val lessons:   List<Lesson>      = emptyList()
 )
 
-// ─── Subject Colors (ARGB) ────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 val SUBJECT_COLORS = listOf(
     0xFF1A56DBL, 0xFF0E9F6EL, 0xFF7E3AF2L, 0xFFFF5A1FL,
     0xFFE3A008L, 0xFFE11D48L, 0xFF0891B2L, 0xFF65A30DL
 )
 
-val GRADES = listOf("高一","高二","高三","初一","初二","初三")
+val GRADES = listOf("高一", "高二", "高三", "初一", "初二", "初三")
+val DAYS   = listOf("一", "二", "三", "四", "五", "六", "日")
 
-val DAYS   = listOf("一","二","三","四","五","六","日")
+const val CAL_START_HOUR = 8
+const val CAL_END_HOUR   = 22
 
-val PERIOD_TIMES     = listOf("08:00","09:00","10:00","11:00","14:00","15:00","16:00","19:00")
-val PERIOD_END_TIMES = listOf("08:45","09:45","10:45","11:45","14:45","15:45","16:45","19:45")
-val PERIODS          = PERIOD_TIMES.zip(PERIOD_END_TIMES).map { (s, e) -> "$s-$e" }
-
-val CAL_START_HOUR = 8
-val CAL_END_HOUR   = 22
-
-const val PERIOD_MINUTES = 45
-const val PERIOD_HOURS   = 0.75f
+// ─── Helper functions ─────────────────────────────────────────────────────────
 
 fun timeToMinutes(hhmm: String): Int {
     if (!hhmm.contains(":")) return 0
     val parts = hhmm.split(":")
-    return parts[0].toIntOrNull()?.times(60)?.plus(parts[1].toIntOrNull() ?: 0) ?: 0
+    return (parts[0].toIntOrNull() ?: 0) * 60 + (parts[1].toIntOrNull() ?: 0)
 }
 
-fun Schedule.resolvedStart(): String =
-    startTime.ifBlank { PERIOD_TIMES.getOrElse(period - 1) { "" } }
-fun Schedule.resolvedEnd(): String =
-    endTime.ifBlank { PERIOD_END_TIMES.getOrElse(period - 1) { "" } }
-fun Attendance.resolvedStart(): String =
-    startTime.ifBlank { PERIOD_TIMES.getOrElse(period - 1) { "" } }
-fun Attendance.resolvedEnd(): String =
-    endTime.ifBlank { PERIOD_END_TIMES.getOrElse(period - 1) { "" } }
-
-/** Resolve subject for a class — single source of truth */
 fun SchoolClass.resolvedSubject(subjects: List<Subject>): Subject? =
     subjects.find { it.id == subjectId }
 
-/** Convenience: subject name via class lookup */
-fun Schedule.subjectName(classes: List<SchoolClass>, subjects: List<Subject>): String =
+fun Lesson.subjectName(classes: List<SchoolClass>, subjects: List<Subject>): String =
     classes.find { it.id == classId }?.resolvedSubject(subjects)?.name ?: "?"
 
-fun Attendance.subjectName(classes: List<SchoolClass>, subjects: List<Subject>): String =
-    classes.find { it.id == classId }?.resolvedSubject(subjects)?.name ?: "?"
-
-fun genCode(prefix: String): String {
-    val t = System.currentTimeMillis()
-    return "$prefix${(t % 100000).toString().padStart(5, '0')}"
+fun Lesson.teacherName(classes: List<SchoolClass>, teachers: List<Teacher>): String {
+    val cls = classes.find { it.id == classId } ?: return "─"
+    return teachers.find { it.id == cls.headTeacherId }?.name ?: "─"
 }
+
+fun Lesson.durationMinutes(): Int {
+    if (startTime.isBlank() || endTime.isBlank()) return 45
+    return (timeToMinutes(endTime) - timeToMinutes(startTime)).coerceAtLeast(0)
+}
+
+fun Lesson.durationHours(): Float = durationMinutes() / 60f
+
+/**
+ * Returns (completedCount, totalCount) for the given classId.
+ * Used for progress display: "已完成 X / Y 节".
+ */
+fun List<Lesson>.progressFor(classId: Long): Pair<Int, Int> {
+    val all  = filter { it.classId == classId }
+    val done = all.count { it.status == "completed" }
+    return done to all.size
+}
+
+fun genCode(prefix: String): String =
+    "$prefix${(System.currentTimeMillis() % 100000).toString().padStart(5, '0')}"
 
 // ─── Sample Data ──────────────────────────────────────────────────────────────
 
@@ -140,79 +136,52 @@ val sampleSubjects = listOf(
     Subject(1, "数学", SUBJECT_COLORS[0], 1, "SBJ00001"),
     Subject(2, "语文", SUBJECT_COLORS[1], 2, "SBJ00002"),
     Subject(3, "英语", SUBJECT_COLORS[2], 3, "SBJ00003"),
-    Subject(4, "物理", SUBJECT_COLORS[3], 1, "SBJ00004"),
-    Subject(5, "化学", SUBJECT_COLORS[4], 4, "SBJ00005"),
 )
 
 val sampleTeachers = listOf(
     Teacher(1, "王老师", "男", "138****0001", code = "T00001"),
     Teacher(2, "李老师", "女", "139****0002", code = "T00002"),
     Teacher(3, "张老师", "女", "137****0003", code = "T00003"),
-    Teacher(4, "刘老师", "男", "136****0004", code = "T00004"),
 )
 
 val sampleClasses = listOf(
-    SchoolClass(1, "高一(1)班", "高一", 45, 1, subjectId = 1, code = "C00001"),
-    SchoolClass(2, "高一(2)班", "高一", 43, 2, subjectId = 2, code = "C00002"),
-    SchoolClass(3, "高二(1)班", "高二", 47, 3, subjectId = 3, code = "C00003"),
+    SchoolClass(1, "高一(1)班·数学·周一", "高一", 45, 1, subjectId = 1, code = "C00001"),
+    SchoolClass(2, "高一(2)班·语文·周三", "高一", 43, 2, subjectId = 2, code = "C00002"),
+    SchoolClass(3, "高二(1)班·英语·连续", "高二", 47, 3, subjectId = 3, code = "C00003"),
 )
 
 val sampleStudents = listOf(
     Student(1, "陈小明", "20240101", "男", "高一", listOf(1)),
-    Student(2, "李小红", "20240102", "女", "高一", listOf(1,2)),
+    Student(2, "李小红", "20240102", "女", "高一", listOf(1, 2)),
     Student(3, "张伟",   "20240201", "男", "高一", listOf(2)),
-    Student(4, "王芳",   "20240202", "女", "高二", listOf(2,3)),
+    Student(4, "王芳",   "20240202", "女", "高二", listOf(2, 3)),
     Student(5, "赵磊",   "20240301", "男", "高二", listOf(3)),
 )
 
-val sampleSchedule = listOf(
-    Schedule(1, 1, 1, 1, startTime = "08:00", endTime = "08:45", code = "SCH0001"),
-    Schedule(2, 1, 2, 1, startTime = "09:00", endTime = "09:45", code = "SCH0002"),
-    Schedule(3, 1, 3, 2, startTime = "08:00", endTime = "08:45", code = "SCH0003"),
-    Schedule(4, 1, 1, 3, startTime = "10:00", endTime = "10:45", code = "SCH0004"),
-    Schedule(5, 1, 4, 4, startTime = "09:00", endTime = "09:45", code = "SCH0005"),
-    Schedule(6, 2, 1, 1, startTime = "10:00", endTime = "10:45", code = "SCH0006"),
-    Schedule(7, 2, 3, 2, startTime = "11:00", endTime = "11:45", code = "SCH0007"),
-    Schedule(8, 3, 2, 1, startTime = "08:00", endTime = "08:45", code = "SCH0008"),
-)
-
-val sampleAttendance: List<Attendance>
+val sampleLessons: List<Lesson>
     get() {
         val fmt   = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val today = LocalDate.now()
         return listOf(
-            Attendance(1, 1, 1, fmt.format(today.minusDays(7)),
-                startTime="08:00", endTime="08:45", topic="函数与极限",
-                status="completed", notes="讲解了基本函数类型",
-                attendees=listOf(1,2), code="ATT0001"),
-            Attendance(2, 1, 2, fmt.format(today.minusDays(7)),
-                startTime="09:00", endTime="09:45", topic="古诗文鉴赏",
-                status="completed", notes="",
-                attendees=listOf(1), code="ATT0002"),
-            Attendance(3, 1, 3, fmt.format(today.minusDays(6)),
-                startTime="08:00", endTime="08:45", topic="时态复习",
-                status="completed", notes="重点复习过去完成时",
-                attendees=listOf(2), code="ATT0003"),
-            Attendance(4, 2, 1, fmt.format(today.minusDays(6)),
-                startTime="10:00", endTime="10:45", topic="方程组",
-                status="cancelled", notes="教师请假",
-                attendees=emptyList(), code="ATT0004"),
-            Attendance(5, 1, 1, fmt.format(today),
-                startTime="10:00", endTime="10:45", topic="牛顿运动定律",
-                status="completed", notes="",
-                attendees=listOf(1,2), code="ATT0005"),
-            Attendance(6, 3, 2, fmt.format(today.minusMonths(1)),
-                startTime="08:00", endTime="08:45", topic="现代文阅读",
-                status="completed", notes="",
-                attendees=listOf(5), code="ATT0006"),
+            Lesson(1,  1, fmt.format(today.minusDays(14)), "08:00", "08:45", "completed", "函数与极限",  "讲解基本函数类型", listOf(1, 2), false, "L00001"),
+            Lesson(2,  1, fmt.format(today.minusDays(7)),  "08:00", "08:45", "completed", "导数基础",    "",                 listOf(1, 2), false, "L00002"),
+            Lesson(3,  1, fmt.format(today),               "08:00", "08:45", "pending",   "",            "",                 emptyList(), false, "L00003"),
+            Lesson(4,  1, fmt.format(today.plusDays(7)),   "08:00", "08:45", "pending",   "",            "",                 emptyList(), false, "L00004"),
+            Lesson(5,  2, fmt.format(today.minusDays(11)), "10:00", "10:45", "completed", "古诗文鉴赏",  "",                 listOf(2, 3), false, "L00005"),
+            Lesson(6,  2, fmt.format(today.minusDays(4)),  "10:00", "10:45", "cancelled", "",            "教师请假",          emptyList(), false, "L00006"),
+            Lesson(7,  2, fmt.format(today.plusDays(3)),   "10:00", "10:45", "pending",   "",            "",                 emptyList(), false, "L00007"),
+            Lesson(8,  3, fmt.format(today.minusDays(4)),  "09:00", "09:45", "completed", "时态复习",    "",                 listOf(4, 5), false, "L00008"),
+            Lesson(9,  3, fmt.format(today.minusDays(3)),  "09:00", "09:45", "completed", "阅读理解",    "",                 listOf(4, 5), false, "L00009"),
+            Lesson(10, 3, fmt.format(today.minusDays(2)),  "09:00", "09:45", "absent",    "",            "学生缺席",          emptyList(), false, "L00010"),
+            Lesson(11, 3, fmt.format(today.minusDays(1)),  "09:00", "09:45", "completed", "写作训练",    "",                 listOf(5),   false, "L00011"),
+            Lesson(12, 3, fmt.format(today),               "09:00", "09:45", "pending",   "",            "",                 emptyList(), false, "L00012"),
         )
     }
 
 fun sampleAppState(): AppState = AppState(
-    subjects   = sampleSubjects,
-    teachers   = sampleTeachers,
-    classes    = sampleClasses,
-    students   = sampleStudents,
-    schedule   = sampleSchedule,
-    attendance = sampleAttendance
+    subjects = sampleSubjects,
+    teachers = sampleTeachers,
+    classes  = sampleClasses,
+    students = sampleStudents,
+    lessons  = sampleLessons
 )
