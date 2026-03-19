@@ -80,10 +80,7 @@ private fun SubjectRow(
     s: Subject, state: AppState, vm: AppViewModel,
     onView: () -> Unit, onEdit: () -> Unit
 ) {
-    val te    = vm.teacher(s.teacherId)
     val color = packedToColor(s.color)
-    // In the new model there is no separate schedule table.
-    // Use lessons total / completed counts as proxies for "排课" / "已完成".
     val totalCount = state.lessons.count { l ->
         state.classes.find { it.id == l.classId }?.subjectId == s.id
     }
@@ -113,8 +110,6 @@ private fun SubjectRow(
                         }
                     }
                 }
-                Text("主讲：${te?.name ?: "未分配"}",
-                    style = MaterialTheme.typography.bodySmall, color = FluentMuted)
             }
 
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -134,14 +129,13 @@ private fun SubjectStatChip(label: String, color: Color) {
     }
 }
 
-// ─── Detail dialog ────────────────────────────────────────────────────────────
+// ─── Detail dialog (teacher removed per requirement) ─────────────────────────
 
 @Composable
 private fun SubjectDetailDialog(
     s: Subject, state: AppState, vm: AppViewModel,
     onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
-    val te = vm.teacher(s.teacherId)
     val totalCount = state.lessons.count { l ->
         state.classes.find { it.id == l.classId }?.subjectId == s.id
     }
@@ -151,12 +145,12 @@ private fun SubjectDetailDialog(
     FluentDialog(title = "科目详情", onDismiss = onDismiss) {
         if (s.code.isNotBlank()) DetailRow("编号", s.code)
         DetailRow("科目名称", s.name)
-        DetailRow("主讲教师", te?.name ?: "未分配")
         DetailRow("课次总数", "$totalCount 节")
         DetailRow("已完成",   "$doneCount 节")
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onEdit,   shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) { Text("✏️ 编辑") }
+            OutlinedButton(onClick = onEdit,   shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)) { Text("✏️ 编辑") }
             OutlinedButton(onClick = onDelete, shape = RoundedCornerShape(12.dp),
                 colors   = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed),
                 modifier = Modifier.weight(1f)) { Text("删除") }
@@ -201,7 +195,8 @@ private fun SubjectFormDialog(
                 val isSelected = idx == colorIdx
                 Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(col)
                     .clickable { colorIdx = idx }
-                    .then(if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(8.dp)) else Modifier))
+                    .then(if (isSelected) Modifier.border(3.dp,
+                        MaterialTheme.colorScheme.onSurface, RoundedCornerShape(8.dp)) else Modifier))
             }
         }
     }

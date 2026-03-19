@@ -24,7 +24,7 @@ data class TeacherEntity(
 @Entity(
     tableName = "classes",
     foreignKeys = [
-        ForeignKey(SubjectEntity::class, ["id"], ["subjectId"],  onDelete = ForeignKey.SET_NULL),
+        ForeignKey(SubjectEntity::class, ["id"], ["subjectId"],     onDelete = ForeignKey.SET_NULL),
         ForeignKey(TeacherEntity::class, ["id"], ["headTeacherId"], onDelete = ForeignKey.SET_NULL)
     ],
     indices = [Index("subjectId"), Index("headTeacherId")]
@@ -52,8 +52,8 @@ data class StudentEntity(
 
 /**
  * Lesson replaces both Schedule and Attendance.
- * classId → classes ON DELETE CASCADE: deleting a class wipes all its lessons.
- * Teacher is resolved via classes.headTeacherId (no direct FK here).
+ * classId → classes ON DELETE CASCADE.
+ * teacherIdOverride: when non-null, overrides the class's headTeacherId for this lesson.
  */
 @Entity(
     tableName = "lessons",
@@ -65,13 +65,14 @@ data class StudentEntity(
 data class LessonEntity(
     @PrimaryKey val id: Long,
     val classId: Long,
-    val date: String,          // YYYY-MM-DD
+    val date: String,           // YYYY-MM-DD
     val startTime: String,
     val endTime: String,
-    val status: String,        // pending/completed/absent/cancelled/postponed
+    val status: String,         // pending/completed/absent/cancelled/postponed
     val topic: String,
     val notes: String,
     val attendeesJson: String,
     val isModified: Boolean,
-    val code: String
+    val code: String,
+    val teacherIdOverride: Long? = null
 )

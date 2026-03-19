@@ -24,7 +24,7 @@ data class Teacher(
 
 /**
  * One SchoolClass = one fixed time-slot teaching unit.
- * headTeacherId is the fixed teacher for every Lesson in this class.
+ * headTeacherId is the default teacher; individual lessons may override it.
  * subjectId is the fixed subject. classId == groupId for batch operations.
  */
 data class SchoolClass(
@@ -51,21 +51,22 @@ data class Student(
 /**
  * A single concrete lesson instance.
  * status: pending / completed / absent / cancelled / postponed
- * isModified: true when this row was individually edited (not batch-generated),
- *             used by batch-modify to optionally skip it.
+ * isModified: true when this row was individually edited (not batch-generated).
+ * teacherIdOverride: when non-null, overrides the class's headTeacherId for this lesson.
  */
 data class Lesson(
     val id: Long,
     val classId: Long,
-    val date: String,                   // YYYY-MM-DD
-    val startTime: String = "",         // HH:mm
-    val endTime: String = "",           // HH:mm
+    val date: String,                       // YYYY-MM-DD
+    val startTime: String = "",             // HH:mm
+    val endTime: String = "",               // HH:mm
     val status: String = "pending",
     val topic: String = "",
     val notes: String = "",
     val attendees: List<Long> = emptyList(),
     val isModified: Boolean = false,
-    val code: String = ""
+    val code: String = "",
+    val teacherIdOverride: Long? = null     // null = use SchoolClass.headTeacherId
 )
 
 // ─── App State ────────────────────────────────────────────────────────────────
@@ -105,9 +106,14 @@ fun SchoolClass.resolvedSubject(subjects: List<Subject>): Subject? =
 fun Lesson.subjectName(classes: List<SchoolClass>, subjects: List<Subject>): String =
     classes.find { it.id == classId }?.resolvedSubject(subjects)?.name ?: "?"
 
+/** Returns the effective teacher id: override first, then class default. */
+fun Lesson.effectiveTeacherId(classes: List<SchoolClass>): Long? =
+    teacherIdOverride ?: classes.find { it.id == classId }?.headTeacherId
+
+/** Returns the effective teacher name. */
 fun Lesson.teacherName(classes: List<SchoolClass>, teachers: List<Teacher>): String {
-    val cls = classes.find { it.id == classId } ?: return "─"
-    return teachers.find { it.id == cls.headTeacherId }?.name ?: "─"
+    val tid = effectiveTeacherId(classes)
+    return teachers.find { it.id == tid }?.name ?: "─"
 }
 
 fun Lesson.durationMinutes(): Int {

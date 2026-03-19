@@ -23,10 +23,10 @@ fun Student.toEntity(): StudentEntity  = StudentEntity(id, name, studentNo, gend
 
 fun LessonEntity.toDomain(): Lesson = Lesson(
     id, classId, date, startTime, endTime, status,
-    topic, notes, attendeesJson.toLongList(), isModified, code
+    topic, notes, attendeesJson.toLongList(), isModified, code, teacherIdOverride
 )
 
 fun Lesson.toEntity(): LessonEntity = LessonEntity(
     id, classId, date, startTime, endTime, status,
-    topic, notes, attendees.toJson(), isModified, code
+    topic, notes, attendees.toJson(), isModified, code, teacherIdOverride
 )

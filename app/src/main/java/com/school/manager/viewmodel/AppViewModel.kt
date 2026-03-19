@@ -33,7 +33,8 @@ private data class GsonLesson(
     val id: Long? = null, val classId: Long? = null, val date: String? = null,
     val startTime: String? = null, val endTime: String? = null, val status: String? = null,
     val topic: String? = null, val notes: String? = null,
-    val attendees: List<Long>? = null, val isModified: Boolean? = null, val code: String? = null
+    val attendees: List<Long>? = null, val isModified: Boolean? = null,
+    val code: String? = null, val teacherIdOverride: Long? = null
 )
 private data class GsonState(
     val subjects: List<Subject>? = null,
@@ -113,12 +114,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun addLesson(
         classId: Long, date: String, startTime: String, endTime: String,
         status: String = "pending", topic: String = "", notes: String = "",
-        attendees: List<Long> = emptyList(), code: String = ""
+        attendees: List<Long> = emptyList(), code: String = "",
+        teacherIdOverride: Long? = null
     ) {
         viewModelScope.launch {
             repo.addLesson(Lesson(System.currentTimeMillis(), classId, date,
                 startTime, endTime, status, topic, notes, attendees, false,
-                code.ifBlank { genCode("L") }))
+                code.ifBlank { genCode("L") }, teacherIdOverride))
         }
     }
 
@@ -141,7 +143,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         dayOfWeek: Int = 1,
         startTime: String,
         endTime: String,
-        excludeDates: Set<String> = emptySet()
+        excludeDates: Set<String> = emptySet(),
+        teacherIdOverride: Long? = null
     ) {
         viewModelScope.launch {
             val dates: List<LocalDate> = when (recurrenceType) {
@@ -167,7 +170,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     repo.addLesson(Lesson(
                         id = baseTime + index, classId = classId, date = dateStr,
                         startTime = startTime, endTime = endTime, status = "pending",
-                        code = genCode("L")
+                        code = genCode("L"), teacherIdOverride = teacherIdOverride
                     ))
                 }
             }
@@ -231,12 +234,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
             }
             baos.toByteArray()
-        } catch (_: Exception) {
-            null
-        }
+        } catch (_: Exception) { null }
     }
 
-    // Block body required — expression body cannot contain explicit `return`
     fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean {
         return try {
             var json: String? = null
@@ -259,9 +259,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 File(avatarDir, name).also { it.writeBytes(data) }.absolutePath
             }
             importMerge(json!!, pathRemap)
-        } catch (_: Exception) {
-            false
-        }
+        } catch (_: Exception) { false }
     }
 
     fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
@@ -272,7 +270,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun resetToSampleData() { viewModelScope.launch { repo.importAll(sampleAppState()) } }
 
-    // ─── JSON parsing — block body (avoids expression-body return restriction) ─
+    // ─── JSON parsing ─────────────────────────────────────────────────────────
     private fun parseGsonState(json: String, pathRemap: Map<String, String> = emptyMap()): AppState? {
         return try {
             val raw = gson.fromJson(json, GsonState::class.java) ?: return null
@@ -293,12 +291,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 Lesson(gl.id ?: 0L, gl.classId ?: 0L, gl.date ?: "",
                     gl.startTime ?: "", gl.endTime ?: "", gl.status ?: "pending",
                     gl.topic ?: "", gl.notes ?: "", gl.attendees ?: emptyList(),
-                    gl.isModified ?: false, gl.code ?: "")
+                    gl.isModified ?: false, gl.code ?: "", gl.teacherIdOverride)
             } ?: emptyList()
 
             AppState(subjects, teachers, classes, students, lessons)
-        } catch (_: Exception) {
-            null
-        }
+        } catch (_: Exception) { null }
     }
 }

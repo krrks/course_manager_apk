@@ -26,7 +26,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.IsoFields
 
-// ── Calendar layout ───────────────────────────────────────────────────────────
+// ── Calendar layout constants ─────────────────────────────────────────────────
 private const val DP_PER_HOUR = 80f
 private const val DP_PER_MIN  = DP_PER_HOUR / 60f
 private const val TIME_COL_W  = 52
@@ -57,7 +57,7 @@ private fun statusColor(status: String): Color = when (status) {
     "absent"    -> FluentAmber
     "cancelled" -> FluentRed
     "postponed" -> FluentMuted
-    else        -> FluentBlue   // pending
+    else        -> FluentBlue
 }
 private fun statusLabel(status: String): String = when (status) {
     "completed" -> "✅ 已完成"
@@ -79,15 +79,17 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     var calDate by remember { mutableStateOf(LocalDate.now()) }
 
     // Filters
-    var fClass  by remember { mutableLongStateOf(0L) }
-    var fStatus by remember { mutableStateOf("") }
+    var fClass   by remember { mutableLongStateOf(0L) }
+    var fStatus  by remember { mutableStateOf("") }
+    var fTeacher by remember { mutableLongStateOf(0L) }
+    var fStudent by remember { mutableLongStateOf(0L) }
 
     // Dialog state
     var viewing      by remember { mutableStateOf<Lesson?>(null) }
     var editing      by remember { mutableStateOf<Lesson?>(null) }
     var showAdd      by remember { mutableStateOf(false) }
     var showBatchGen by remember { mutableStateOf(false) }
-    var batchModCls  by remember { mutableLongStateOf(0L) }  // >0 triggers BatchModifyDialog
+    var batchModCls  by remember { mutableLongStateOf(0L) }
     var batchDelCls  by remember { mutableLongStateOf(0L) }
 
     // Pre-computed progress map: classId → (completed, total)
@@ -99,8 +101,13 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
 
     val filtered = state.lessons
         .filter { l ->
-            (fClass == 0L || l.classId == fClass) &&
-            (fStatus.isBlank() || l.status == fStatus)
+            (fClass == 0L   || l.classId == fClass) &&
+            (fStatus.isBlank() || l.status == fStatus) &&
+            (fTeacher == 0L || l.effectiveTeacherId(state.classes) == fTeacher) &&
+            (fStudent == 0L || run {
+                val s = state.students.find { it.id == fStudent }
+                s != null && s.classIds.contains(l.classId)
+            })
         }
         .sortedWith(compareBy({ it.date }, { it.startTime }))
 
@@ -123,7 +130,7 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
             modifier = Modifier.fillMaxSize()
                 .padding(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding())
         ) {
-            // Tab row
+            // View tab row
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -134,21 +141,44 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                 FilterChip(selected = view == "day",   onClick = { view = "day" },   label = { Text("☀️ 日视图") })
                 FilterChip(selected = view == "list",  onClick = { view = "list" },  label = { Text("📋 列表") })
             }
-            // Filter chips
+
+            // Filter chips row — class, status, teacher, student
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                DropdownFilterChip("全部班级",
+                // Class filter
+                DropdownFilterChip(
+                    allLabel = "全部班级",
                     items    = state.classes.map { it.id to it.name },
-                    selected = fClass) { fClass = it }
-                val statusOpts = listOf("" to "全部状态", "pending" to "待上课", "completed" to "已完成",
-                    "absent" to "缺席", "cancelled" to "已取消", "postponed" to "已延期")
-                DropdownFilterChip("全部状态",
-                    items    = statusOpts.mapIndexed { i, (v, _) -> i.toLong() to statusOpts[i].second }.drop(1),
+                    selected = fClass
+                ) { fClass = it }
+
+                // Status filter
+                val statusOpts = listOf(
+                    "" to "全部状态", "pending" to "待上课", "completed" to "已完成",
+                    "absent" to "缺席", "cancelled" to "已取消", "postponed" to "已延期"
+                )
+                DropdownFilterChip(
+                    allLabel = "全部状态",
+                    items    = statusOpts.drop(1).mapIndexed { i, (_, label) -> (i + 1).toLong() to label },
                     selected = statusOpts.indexOfFirst { it.first == fStatus }.let { if (it <= 0) 0L else it.toLong() }
                 ) { idx -> fStatus = if (idx == 0L) "" else statusOpts.getOrNull(idx.toInt())?.first ?: "" }
+
+                // Teacher filter
+                DropdownFilterChip(
+                    allLabel = "全部教师",
+                    items    = state.teachers.map { it.id to it.name },
+                    selected = fTeacher
+                ) { fTeacher = it }
+
+                // Student filter
+                DropdownFilterChip(
+                    allLabel = "全部学生",
+                    items    = state.students.map { it.id to it.name },
+                    selected = fStudent
+                ) { fStudent = it }
             }
 
             when (view) {
@@ -156,9 +186,9 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                 "month" -> MonthView(filtered, calDate, { calDate = it }, state, progressMap) { viewing = it }
                 "day"   -> DayView(filtered,   calDate, { calDate = it }, state, progressMap) { viewing = it }
                 "list"  -> ListView(filtered, state, progressMap,
-                    onLessonClick  = { viewing = it },
-                    onBatchModify  = { batchModCls = it },
-                    onBatchDelete  = { batchDelCls = it }
+                    onLessonClick = { viewing = it },
+                    onBatchModify = { batchModCls = it },
+                    onBatchDelete = { batchDelCls = it }
                 )
             }
         }
@@ -182,7 +212,9 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
         LessonFormDialog("添加课次", null, state, vm,
             onDismiss = { showAdd = false },
             onSave    = { l ->
-                vm.addLesson(l.classId, l.date, l.startTime, l.endTime, l.status, l.topic, l.notes, l.attendees)
+                vm.addLesson(l.classId, l.date, l.startTime, l.endTime,
+                    l.status, l.topic, l.notes, l.attendees,
+                    teacherIdOverride = l.teacherIdOverride)
                 showAdd = false
             }
         )
@@ -224,7 +256,6 @@ private fun WeekView(
 
         val scrollV = rememberScrollState()
         Row(Modifier.fillMaxSize()) {
-            // Time axis
             Box(Modifier.width(TIME_COL_W.dp).verticalScroll(scrollV)
                 .background(MaterialTheme.colorScheme.surfaceVariant)) {
                 Box(Modifier.height((CAL_TOTAL_HEIGHT + CAL_V_PAD * 2).dp)) {
@@ -236,7 +267,6 @@ private fun WeekView(
                     }
                 }
             }
-            // Day columns
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
                 days.forEach { day ->
                     val dayLessons = lessons.filter { it.date == day.toString() }
@@ -259,7 +289,7 @@ private fun WeekView(
                             }
                             dayLessons.forEach { l ->
                                 if (l.startTime.isBlank()) return@forEach
-                                val color  = statusColor(l.status)
+                                val color   = statusColor(l.status)
                                 val subName = l.subjectName(state.classes, state.subjects)
                                 val (done, total) = progressMap[l.classId] ?: (0 to 0)
                                 Box(Modifier
@@ -276,9 +306,11 @@ private fun WeekView(
                                         Text(subName, style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold, color = color, maxLines = 1)
                                         Text("${l.startTime}–${l.endTime}",
-                                            style = MaterialTheme.typography.labelSmall, color = FluentMuted, maxLines = 1)
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = FluentMuted, maxLines = 1)
                                         if (total > 0)
-                                            Text("$done/$total", style = MaterialTheme.typography.labelSmall,
+                                            Text("$done/$total",
+                                                style = MaterialTheme.typography.labelSmall,
                                                 color = color, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
@@ -305,7 +337,8 @@ private fun MonthView(
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
             IconButton(onClick = { onDateChange(current.minusMonths(1)) }) {
                 Icon(Icons.Default.ChevronLeft, null, tint = Color.White) }
             Text("${current.year}年${current.monthValue}月",
@@ -316,7 +349,8 @@ private fun MonthView(
         Row(Modifier.fillMaxWidth()) {
             listOf("日","一","二","三","四","五","六").forEach { d ->
                 Text(d, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
-                    color = FluentMuted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    color = FluentMuted,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
         LazyColumn(Modifier.fillMaxSize()) {
@@ -342,7 +376,8 @@ private fun MonthView(
                                     dayLessons.take(3).forEach { l ->
                                         val color = statusColor(l.status)
                                         Text(l.subjectName(state.classes, state.subjects),
-                                            style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1,
+                                            style = MaterialTheme.typography.labelSmall, color = color,
+                                            maxLines = 1,
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(2.dp))
                                                 .background(color.copy(0.12f))
@@ -350,7 +385,8 @@ private fun MonthView(
                                                 .clickable { onClick(l) })
                                     }
                                     if (dayLessons.size > 3)
-                                        Text("+${dayLessons.size - 3}", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+                                        Text("+${dayLessons.size - 3}",
+                                            style = MaterialTheme.typography.labelSmall, color = FluentMuted)
                                 }
                             }
                         }
@@ -369,12 +405,13 @@ private fun DayView(
     lessons: List<Lesson>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
     state: AppState, progressMap: Map<Long, Pair<Int, Int>>, onClick: (Lesson) -> Unit
 ) {
-    val dow      = DAYS.getOrElse(current.dayOfWeek.value - 1) { "" }
+    val dow        = DAYS.getOrElse(current.dayOfWeek.value - 1) { "" }
     val dayLessons = lessons.filter { it.date == current.toString() }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(FluentBlue).padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
             IconButton(onClick = { onDateChange(current.minusDays(1)) }) {
                 Icon(Icons.Default.ChevronLeft, null, tint = Color.White) }
             Text("${current.monthValue}月${current.dayOfMonth}日  周$dow",
@@ -405,7 +442,7 @@ private fun DayView(
                     if (l.startTime.isBlank()) return@forEach
                     val color   = statusColor(l.status)
                     val cls     = state.classes.find { it.id == l.classId }
-                    val teacher = cls?.let { state.teachers.find { t -> t.id == it.headTeacherId } }
+                    val teacher = state.teachers.find { it.id == l.effectiveTeacherId(state.classes) }
                     val (done, total) = progressMap[l.classId] ?: (0 to 0)
                     Box(Modifier
                         .offset(y = (minuteOffsetDp(l.startTime) + CAL_V_PAD).dp)
@@ -422,11 +459,14 @@ private fun DayView(
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold, color = color, maxLines = 1)
                             Text("${l.startTime} – ${l.endTime}  👩‍🏫${teacher?.name ?: "─"}",
-                                style = MaterialTheme.typography.labelSmall, color = FluentMuted, maxLines = 1)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                style = MaterialTheme.typography.labelSmall,
+                                color = FluentMuted, maxLines = 1)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
                                 StatusChip(l.status)
                                 if (total > 0)
-                                    Surface(shape = RoundedCornerShape(8.dp), color = color.copy(0.1f)) {
+                                    Surface(shape = RoundedCornerShape(8.dp),
+                                        color = color.copy(0.1f)) {
                                         Text("已上 $done/$total 节",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = color, fontWeight = FontWeight.SemiBold,
@@ -434,7 +474,8 @@ private fun DayView(
                                     }
                             }
                             if (l.topic.isNotBlank())
-                                Text("📌 ${l.topic}", style = MaterialTheme.typography.labelSmall,
+                                Text("📌 ${l.topic}",
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = FluentMuted, maxLines = 1)
                         }
                     }
@@ -471,7 +512,6 @@ private fun ListView(
                     Color(SUBJECT_COLORS[(state.subjects.indexOf(it)).coerceAtLeast(0) % SUBJECT_COLORS.size])
                 } ?: FluentBlue
 
-                // Class group header
                 item(key = "header_$classId") {
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -487,20 +527,21 @@ private fun ListView(
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             TextButton(onClick = { onBatchModify(classId) },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
-                                Text("批量修改", style = MaterialTheme.typography.labelSmall, color = FluentBlue)
+                                Text("批量修改", style = MaterialTheme.typography.labelSmall,
+                                    color = FluentBlue)
                             }
                             TextButton(onClick = { onBatchDelete(classId) },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
-                                Text("批量删除", style = MaterialTheme.typography.labelSmall, color = FluentRed)
+                                Text("批量删除", style = MaterialTheme.typography.labelSmall,
+                                    color = FluentRed)
                             }
                         }
                     }
-                    // Progress bar
                     if (total > 0)
-                        FluentProgressBar(done.toFloat() / total, color, Modifier.fillMaxWidth().padding(bottom = 4.dp))
+                        FluentProgressBar(done.toFloat() / total, color,
+                            Modifier.fillMaxWidth().padding(bottom = 4.dp))
                 }
 
-                // Lesson rows
                 items(classLessons.sortedBy { it.date }, key = { "lesson_${it.id}" }) { l ->
                     LessonCard(l, state, color, onLessonClick)
                 }
@@ -512,39 +553,41 @@ private fun ListView(
 
 @Composable
 private fun LessonCard(l: Lesson, state: AppState, accentColor: Color, onClick: (Lesson) -> Unit) {
-    FluentCard(accentColor = accentColor, modifier = Modifier.fillMaxWidth(), onClick = { onClick(l) }) {
+    FluentCard(accentColor = accentColor, modifier = Modifier.fillMaxWidth(),
+        onClick = { onClick(l) }) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Date block
             Column(horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.width(44.dp)) {
                 val parts = l.date.split("-")
                 Text(parts.getOrElse(2){"?"}, style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold, color = accentColor)
-                Text("${parts.getOrElse(1){"?"}}月", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+                Text("${parts.getOrElse(1){"?"}}月",
+                    style = MaterialTheme.typography.labelSmall, color = FluentMuted)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(l.subjectName(state.classes, state.subjects),
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                        color = accentColor)
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold, color = accentColor)
                     StatusChip(l.status)
                     if (l.isModified)
                         Surface(shape = RoundedCornerShape(4.dp), color = FluentAmber.copy(0.15f)) {
                             Text("已改", style = MaterialTheme.typography.labelSmall,
-                                color = FluentAmber, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                                color = FluentAmber,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
                         }
                 }
                 if (l.topic.isNotBlank())
-                    Text("📌 ${l.topic}", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
+                    Text("📌 ${l.topic}", style = MaterialTheme.typography.bodyMedium,
+                        color = FluentMuted)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (l.startTime.isNotBlank())
                         Text("🕐 ${l.startTime}–${l.endTime}",
                             style = MaterialTheme.typography.bodySmall, color = FluentMuted)
-                    val teacher = state.classes.find { it.id == l.classId }
-                        ?.let { state.teachers.find { t -> t.id == it.headTeacherId } }
-                    Text("👩‍🏫 ${teacher?.name ?: "─"}",
+                    val teacherName = l.teacherName(state.classes, state.teachers)
+                    Text("👩‍🏫 $teacherName",
                         style = MaterialTheme.typography.bodySmall, color = FluentMuted)
                 }
             }
@@ -562,7 +605,7 @@ private fun LessonDetailDialog(
 ) {
     val cls     = state.classes.find { it.id == l.classId }
     val sub     = cls?.resolvedSubject(state.subjects)
-    val teacher = cls?.let { state.teachers.find { t -> t.id == it.headTeacherId } }
+    val teacher = state.teachers.find { it.id == l.effectiveTeacherId(state.classes) }
     val ats     = l.attendees.mapNotNull { vm.student(it) }
     val (done, total) = progressMap[l.classId] ?: (0 to 0)
 
@@ -571,21 +614,29 @@ private fun LessonDetailDialog(
         DetailRow("班级", cls?.name ?: "─")
         DetailRow("科目", sub?.name ?: "─")
         DetailRow("教师", teacher?.name ?: "─")
+        if (l.teacherIdOverride != null) {
+            // Show a badge indicating teacher was overridden for this lesson
+            Surface(shape = RoundedCornerShape(6.dp), color = FluentAmber.copy(0.12f),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
+                Text("本节课教师已覆盖班级默认设置",
+                    style = MaterialTheme.typography.labelSmall, color = FluentAmber,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+            }
+        }
         DetailRow("日期", l.date)
         if (l.startTime.isNotBlank()) DetailRow("时间", "${l.startTime} – ${l.endTime}")
-        // Progress row
         if (total > 0) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("上课进度", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("已完成 $done / $total 节",
-                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
-                        color = statusColor("completed"))
-                }
+                Text("已完成 $done / $total 节",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = statusColor("completed"))
             }
             FluentProgressBar(if (total > 0) done.toFloat() / total else 0f,
-                statusColor("completed"), Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                statusColor("completed"),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             HorizontalDivider(color = FluentBorder, thickness = 0.5.dp,
                 modifier = Modifier.padding(horizontal = 16.dp))
         }
@@ -606,7 +657,6 @@ private fun LessonDetailDialog(
             }
         }
         Spacer(Modifier.height(8.dp))
-        // Quick status buttons
         SectionHeader("快速更改状态")
         androidx.compose.foundation.layout.FlowRow(
             Modifier.padding(horizontal = 16.dp),
@@ -633,7 +683,8 @@ private fun LessonDetailDialog(
     }
 }
 
-// ── Form dialog (single lesson) ───────────────────────────────────────────────
+// ── Form dialog ───────────────────────────────────────────────────────────────
+// Used for both add and edit. Includes teacher override field (req 2 & 5).
 
 @Composable
 private fun LessonFormDialog(
@@ -652,22 +703,46 @@ private fun LessonFormDialog(
     var code      by remember { mutableStateOf(initial?.code?.ifBlank { null } ?: genCode("L")) }
 
     val selectedClass = state.classes.find { it.id == classId }
+
+    // Teacher: default = class headTeacher, but can be overridden per-lesson
+    var teacherOverrideId by remember {
+        mutableStateOf(
+            initial?.teacherIdOverride
+                ?: selectedClass?.headTeacherId
+        )
+    }
+    // When class changes, reset teacher to new class default
+    LaunchedEffect(classId) {
+        if (initial == null || initial.teacherIdOverride == null) {
+            teacherOverrideId = state.classes.find { it.id == classId }?.headTeacherId
+        }
+    }
+
     val classStudents = state.students.filter { it.classIds.contains(classId) }
+    val effectiveTeacherName = state.teachers.find { it.id == teacherOverrideId }?.name ?: ""
+    val classDefaultTeacherName = state.teachers.find {
+        it.id == state.classes.find { c -> c.id == classId }?.headTeacherId
+    }?.name
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         if (classId != 0L) {
+            val classDefaultTeacherId = state.classes.find { it.id == classId }?.headTeacherId
+            // Only store override if it differs from class default
+            val overrideToSave = if (teacherOverrideId == classDefaultTeacherId) null
+                                 else teacherOverrideId
             onSave(Lesson(
-                id         = initial?.id ?: System.currentTimeMillis(),
-                classId    = classId,
-                date       = date,
-                startTime  = startTime,
-                endTime    = endTime,
-                status     = status,
-                topic      = topic,
-                notes      = notes,
-                attendees  = attendees,
-                isModified = initial != null,  // mark as modified if editing
-                code       = code.trim().ifBlank { genCode("L") }
+                id                = initial?.id ?: System.currentTimeMillis(),
+                classId           = classId,
+                date              = date,
+                startTime         = startTime,
+                endTime           = endTime,
+                status            = status,
+                topic             = topic,
+                notes             = notes,
+                attendees         = attendees,
+                isModified        = initial != null,
+                code              = code.trim().ifBlank { genCode("L") },
+                teacherIdOverride = overrideToSave
             ))
         }
     }) {
@@ -680,19 +755,30 @@ private fun LessonFormDialog(
                     listOf("pending","completed","absent","cancelled","postponed")) { status = it }
             }
         }
-        // Row 2: class + subject badge
+        // Row 2: class selector + subject badge
         FormDropdown("班级", selectedClass?.name ?: "",
             state.classes.map { it.name }) { name ->
             classId = state.classes.firstOrNull { it.name == name }?.id ?: classId
             attendees = emptyList()
+            // Reset teacher to new class default
+            teacherOverrideId = state.classes.firstOrNull { it.name == name }?.headTeacherId
         }
         selectedClass?.resolvedSubject(state.subjects)?.let { sub ->
             Surface(shape = RoundedCornerShape(8.dp), color = FluentPurple.copy(0.1f)) {
-                Text("科目：${sub.name}  ·  教师：${state.teachers.find { it.id == selectedClass.headTeacherId }?.name ?: "─"}",
+                Text("科目：${sub.name}",
                     style = MaterialTheme.typography.bodySmall, color = FluentPurple,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
             }
+        }
+        // Teacher override selector
+        FormDropdown(
+            label    = if (classDefaultTeacherName != null) "教师（默认：$classDefaultTeacherName）" else "教师",
+            selected = effectiveTeacherName.ifBlank { "无" },
+            options  = listOf("无") + state.teachers.map { it.name }
+        ) { picked ->
+            teacherOverrideId = if (picked == "无") null
+                                else state.teachers.firstOrNull { it.name == picked }?.id
         }
         // Row 3: date + start time
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -708,7 +794,6 @@ private fun LessonFormDialog(
         }
         DurationChipsCompact(startTime, endTime) { endTime = it }
         FormTextField("课题", topic, { topic = it }, "本节课主题")
-        // Attendees
         if (classStudents.isNotEmpty()) {
             SectionHeader("出勤学生")
             androidx.compose.foundation.layout.FlowRow(
@@ -730,41 +815,70 @@ private fun LessonFormDialog(
 
 @Composable
 private fun BatchGenerateDialog(state: AppState, vm: AppViewModel, onDismiss: () -> Unit) {
-    var classId       by remember { mutableLongStateOf(state.classes.firstOrNull()?.id ?: 0L) }
-    var recType       by remember { mutableStateOf("WEEKLY") } // WEEKLY / DAILY / ONCE
-    var dayOfWeek     by remember { mutableIntStateOf(1) }     // 1=Mon..7=Sun
-    var startDate     by remember { mutableStateOf(LocalDate.now().toString()) }
-    var endDate       by remember { mutableStateOf(LocalDate.now().plusWeeks(12).toString()) }
-    var startTime     by remember { mutableStateOf("08:00") }
-    var endTime       by remember { mutableStateOf("08:45") }
-    var excludeText   by remember { mutableStateOf("") }       // comma-separated YYYY-MM-DD
+    var classId     by remember { mutableLongStateOf(state.classes.firstOrNull()?.id ?: 0L) }
+    var recType     by remember { mutableStateOf("WEEKLY") }
+    var dayOfWeek   by remember { mutableIntStateOf(1) }
+    var startDate   by remember { mutableStateOf(LocalDate.now().toString()) }
+    var endDate     by remember { mutableStateOf(LocalDate.now().plusWeeks(12).toString()) }
+    var startTime   by remember { mutableStateOf("08:00") }
+    var endTime     by remember { mutableStateOf("08:45") }
+    // Exclude dates stored as a set; also editable as text
+    var excludeSet  by remember { mutableStateOf(emptySet<String>()) }
+    val excludeText = excludeSet.sorted().joinToString(", ")
+
+    // Teacher override for batch-generated lessons; default = class headTeacher
+    var teacherOverrideId by remember {
+        mutableStateOf(state.classes.firstOrNull()?.headTeacherId)
+    }
+    LaunchedEffect(classId) {
+        teacherOverrideId = state.classes.find { it.id == classId }?.headTeacherId
+    }
+    val selectedClass = state.classes.find { it.id == classId }
+    val classDefaultTeacherName = state.teachers.find {
+        it.id == selectedClass?.headTeacherId
+    }?.name
+    val effectiveTeacherName = state.teachers.find { it.id == teacherOverrideId }?.name ?: ""
 
     FluentDialog(title = "批量生成课次", onDismiss = onDismiss, confirmText = "生成", onConfirm = {
         if (classId == 0L) return@FluentDialog
-        val excludeDates = excludeText.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
         val sDate = runCatching { LocalDate.parse(startDate) }.getOrNull() ?: LocalDate.now()
         val eDate = runCatching { LocalDate.parse(endDate)   }.getOrNull() ?: sDate.plusWeeks(12)
+        val classDefaultTeacherId = state.classes.find { it.id == classId }?.headTeacherId
+        val overrideToSave = if (teacherOverrideId == classDefaultTeacherId) null
+                             else teacherOverrideId
         vm.batchGenerateLessons(
-            classId       = classId,
-            recurrenceType = AppViewModel.RecurrenceType.valueOf(recType),
-            startDate     = sDate,
-            endDate       = eDate,
-            dayOfWeek     = dayOfWeek,
-            startTime     = startTime,
-            endTime       = endTime,
-            excludeDates  = excludeDates
+            classId           = classId,
+            recurrenceType    = AppViewModel.RecurrenceType.valueOf(recType),
+            startDate         = sDate,
+            endDate           = eDate,
+            dayOfWeek         = dayOfWeek,
+            startTime         = startTime,
+            endTime           = endTime,
+            excludeDates      = excludeSet,
+            teacherIdOverride = overrideToSave
         )
         onDismiss()
     }) {
-        FormDropdown("班级", state.classes.find { it.id == classId }?.name ?: "",
+        FormDropdown("班级", selectedClass?.name ?: "",
             state.classes.map { it.name }) { name ->
             classId = state.classes.firstOrNull { it.name == name }?.id ?: classId
+        }
+
+        // Teacher override
+        FormDropdown(
+            label    = if (classDefaultTeacherName != null) "教师（默认：$classDefaultTeacherName）" else "教师",
+            selected = effectiveTeacherName.ifBlank { "无" },
+            options  = listOf("无") + state.teachers.map { it.name }
+        ) { picked ->
+            teacherOverrideId = if (picked == "无") null
+                                else state.teachers.firstOrNull { it.name == picked }?.id
         }
 
         SectionHeader("重复类型")
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("WEEKLY" to "每周", "DAILY" to "连续每天", "ONCE" to "单次").forEach { (v, label) ->
-                FilterChip(selected = recType == v, onClick = { recType = v }, label = { Text(label) })
+                FilterChip(selected = recType == v, onClick = { recType = v },
+                    label = { Text(label) })
             }
         }
 
@@ -773,8 +887,9 @@ private fun BatchGenerateDialog(state: AppState, vm: AppViewModel, onDismiss: ()
             Row(Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 DAYS.forEachIndexed { i, d ->
-                    FilterChip(selected = dayOfWeek == i + 1, onClick = { dayOfWeek = i + 1 },
-                        label = { Text("周$d") })
+                    FilterChip(selected = dayOfWeek == i + 1,
+                        onClick = { dayOfWeek = i + 1 },
+                        label   = { Text("周$d") })
                 }
             }
         }
@@ -802,9 +917,82 @@ private fun BatchGenerateDialog(state: AppState, vm: AppViewModel, onDismiss: ()
         }
         DurationChipsCompact(startTime, endTime) { endTime = it }
 
+        // ── Exclude dates section ─────────────────────────────────────────────
         if (recType != "ONCE") {
-            FormTextField("跳过日期（逗号分隔）", excludeText, { excludeText = it }, "例：2025-10-01,2025-10-07")
+            SectionHeader("跳过日期")
+            // Date picker button to add an exclusion date
+            ExcludeDatePicker(excludeSet) { date ->
+                excludeSet = excludeSet + date
+            }
+            // Display + remove chips for each excluded date
+            if (excludeSet.isNotEmpty()) {
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement   = Arrangement.spacedBy(4.dp)
+                ) {
+                    excludeSet.sorted().forEach { d ->
+                        InputChip(
+                            selected     = false,
+                            onClick      = { excludeSet = excludeSet - d },
+                            label        = { Text(d, style = MaterialTheme.typography.labelSmall) },
+                            trailingIcon = {
+                                Icon(Icons.Default.Close, "删除",
+                                    modifier = Modifier.size(14.dp))
+                            }
+                        )
+                    }
+                }
+            } else {
+                Text("暂未跳过任何日期",
+                    style    = MaterialTheme.typography.bodySmall, color = FluentMuted,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            }
         }
+    }
+}
+
+/** Small inline date-picker button that appends a picked date to excludeSet. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExcludeDatePicker(
+    current: Set<String>,
+    onAdd: (String) -> Unit
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val pickerState = rememberDatePickerState(
+        initialSelectedDateMillis = System.currentTimeMillis()
+    )
+
+    OutlinedButton(
+        onClick = { showPicker = true },
+        shape   = RoundedCornerShape(12.dp),
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
+        Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("添加跳过日期", style = MaterialTheme.typography.labelMedium)
+    }
+
+    if (showPicker) {
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton    = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let { ms ->
+                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+                        val dateStr = "%04d-%02d-%02d".format(
+                            cal.get(java.util.Calendar.YEAR),
+                            cal.get(java.util.Calendar.MONTH) + 1,
+                            cal.get(java.util.Calendar.DAY_OF_MONTH)
+                        )
+                        onAdd(dateStr)
+                    }
+                    showPicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showPicker = false }) { Text("取消") } }
+        ) { DatePicker(state = pickerState) }
     }
 }
 
@@ -812,46 +1000,38 @@ private fun BatchGenerateDialog(state: AppState, vm: AppViewModel, onDismiss: ()
 
 @Composable
 private fun BatchModifyDialog(classId: Long, state: AppState, vm: AppViewModel, onDismiss: () -> Unit) {
-    val cls        = state.classes.find { it.id == classId }
-    val allDates   = state.lessons.filter { it.classId == classId }.map { it.date }.sorted()
-    val today      = LocalDate.now().toString()
-    var fromDate   by remember { mutableStateOf(today) }
-    var toDate     by remember { mutableStateOf(allDates.lastOrNull() ?: today) }
-    var newStart   by remember { mutableStateOf("") }
-    var newEnd     by remember { mutableStateOf("") }
-    var skipMod    by remember { mutableStateOf(true) }
+    val cls         = state.classes.find { it.id == classId }
+    val allDates    = state.lessons.filter { it.classId == classId }.map { it.date }.sorted()
+    val today       = LocalDate.now().toString()
+    var fromDate    by remember { mutableStateOf(today) }
+    var toDate      by remember { mutableStateOf(allDates.lastOrNull() ?: today) }
+    var newStart    by remember { mutableStateOf("") }
+    var newEnd      by remember { mutableStateOf("") }
+    var skipMod     by remember { mutableStateOf(true) }
     var inclNonPend by remember { mutableStateOf(false) }
 
     FluentDialog(title = "批量修改 — ${cls?.name ?: "班级"}", onDismiss = onDismiss,
         confirmText = "批量修改", onConfirm = {
-            vm.batchModifyLessons(
-                classId         = classId,
-                fromDate        = fromDate,
-                toDate          = toDate,
-                newStartTime    = newStart.ifBlank { null },
-                newEndTime      = newEnd.ifBlank { null },
-                skipModified    = skipMod,
-                includeNonPending = inclNonPend
-            )
+            vm.batchModifyLessons(classId, fromDate, toDate,
+                newStart.ifBlank { null }, newEnd.ifBlank { null },
+                skipMod, inclNonPend)
             onDismiss()
         }) {
         Text("默认不修改今天之前的课次。留空表示不修改该字段。",
             style = MaterialTheme.typography.bodySmall, color = FluentMuted,
             modifier = Modifier.padding(horizontal = 16.dp))
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) { DatePickerField("开始日期", fromDate) { fromDate = it } }
             Box(Modifier.weight(1f)) { DatePickerField("结束日期", toDate)   { toDate   = it } }
         }
 
         SectionHeader("修改时间（留空则不修改）")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.weight(1f)) {
-                StartTimeCompact(newStart.ifBlank { "08:00" }) { newStart = it }
-            }
-            Box(Modifier.weight(1f)) {
-                StartTimeCompact(newEnd.ifBlank { "08:45" }) { newEnd = it }
-            }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f)) { StartTimeCompact(newStart.ifBlank { "08:00" }) { newStart = it } }
+            Box(Modifier.weight(1f)) { StartTimeCompact(newEnd.ifBlank   { "08:45" }) { newEnd   = it } }
         }
 
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -900,24 +1080,29 @@ private fun BatchDeleteDialog(classId: Long, state: AppState, vm: AppViewModel, 
                 style = MaterialTheme.typography.bodySmall, color = FluentRed,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.weight(1f)) { DatePickerField("开始日期", fromDate) { fromDate = it; confirmed = false } }
-            Box(Modifier.weight(1f)) { DatePickerField("结束日期", toDate)   { toDate   = it; confirmed = false } }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f)) {
+                DatePickerField("开始日期", fromDate) { fromDate = it; confirmed = false } }
+            Box(Modifier.weight(1f)) {
+                DatePickerField("结束日期", toDate)   { toDate   = it; confirmed = false } }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
             Text("包含已完成/已取消课次", style = MaterialTheme.typography.bodyMedium)
             Switch(checked = inclNonPend, onCheckedChange = { inclNonPend = it; confirmed = false })
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
             Text("包含已单独修改的课次", style = MaterialTheme.typography.bodyMedium)
             Switch(checked = inclMod, onCheckedChange = { inclMod = it; confirmed = false })
         }
     }
 }
 
-// ── Time picker helpers (shared with other dialogs) ───────────────────────────
+// ── Time / date picker helpers ────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -929,8 +1114,8 @@ internal fun StartTimeCompact(startTime: String, onStartChange: (String) -> Unit
         shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
         trailingIcon = {
             IconButton(onClick = { showPicker = true }) {
-                Icon(Icons.Default.Schedule, null, tint = FluentBlue, modifier = Modifier.size(18.dp))
-            }
+                Icon(Icons.Default.Schedule, null, tint = FluentBlue,
+                    modifier = Modifier.size(18.dp)) }
         },
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
@@ -955,27 +1140,35 @@ internal fun DurationChipsCompact(startTime: String, endTime: String, onEndChang
             color = FluentBlue, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(4.dp))
         OutlinedTextField(value = h.toString(),
-            onValueChange = { raw -> val newH = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0,23) ?: h; durMins = newH*60+m; push(durMins) },
+            onValueChange = { raw ->
+                val newH = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 23) ?: h
+                durMins = newH * 60 + m; push(durMins) },
             label = { Text("时", style = MaterialTheme.typography.labelSmall) },
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape = RoundedCornerShape(8.dp), modifier = Modifier.width(52.dp),
             textStyle = MaterialTheme.typography.bodySmall,
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
         OutlinedTextField(value = "%02d".format(m),
-            onValueChange = { raw -> val newM = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0,59) ?: m; durMins = h*60+newM; push(durMins) },
+            onValueChange = { raw ->
+                val newM = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 59) ?: m
+                durMins = h * 60 + newM; push(durMins) },
             label = { Text("分", style = MaterialTheme.typography.labelSmall) },
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape = RoundedCornerShape(8.dp), modifier = Modifier.width(52.dp),
             textStyle = MaterialTheme.typography.bodySmall,
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
         Spacer(Modifier.width(2.dp))
-        FilledTonalIconButton(onClick = { durMins = (durMins-10).coerceAtLeast(10); push(durMins) },
+        FilledTonalIconButton(onClick = { durMins = (durMins - 10).coerceAtLeast(10); push(durMins) },
             modifier = Modifier.size(32.dp), shape = RoundedCornerShape(8.dp),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = FluentBorder, contentColor = FluentMuted)) {
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = FluentBorder, contentColor = FluentMuted)) {
             Icon(Icons.Default.Remove, "-10分钟", Modifier.size(16.dp)) }
-        FilledTonalIconButton(onClick = { durMins = (durMins+10).coerceAtMost(23*60); push(durMins) },
+        FilledTonalIconButton(onClick = { durMins = (durMins + 10).coerceAtMost(23 * 60); push(durMins) },
             modifier = Modifier.size(32.dp), shape = RoundedCornerShape(8.dp),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = FluentBlueLight, contentColor = FluentBlue)) {
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = FluentBlueLight, contentColor = FluentBlue)) {
             Icon(Icons.Default.Add, "+10分钟", Modifier.size(16.dp)) }
         Text("→ ${addMinutesToTime(startTime.ifBlank { "08:00" }, durMins)}",
             style = MaterialTheme.typography.labelSmall, color = FluentMuted)
@@ -988,15 +1181,18 @@ internal fun DatePickerField(label: String, value: String, onChange: (String) ->
     var showPicker by remember { mutableStateOf(false) }
     val epochMs: Long? = runCatching {
         val p = value.split("-")
-        java.util.Calendar.getInstance().apply { set(p[0].toInt(), p[1].toInt()-1, p[2].toInt()) }.timeInMillis
+        java.util.Calendar.getInstance()
+            .apply { set(p[0].toInt(), p[1].toInt() - 1, p[2].toInt()) }.timeInMillis
     }.getOrNull()
     val pickerState = rememberDatePickerState(initialSelectedDateMillis = epochMs)
 
     OutlinedTextField(value = value, onValueChange = onChange, label = { Text(label) },
         shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(), singleLine = true,
-        trailingIcon = { IconButton(onClick = { showPicker = true }) {
-            Icon(Icons.Default.DateRange, null, tint = FluentBlue) } },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
+        trailingIcon = {
+            IconButton(onClick = { showPicker = true }) {
+                Icon(Icons.Default.DateRange, null, tint = FluentBlue) } },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
 
     if (showPicker) {
         DatePickerDialog(
@@ -1005,8 +1201,10 @@ internal fun DatePickerField(label: String, value: String, onChange: (String) ->
                 TextButton(onClick = {
                     pickerState.selectedDateMillis?.let { ms ->
                         val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
-                        onChange("%04d-%02d-%02d".format(cal.get(java.util.Calendar.YEAR),
-                            cal.get(java.util.Calendar.MONTH)+1, cal.get(java.util.Calendar.DAY_OF_MONTH)))
+                        onChange("%04d-%02d-%02d".format(
+                            cal.get(java.util.Calendar.YEAR),
+                            cal.get(java.util.Calendar.MONTH) + 1,
+                            cal.get(java.util.Calendar.DAY_OF_MONTH)))
                     }
                     showPicker = false
                 }) { Text("确定") }
@@ -1020,10 +1218,13 @@ internal fun DatePickerField(label: String, value: String, onChange: (String) ->
 @Composable
 private fun LessonTimePickerDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     val parts = initial.split(":").mapNotNull { it.toIntOrNull() }
-    val ts = rememberTimePickerState(parts.getOrElse(0){8}, parts.getOrElse(1){0}, is24Hour = true)
+    val ts    = rememberTimePickerState(parts.getOrElse(0){8}, parts.getOrElse(1){0}, is24Hour = true)
     AlertDialog(onDismissRequest = onDismiss, shape = RoundedCornerShape(20.dp),
         title = { Text("选择时间", fontWeight = FontWeight.Bold) },
-        text  = { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TimePicker(state = ts) } },
+        text  = {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TimePicker(state = ts) }
+        },
         confirmButton = {
             Button(onClick = { onConfirm("%02d:%02d".format(ts.hour, ts.minute)) },
                 shape = RoundedCornerShape(12.dp),

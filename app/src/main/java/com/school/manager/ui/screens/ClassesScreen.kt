@@ -24,7 +24,12 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
 
     Scaffold(
         floatingActionButton = {
-            ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer)
+            ScreenSpeedDialFab(
+                addLabel     = "添加班级",
+                addIcon      = Icons.Default.Add,
+                onAdd        = { showAdd = true },
+                onOpenDrawer = onOpenDrawer
+            )
         }
     ) { inner ->
         LazyColumn(
