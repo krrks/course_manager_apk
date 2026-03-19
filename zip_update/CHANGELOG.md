@@ -1,36 +1,27 @@
 #!build
-# UI 功能增强：教师覆盖、班级添加、筛选器扩展
+# UI 重构：日历页顶部空间释放，视图切换内嵌标题栏，筛选器移至 FAB BottomSheet
 
-## 功能变更
+## 变更内容
 
-### 1. 班级页面增加添加按钮
-- ClassesScreen：ScreenSpeedDialFab 增加 addLabel="添加班级" + onAdd，原来只有导航无法新增
+### 移除顶部两行（约 100dp 空间释放）
+- 删除视图切换 Tab 行（周/月/日/列表 FilterChip）
+- 删除筛选 chips 行（班级/状态/教师/学生）
+- 日历可视区域相应扩大
 
-### 2 & 5. 课次添加/编辑允许修改教师
-- Lesson 模型新增 teacherIdOverride: Long?（null 表示使用班级默认班主任）
-- LessonFormDialog（添加和编辑共用）增加教师下拉选择器
-  - 默认值自动填入所选班级的班主任
-  - 切换班级时自动重置为新班级的班主任
-  - 仅当选择的教师与班级默认不同时才存储 override
-- LessonDetailDialog 展示实际生效教师，override 时显示"已覆盖"提示
-- AppViewModel.addLesson 增加 teacherIdOverride 参数
-- Lesson.effectiveTeacherId() 扩展函数：优先 override，降级到 class.headTeacherId
+### 视图切换：内嵌至各视图蓝色标题栏
+- WeekView / MonthView / DayView / ListView 的蓝色标题栏右侧统一新增 4 个紧凑图标按钮
+- 图标：ViewWeek / CalendarMonth / Today / ViewList
+- 当前视图图标高亮白色，其余半透明，一眼可识当前状态
+- ListView 原无标题栏，新增蓝色标题栏（"课次列表"）以保持一致性
+- 标题文字改为 weight(1f) + TextAlign.Center，与左右箭头及视图图标自然分布
 
-### 3. 移除科目详情里的主讲教师
-- SubjectsScreen：SubjectDetailDialog 删除"主讲教师"行
-- SubjectRow 卡片同步移除"主讲：xxx"副标题（保留 SubjectFormDialog 中的教师字段）
+### 筛选器：移入 FAB SpeedDial → ModalBottomSheet
+- FAB SpeedDial 新增"筛选条件"项（FilterList 图标）
+- 有筛选条件生效时该项高亮橙色（FluentOrange），无筛选时为灰色
+- 点击后展开 ModalBottomSheet，内含班级 / 状态 / 教师 / 学生四组 FilterChip
+- 顶部提供"清除全部"按钮，仅在有活跃筛选时显示
+- SpeedDial 展开项顺序：筛选条件 → 批量生成课次 → 添加单节课 → 导航菜单
 
-### 4. 批量生成课次增加教师和跳过日期选择器
-- BatchGenerateDialog 增加教师下拉（默认为班级班主任，可覆盖）
-- 跳过日期从文本框改为日期选择器（"添加跳过日期"按钮 → DatePickerDialog）
-- 已选跳过日期以 InputChip 展示，可点 × 单个删除
-- AppViewModel.batchGenerateLessons 增加 teacherIdOverride 参数
-
-### 6. 日历视图筛选器增加教师和学生选择器
-- LessonScreen 过滤行增加"全部教师"和"全部学生"两个 DropdownFilterChip
-- 教师筛选：按 lesson.effectiveTeacherId 过滤
-- 学生筛选：显示该学生所属班级的所有课次（按 student.classIds 过滤）
-
-### 数据层
-- Lesson.teacherIdOverride 字段同步到 LessonEntity、Mappers、AppViewModel 的 Gson 解析
-- AppDatabase 版本升至 2（fallbackToDestructiveMigration，首次启动加载示例数据）
+### 仅修改文件
+- `app/src/main/java/com/school/manager/ui/screens/LessonScreen.kt`
+- 数据层、ViewModel、CommonComponents 均无变动
