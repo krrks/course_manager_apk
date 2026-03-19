@@ -1,14 +1,13 @@
 # Repository Snapshot
 
-> Updated: `2026-03-19T04:58:21Z`
-> Commit:  `364390d41f960022a5a2f51560a18ca30923cf33`
+> Updated: `2026-03-19T08:18:17Z`
+> Commit:  `b9fd86a3dd3987d6f8bd0065a930a14967f57563`
 
 ```
 ./.github/workflows/build.yml
 ./.github/workflows/cleanup.yml
 ./.github/workflows/update_apk_key.yml
 ./.gitignore
-./AttendanceScreen_FormDialog_PATCH.kt
 ./README.md
 ./app/build.gradle.kts
 ./app/proguard-rules.pro
@@ -23,10 +22,9 @@
 ./app/src/main/java/com/school/manager/data/repository/AppRepository.kt
 ./app/src/main/java/com/school/manager/ui/components/CommonComponents.kt
 ./app/src/main/java/com/school/manager/ui/components/FluentComponentAliases.kt
-./app/src/main/java/com/school/manager/ui/screens/AttendanceScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
-./app/src/main/java/com/school/manager/ui/screens/ScheduleScreen.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/StatsScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/StudentsScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/SubjectsScreen.kt
