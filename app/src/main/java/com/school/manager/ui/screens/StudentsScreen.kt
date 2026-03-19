@@ -48,17 +48,15 @@ fun StudentsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     ) { inner ->
         Column(modifier = Modifier.fillMaxSize()
             .padding(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding())) {
-            // Filter chips
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 DropdownFilterChip("全部年级",
-                    items    = GRADES.map { 0L to it }.mapIndexed { i, (_, g) -> (i + 1).toLong() to g },
+                    items    = GRADES.mapIndexed { i, g -> (i + 1).toLong() to g },
                     selected = GRADES.indexOf(fGrade).let { if (it < 0) 0L else (it + 1).toLong() }
                 ) { idx -> fGrade = if (idx == 0L) "" else GRADES.getOrElse((idx - 1).toInt()) { "" } }
                 DropdownFilterChip("全部班级",
                     items    = state.classes.map { it.id to it.name },
-                    selected = fClass
-                ) { fClass = it }
+                    selected = fClass) { fClass = it }
             }
 
             Text("共 ${filtered.size} 名学生", style = MaterialTheme.typography.labelMedium,
@@ -111,13 +109,11 @@ fun StudentsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
             onDelete  = { vm.deleteStudent(s.id); viewing = null }
         )
     }
-
     editing?.let { s ->
         StudentFormDialog("编辑学生", s, state, vm, onDismiss = { editing = null }) { updated ->
             vm.updateStudent(updated); editing = null
         }
     }
-
     if (showAdd) {
         StudentFormDialog("添加学生", null, state, vm, onDismiss = { showAdd = false }) { s ->
             vm.addStudent(s.name, s.studentNo, s.gender, s.grade, s.classIds, s.avatarUri)
@@ -132,7 +128,8 @@ private fun StudentDetailDialog(
     onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     val classes  = s.classIds.mapNotNull { vm.schoolClass(it) }
-    val attended = state.attendance.count { it.attendees.contains(s.id) && it.status == "completed" }
+    // Use state.lessons instead of state.attendance
+    val attended = state.lessons.count { it.attendees.contains(s.id) && it.status == "completed" }
 
     FluentDialog(title = "学生详情", onDismiss = onDismiss) {
         Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {

@@ -30,7 +30,12 @@ fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
 
     Scaffold(
         floatingActionButton = {
-            ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer)
+            ScreenSpeedDialFab(
+                addLabel     = "添加教师",
+                addIcon      = Icons.Default.Add,
+                onAdd        = { showAdd = true },
+                onOpenDrawer = onOpenDrawer
+            )
         }
     ) { inner ->
         LazyColumn(
@@ -47,10 +52,12 @@ fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
             } else {
                 items(state.teachers) { t ->
                     val teacherSubjects = state.subjects.filter { it.teacherId == t.id }
-                    val lessonCount = state.attendance.count { it.teacherId == t.id && it.status == "completed" }
-                    val teacherClasses = state.classes.filter { c ->
-                        state.schedule.any { s -> s.teacherId == t.id && s.classId == c.id }
+                    // In the new model teacher is fixed via SchoolClass.headTeacherId
+                    val lessonCount = state.lessons.count { l ->
+                        state.classes.find { it.id == l.classId }?.headTeacherId == t.id &&
+                        l.status == "completed"
                     }
+                    val teacherClasses = state.classes.filter { c -> c.headTeacherId == t.id }
 
                     FluentCard(modifier = Modifier.fillMaxWidth(), onClick = { viewing = t }) {
                         Row(Modifier.padding(14.dp),
@@ -63,7 +70,7 @@ fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
                                     Text(t.name,
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style      = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold)
                                     ColorChip(t.gender, if (t.gender == "男") FluentBlue else FluentPurple)
                                 }
@@ -83,7 +90,6 @@ fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                                             ColorChip(sub.name, FluentBlue)
                                         }
                                         teacherClasses.take(3).forEach { c ->
-                                            // subject name derived from FK only
                                             val subjectDisplay = c.resolvedSubject(state.subjects)?.name ?: c.name
                                             ColorChip(subjectDisplay, FluentGreen)
                                         }
@@ -104,13 +110,11 @@ fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
             onDelete  = { vm.deleteTeacher(t.id); viewing = null }
         )
     }
-
     editing?.let { t ->
         TeacherFormDialog("编辑教师", t, state, vm, onDismiss = { editing = null }) { updated ->
             vm.updateTeacher(updated); editing = null
         }
     }
-
     if (showAdd) {
         TeacherFormDialog("添加教师", null, state, vm, onDismiss = { showAdd = false }) { t ->
             vm.addTeacher(t.name, t.gender, t.phone, avatarUri = t.avatarUri, code = t.code)
@@ -124,10 +128,11 @@ private fun TeacherDetailDialog(
     t: Teacher, vm: AppViewModel, state: AppState,
     onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
-    val lessonCount = state.attendance.count { it.teacherId == t.id && it.status == "completed" }
-    val teacherClasses = state.classes.filter { c ->
-        state.schedule.any { s -> s.teacherId == t.id && s.classId == c.id }
+    val lessonCount = state.lessons.count { l ->
+        state.classes.find { it.id == l.classId }?.headTeacherId == t.id &&
+        l.status == "completed"
     }
+    val teacherClasses  = state.classes.filter  { c -> c.headTeacherId == t.id }
     val teacherSubjects = state.subjects.filter { it.teacherId == t.id }
 
     FluentDialog(title = "教师详情", onDismiss = onDismiss) {

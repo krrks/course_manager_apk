@@ -77,16 +77,19 @@ fun SubjectsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
 
 @Composable
 private fun SubjectRow(
-    s: Subject,
-    state: com.school.manager.data.AppState,
-    vm: AppViewModel,
-    onView: () -> Unit,
-    onEdit: () -> Unit
+    s: Subject, state: AppState, vm: AppViewModel,
+    onView: () -> Unit, onEdit: () -> Unit
 ) {
-    val te         = vm.teacher(s.teacherId)
-    val color      = packedToColor(s.color)
-    val schedCount = state.schedule.count { slot -> state.classes.find { it.id == slot.classId }?.subjectId == s.id }
-    val attCount   = state.attendance.count { att -> state.classes.find { it.id == att.classId }?.subjectId == s.id }
+    val te    = vm.teacher(s.teacherId)
+    val color = packedToColor(s.color)
+    // In the new model there is no separate schedule table.
+    // Use lessons total / completed counts as proxies for "排课" / "已完成".
+    val totalCount = state.lessons.count { l ->
+        state.classes.find { it.id == l.classId }?.subjectId == s.id
+    }
+    val doneCount = state.lessons.count { l ->
+        state.classes.find { it.id == l.classId }?.subjectId == s.id && l.status == "completed"
+    }
 
     FluentCard(modifier = Modifier.fillMaxWidth(), onClick = onView) {
         Row(
@@ -94,52 +97,29 @@ private fun SubjectRow(
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Color strip
-            Box(
-                Modifier
-                    .width(4.dp)
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(color)
-            )
+            Box(Modifier.width(4.dp).height(52.dp)
+                .clip(RoundedCornerShape(2.dp)).background(color))
 
-            // Main info
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Row(
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        "📚 ${s.name}",
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("📚 ${s.name}",
                         style      = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color      = color
-                    )
+                        fontWeight = FontWeight.Bold, color = color)
                     if (s.code.isNotBlank()) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = color.copy(alpha = 0.12f)
-                        ) {
-                            Text(
-                                s.code,
-                                style    = MaterialTheme.typography.labelSmall,
-                                color    = color,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
+                        Surface(shape = RoundedCornerShape(6.dp), color = color.copy(alpha = 0.12f)) {
+                            Text(s.code, style = MaterialTheme.typography.labelSmall, color = color,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                         }
                     }
                 }
-                Text(
-                    "主讲：${te?.name ?: "未分配"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = FluentMuted
-                )
+                Text("主讲：${te?.name ?: "未分配"}",
+                    style = MaterialTheme.typography.bodySmall, color = FluentMuted)
             }
 
-            // Stats
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SubjectStatChip("排课 $schedCount", color)
-                SubjectStatChip("记录 $attCount",  color)
+                SubjectStatChip("课次 $totalCount", color)
+                SubjectStatChip("完成 $doneCount",  color)
             }
         }
     }
@@ -148,13 +128,9 @@ private fun SubjectRow(
 @Composable
 private fun SubjectStatChip(label: String, color: Color) {
     Surface(shape = RoundedCornerShape(8.dp), color = color.copy(alpha = 0.10f)) {
-        Text(
-            label,
-            style      = MaterialTheme.typography.labelSmall,
-            color      = color,
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color,
             fontWeight = FontWeight.SemiBold,
-            modifier   = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-        )
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
     }
 }
 
@@ -162,78 +138,58 @@ private fun SubjectStatChip(label: String, color: Color) {
 
 @Composable
 private fun SubjectDetailDialog(
-    s: Subject,
-    state: com.school.manager.data.AppState,
-    vm: AppViewModel,
-    onDismiss: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    s: Subject, state: AppState, vm: AppViewModel,
+    onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     val te = vm.teacher(s.teacherId)
+    val totalCount = state.lessons.count { l ->
+        state.classes.find { it.id == l.classId }?.subjectId == s.id
+    }
+    val doneCount = state.lessons.count { l ->
+        state.classes.find { it.id == l.classId }?.subjectId == s.id && l.status == "completed"
+    }
     FluentDialog(title = "科目详情", onDismiss = onDismiss) {
         if (s.code.isNotBlank()) DetailRow("编号", s.code)
         DetailRow("科目名称", s.name)
         DetailRow("主讲教师", te?.name ?: "未分配")
-        DetailRow("排课数量", "${state.schedule.count { slot -> state.classes.find { it.id == slot.classId }?.subjectId == s.id }} 节")
-        DetailRow("上课次数", "${state.attendance.count { att -> state.classes.find { it.id == att.classId }?.subjectId == s.id }} 次")
+        DetailRow("课次总数", "$totalCount 节")
+        DetailRow("已完成",   "$doneCount 节")
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick  = onEdit,
-                shape    = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) { Text("✏️ 编辑") }
-            OutlinedButton(
-                onClick  = onDelete,
-                shape    = RoundedCornerShape(12.dp),
+            OutlinedButton(onClick = onEdit,   shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) { Text("✏️ 编辑") }
+            OutlinedButton(onClick = onDelete, shape = RoundedCornerShape(12.dp),
                 colors   = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed),
-                modifier = Modifier.weight(1f)
-            ) { Text("删除") }
+                modifier = Modifier.weight(1f)) { Text("删除") }
         }
     }
 }
 
-// ─── Add / Edit form dialog ───────────────────────────────────────────────────
+// ─── Form dialog ──────────────────────────────────────────────────────────────
 
 @Composable
 private fun SubjectFormDialog(
-    title: String,
-    initial: Subject?,
-    state: com.school.manager.data.AppState,
-    vm: AppViewModel,
-    onDismiss: () -> Unit,
-    onSave: (Subject) -> Unit
+    title: String, initial: Subject?,
+    state: AppState, vm: AppViewModel,
+    onDismiss: () -> Unit, onSave: (Subject) -> Unit
 ) {
     var name     by remember { mutableStateOf(initial?.name ?: "") }
     var teacher  by remember { mutableStateOf(
-        state.teachers.firstOrNull { it.id == initial?.teacherId }?.name ?: ""
-    ) }
-    var code     by remember { mutableStateOf(
-        initial?.code?.ifBlank { null } ?: genCode("SBJ")
-    ) }
+        state.teachers.firstOrNull { it.id == initial?.teacherId }?.name ?: "") }
+    var code     by remember { mutableStateOf(initial?.code?.ifBlank { null } ?: genCode("SBJ")) }
     var colorIdx by remember { mutableStateOf(
-        SUBJECT_COLORS.indexOfFirst { it == initial?.color }.coerceAtLeast(0)
-    ) }
+        SUBJECT_COLORS.indexOfFirst { it == initial?.color }.coerceAtLeast(0)) }
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         if (name.isNotBlank()) {
-            val tId       = state.teachers.firstOrNull { it.name == teacher }?.id
-            val subjectId = initial?.id ?: System.currentTimeMillis()
-            onSave(Subject(subjectId, name.trim(), SUBJECT_COLORS[colorIdx], tId, code.trim()))
+            val tId = state.teachers.firstOrNull { it.name == teacher }?.id
+            onSave(Subject(initial?.id ?: System.currentTimeMillis(),
+                name.trim(), SUBJECT_COLORS[colorIdx], tId, code.trim()))
         }
     }) {
-        // 科目编号
         FluentTextField("科目编号", code, { code = it })
-
-        // 科目名称
         FluentTextField("科目名称", name, { name = it })
+        DropdownField("主讲教师", teacher, listOf("") + state.teachers.map { it.name }) { teacher = it }
 
-        // 主讲教师 — positional args, matching the signature used in ClassesScreen
-        DropdownField("主讲教师", teacher, listOf("") + state.teachers.map { it.name }) {
-            teacher = it
-        }
-
-        // 颜色选择
         SectionHeader("颜色")
         androidx.compose.foundation.layout.FlowRow(
             modifier              = Modifier.padding(horizontal = 16.dp),
@@ -241,22 +197,11 @@ private fun SubjectFormDialog(
             verticalArrangement   = Arrangement.spacedBy(8.dp)
         ) {
             SUBJECT_COLORS.forEachIndexed { idx, packed ->
-                val col      = packedToColor(packed)
+                val col        = packedToColor(packed)
                 val isSelected = idx == colorIdx
-                Box(
-                    Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(col)
-                        .clickable { colorIdx = idx }
-                        .then(
-                            if (isSelected) Modifier.border(
-                                3.dp,
-                                MaterialTheme.colorScheme.onSurface,
-                                RoundedCornerShape(8.dp)
-                            ) else Modifier
-                        )
-                )
+                Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(col)
+                    .clickable { colorIdx = idx }
+                    .then(if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(8.dp)) else Modifier))
             }
         }
     }
