@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-19T18:01:23Z`
-> Commit:  `bfba8044c41ae12fdd51b389af47ca23b83f2b79`
+> Updated: `2026-03-19T23:40:26Z`
+> Commit:  `7d7c9ed9a52e687a6e3856e8b1cf4e87a1d4c383`
 
 ```
 ./.github/workflows/build.yml
@@ -20,11 +20,18 @@
 ./app/src/main/java/com/school/manager/data/db/Entities.kt
 ./app/src/main/java/com/school/manager/data/db/Mappers.kt
 ./app/src/main/java/com/school/manager/data/repository/AppRepository.kt
+./app/src/main/java/com/school/manager/ui/components/AvatarComponents.kt
 ./app/src/main/java/com/school/manager/ui/components/CommonComponents.kt
 ./app/src/main/java/com/school/manager/ui/components/FluentComponentAliases.kt
+./app/src/main/java/com/school/manager/ui/components/SpeedDialFab.kt
 ./app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonBatchDialogs.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonDialogs.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonFilterSheet.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonScreen.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonTimeHelpers.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonViews.kt
 ./app/src/main/java/com/school/manager/ui/screens/StatsScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/StudentsScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/SubjectsScreen.kt
@@ -34,6 +41,7 @@
 ./app/src/main/java/com/school/manager/ui/theme/Type.kt
 ./app/src/main/java/com/school/manager/util/AvatarUtil.kt
 ./app/src/main/java/com/school/manager/viewmodel/AppViewModel.kt
+./app/src/main/java/com/school/manager/viewmodel/GsonModels.kt
 ./app/src/main/res/drawable/ic_launcher_foreground.xml
 ./app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
 ./app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
