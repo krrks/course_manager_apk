@@ -216,19 +216,34 @@ fun ScheduleScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
             }
         }
     ) { inner ->
-        Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding())
+        ) {
+            // ── 筛选标题栏：仅在有筛选时显示 ──────────────────────────────
             if (screenTitle != "课表") {
-                Text(
-                    screenTitle,
-                    style    = MaterialTheme.typography.labelMedium,
-                    color    = FluentBlue,
+                Box(
                     modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = inner.calculateTopPadding() + 4.dp)
-                )
+                        .fillMaxWidth()
+                        .background(FluentBlueLight)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(
+                        text  = screenTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = FluentBlue,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-            if (viewMode == "calendar") CalendarGrid(slots, vm, state) { addAttendanceForSlot = it }
-            else                        ScheduleListView(slots, state, vm)
+
+            // ── 日历 / 列表视图 ────────────────────────────────────────────
+            Box(modifier = Modifier.weight(1f)) {
+                if (viewMode == "calendar") CalendarGrid(slots, vm, state) { addAttendanceForSlot = it }
+                else                        ScheduleListView(slots, state, vm)
+            }
         }
     }
 
