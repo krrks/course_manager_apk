@@ -18,39 +18,10 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-// ─── Gson helpers ─────────────────────────────────────────────────────────────
-
-private data class GsonTeacher(
-    val id: Long? = null, val name: String? = null, val gender: String? = null,
-    val phone: String? = null, val avatarUri: String? = null, val code: String? = null
-)
-private data class GsonClass(
-    val id: Long? = null, val name: String? = null, val grade: String? = null,
-    val count: Int? = null, val headTeacherId: Long? = null,
-    val subjectId: Long? = null, val code: String? = null
-)
-private data class GsonLesson(
-    val id: Long? = null, val classId: Long? = null, val date: String? = null,
-    val startTime: String? = null, val endTime: String? = null, val status: String? = null,
-    val topic: String? = null, val notes: String? = null,
-    val attendees: List<Long>? = null, val isModified: Boolean? = null,
-    val code: String? = null, val teacherIdOverride: Long? = null
-)
-private data class GsonState(
-    val subjects: List<Subject>? = null,
-    val teachers: List<GsonTeacher>? = null,
-    val classes:  List<GsonClass>? = null,
-    val students: List<Student>? = null,
-    val lessons:  List<GsonLesson>? = null
-    // Legacy keys (schedule, attendance) silently ignored by Gson
-)
-
-// ─── ViewModel ────────────────────────────────────────────────────────────────
-
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = AppRepository(app)
-    private val gson: Gson = GsonBuilder().create()
+    internal val gson: Gson = GsonBuilder().create()
 
     val state: StateFlow<AppState> = repo.appState
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppState())
@@ -63,7 +34,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun schoolClass(id: Long?) = state.value.classes.find  { it.id == id }
     fun student(id: Long?)     = state.value.students.find { it.id == id }
 
-    /** Returns (completedCount, totalCount) for the given classId. */
     fun lessonProgress(classId: Long): Pair<Int, Int> =
         state.value.lessons.progressFor(classId)
 
@@ -124,7 +94,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** markModified=true sets isModified=true so batch ops can skip this row. */
     fun updateLesson(l: Lesson, markModified: Boolean = true) {
         val updated = if (markModified) l.copy(isModified = true) else l
         viewModelScope.launch { repo.updateLesson(updated) }
@@ -213,9 +182,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun exportLessonsJson(teacherId: Long?): String {
         val cids = if (teacherId == null) null
-        else state.value.classes.filter { it.headTeacherId == teacherId }.map { it.id }.toSet()
+                   else state.value.classes.filter { it.headTeacherId == teacherId }.map { it.id }.toSet()
         val list = if (cids == null) state.value.lessons
-        else state.value.lessons.filter { it.classId in cids }
+                   else state.value.lessons.filter { it.classId in cids }
         return gson.toJson(list)
     }
 
@@ -263,38 +232,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
-        val parsed = parseGsonState(json, pathRemap) ?: return false
+        val parsed = parseGsonState(json, gson, pathRemap) ?: return false
         viewModelScope.launch { repo.mergeAll(parsed) }
         return true
     }
 
     fun resetToSampleData() { viewModelScope.launch { repo.importAll(sampleAppState()) } }
-
-    // ─── JSON parsing ─────────────────────────────────────────────────────────
-    private fun parseGsonState(json: String, pathRemap: Map<String, String> = emptyMap()): AppState? {
-        return try {
-            val raw = gson.fromJson(json, GsonState::class.java) ?: return null
-            fun remap(old: String?) = old?.let { pathRemap[File(it).name] ?: it }
-
-            val subjects = raw.subjects ?: emptyList()
-            val teachers = raw.teachers?.map {
-                Teacher(it.id ?: 0L, it.name ?: "", it.gender ?: "男",
-                    it.phone ?: "", remap(it.avatarUri), it.code ?: "")
-            } ?: emptyList()
-            val classes = raw.classes?.map {
-                SchoolClass(it.id ?: 0L, it.name ?: "", it.grade ?: "",
-                    it.count ?: 0, it.headTeacherId, it.subjectId, it.code ?: "")
-            } ?: emptyList()
-            val students = raw.students?.map { it.copy(avatarUri = remap(it.avatarUri)) }
-                ?: emptyList()
-            val lessons = raw.lessons?.map { gl ->
-                Lesson(gl.id ?: 0L, gl.classId ?: 0L, gl.date ?: "",
-                    gl.startTime ?: "", gl.endTime ?: "", gl.status ?: "pending",
-                    gl.topic ?: "", gl.notes ?: "", gl.attendees ?: emptyList(),
-                    gl.isModified ?: false, gl.code ?: "", gl.teacherIdOverride)
-            } ?: emptyList()
-
-            AppState(subjects, teachers, classes, students, lessons)
-        } catch (_: Exception) { null }
-    }
 }
