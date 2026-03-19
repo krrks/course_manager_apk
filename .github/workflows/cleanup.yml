@@ -2,9 +2,9 @@ name: 🧹 Cleanup Old Releases & Workflow Runs
 
 on:
   # 每次 build.yml 产出新 release 后自动触发
-  workflow_run:
-    workflows: ["Build & Release APK"]
-    types: [completed]
+  # workflow_run:
+  #   workflows: ["Build & Release APK"]
+  #   types: [completed]
 
   # 也可以手动触发，方便首次清理存量
   workflow_dispatch:
