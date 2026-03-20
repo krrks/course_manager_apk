@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-20T04:53:35Z`
-> Commit:  `319015b657e1b2d88a23f3a858df5010923308ed`
+> Updated: `2026-03-20T08:42:46Z`
+> Commit:  `03ef4723cca73ff6af98c23edba56de6be75e618`
 
 ```
 ./.github/workflows/build.yml
@@ -28,9 +28,11 @@
 ./app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportImportDialog.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonBatchActionDialog.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonBatchDialogs.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonDialogs.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonFilterSheet.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonListView.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonTimeHelpers.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonViews.kt
