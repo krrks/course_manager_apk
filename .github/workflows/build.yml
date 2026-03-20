@@ -49,20 +49,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check if only .github files changed
-        id: github_only
+      # ── Check if app/ or zip_update/ has any changes ──────────────────────
+      #
+      #   Skip the build entirely when the push touches neither app/ nor
+      #   zip_update/ (e.g. only README, .github/, keys/, or other root
+      #   files changed). This is stricter than the old "only .github/" check
+      #   and avoids unnecessary builds for any non-code change.
+      #
+      - name: Check if app/ or zip_update/ changed
+        id: relevance
         if: github.event_name == 'push'
         run: |
           CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
           if [ -z "$CHANGED" ]; then
-            echo "only_github=false" >> "$GITHUB_OUTPUT"
+            echo "no_relevant_changes=false" >> "$GITHUB_OUTPUT"
           else
-            NON_GITHUB=$(echo "$CHANGED" | grep -v '^\.github/' || true)
-            if [ -z "$NON_GITHUB" ]; then
-              echo "ℹ️  Only .github/ files changed — skipping build"
-              echo "only_github=true" >> "$GITHUB_OUTPUT"
+            RELEVANT=$(echo "$CHANGED" | grep -E '^(app/|zip_update/)' || true)
+            if [ -z "$RELEVANT" ]; then
+              echo "ℹ️  No changes in app/ or zip_update/ — skipping build"
+              echo "no_relevant_changes=true" >> "$GITHUB_OUTPUT"
             else
-              echo "only_github=false" >> "$GITHUB_OUTPUT"
+              echo "Relevant changes detected:"
+              echo "$RELEVANT"
+              echo "no_relevant_changes=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
@@ -124,12 +133,8 @@ jobs:
       #   If the flag is absent, #!build is assumed (default).
       #   workflow_dispatch with force_build=true always compiles regardless.
       #
-      #   BUG FIX: The flag must be read from inside the zip, not from the
-      #   repo's committed CHANGELOG.md. The repo file always reflects the
-      #   *previous* patch (often #!no-build), while the new zip's
-      #   CHANGELOG.md is only extracted in the build job — too late for the
-      #   check job to see it. Fix: use `unzip -p` to peek at CHANGELOG.md
-      #   directly from the zip before extraction.
+      #   The flag is read from inside the zip (not the repo file) so it
+      #   reflects the new patch, not the previously committed CHANGELOG.md.
       #
       - name: Read build flag from CHANGELOG.md
         id: build_flag
@@ -137,11 +142,10 @@ jobs:
           PATCH_FOUND: ${{ steps.find_patch.outputs.patch_found }}
           PATCH_PATH:  ${{ steps.find_patch.outputs.patch_path }}
         run: |
-          FLAG="build"   # default — always compile unless explicitly told not to
+          FLAG="build"
           FIRST_LINE=""
 
           if [ "$PATCH_FOUND" = "true" ] && [ -n "$PATCH_PATH" ]; then
-            # Peek inside the zip for CHANGELOG.md (no full extraction needed)
             TMP_DIR=$(mktemp -d)
             if unzip -p "$PATCH_PATH" "zip_update/CHANGELOG.md" \
                  > "$TMP_DIR/CHANGELOG.md" 2>/dev/null \
@@ -154,7 +158,6 @@ jobs:
             rm -rf "$TMP_DIR"
           fi
 
-          # Fall back to repo file when no zip, or zip had no CHANGELOG.md
           if [ -z "$FIRST_LINE" ]; then
             CHANGELOG="zip_update/CHANGELOG.md"
             if [ -f "$CHANGELOG" ]; then
@@ -184,22 +187,22 @@ jobs:
       - name: Decide whether to build
         id: decision
         env:
-          EVENT:            ${{ github.event_name }}
-          ONLY_GITHUB:      ${{ steps.github_only.outputs.only_github }}
-          PATCH_FOUND:      ${{ steps.find_patch.outputs.patch_found }}
-          ALREADY_RELEASED: ${{ steps.already_released.outputs.already }}
-          FORCE:            ${{ github.event.inputs.force_build }}
-          BUILD_FLAG:       ${{ steps.build_flag.outputs.flag }}
+          EVENT:               ${{ github.event_name }}
+          NO_RELEVANT_CHANGES: ${{ steps.relevance.outputs.no_relevant_changes }}
+          PATCH_FOUND:         ${{ steps.find_patch.outputs.patch_found }}
+          ALREADY_RELEASED:    ${{ steps.already_released.outputs.already }}
+          FORCE:               ${{ github.event.inputs.force_build }}
+          BUILD_FLAG:          ${{ steps.build_flag.outputs.flag }}
         run: |
           if [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCE" = "true" ]; then
             echo "should_build=true"  >> "$GITHUB_OUTPUT"
             echo "compile_apk=true"   >> "$GITHUB_OUTPUT"
             echo "Force build — compiling APK"
 
-          elif [ "$ONLY_GITHUB" = "true" ]; then
+          elif [ "$NO_RELEVANT_CHANGES" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             echo "compile_apk=false"  >> "$GITHUB_OUTPUT"
-            echo "Skipping: only .github/ changed"
+            echo "Skipping: no changes in app/ or zip_update/"
 
           elif [ "$PATCH_FOUND" = "true" ] && [ "$ALREADY_RELEASED" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
@@ -302,9 +305,7 @@ jobs:
             echo "No apply.sh found — skipping"
           fi
 
-      # ── 4. Commit patch changes & clean up (before compilation) ─────────
-      #   Runs immediately after extract+apply so the source changes are always
-      #   committed even if the build step later fails.
+      # ── 4. Commit patch changes & clean up ───────────────────────────────
       - name: Commit patch changes & clean up
         if: needs.check.outputs.patch_found == 'true'
         env:
@@ -337,7 +338,7 @@ jobs:
             echo "✅ Commit pushed"
           fi
 
-      # ── 4b. Update repo snapshot (before compilation) ────────────────────
+      # ── 4b. Update repo snapshot ──────────────────────────────────────────
       - name: Update repo snapshot
         if: needs.check.outputs.patch_found == 'true'
         run: |
@@ -378,9 +379,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch only the single latest release — no need to list all and sort.
-          # gh release list returns releases sorted by creation date descending,
-          # so --limit 1 always gives the most recent tag.
           LATEST=$(gh release view --json tagName -q '.tagName' 2>/dev/null \
                    | grep -E '^v1\.[0-9]+$' || echo "")
 
@@ -394,7 +392,6 @@ jobs:
 
           echo "✅ Latest: ${LATEST:-none}  →  Next: $NEXT"
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
-
 
       # ── 5b. Stamp versionName & versionCode ───────────────────────────────
       - name: Stamp version in build.gradle.kts
@@ -453,7 +450,7 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
-      # ── 11. Load keystore credentials from keys/keystore.properties ───────
+      # ── 11. Load keystore credentials ─────────────────────────────────────
       - name: Load keystore credentials
         if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_release == 'true'
         run: |
@@ -464,7 +461,6 @@ jobs:
             KEYSTORE_OK=false
             echo "::warning::keystore.properties not found"
           else
-            # Parse key=value lines, export each to GITHUB_ENV (mask passwords)
             while IFS='=' read -r key value; do
               [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
               key=$(echo "$key" | xargs)
@@ -473,7 +469,6 @@ jobs:
               echo "${key}=${value}" >> "$GITHUB_ENV"
             done < "$PROPS"
 
-            # Verify the keystore file itself exists
             JKS="keys/release.jks"
             if [ ! -f "$JKS" ]; then
               KEYSTORE_OK=false
@@ -507,8 +502,6 @@ jobs:
         env:
           GRADLE_OPTS:   "-Dorg.gradle.jvmargs=-Xmx4g"
           KEYSTORE_PATH: ${{ github.workspace }}/keys/release.jks
-          # KEYSTORE_STORE_PASSWORD, KEYSTORE_KEY_ALIAS, KEYSTORE_KEY_PASSWORD
-          # are loaded into $GITHUB_ENV by the previous step from keys/keystore.properties
 
       # ── 13. Upload APK artifacts ──────────────────────────────────────────
       - name: Upload Debug APK artifact
@@ -526,7 +519,6 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
 
       # ── 14. Create GitHub Release ─────────────────────────────────────────
-      #   Skipped when compile_apk=false (#!no-build mode).
       - name: Create GitHub Release
         if: needs.check.outputs.compile_apk == 'true'
         env:
@@ -556,3 +548,107 @@ jobs:
             $UPLOAD_FILES
 
           echo "✅ Released: $TAG"
+
+# ════════════════════════════════════════════════════════════════════════════
+# Job 3 — Cleanup old releases & workflow runs (runs after every release)
+# ════════════════════════════════════════════════════════════════════════════
+  cleanup:
+    name: Cleanup Old Releases & Runs
+    needs: [check, build]
+    # Only run after a successful build that created a release
+    if: |
+      needs.check.outputs.compile_apk == 'true' &&
+      needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # delete releases & tags
+      actions: write    # delete workflow runs
+
+    steps:
+      # ── Keep newest 10 releases ───────────────────────────────────────────
+      - name: 🧹 Delete old releases (keep newest 10)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO:     ${{ github.repository }}
+          KEEP:     10
+        run: |
+          set -e
+          echo "── Releases ──────────────────────────────────"
+
+          # IDs are returned newest-first by the API
+          RELEASE_IDS=$(gh api "repos/$REPO/releases" \
+            --paginate \
+            --jq '.[].id' \
+            | head -200)
+
+          TOTAL=$(echo "$RELEASE_IDS" | grep -c . || true)
+          echo "Total releases: $TOTAL  |  Keeping newest: $KEEP"
+
+          if [ "$TOTAL" -le "$KEEP" ]; then
+            echo "Nothing to delete."
+          else
+            TO_DELETE=$(echo "$RELEASE_IDS" | tail -n "+$(( KEEP + 1 ))")
+            COUNT=$(echo "$TO_DELETE" | grep -c . || true)
+            echo "Deleting $COUNT old release(s)..."
+
+            echo "$TO_DELETE" | while read -r rid; do
+              [ -z "$rid" ] && continue
+              TAG=$(gh api "repos/$REPO/releases/$rid" --jq '.tag_name' 2>/dev/null || echo "")
+              gh api --method DELETE "repos/$REPO/releases/$rid" && \
+                echo "  ✅ Deleted release $rid  (tag: ${TAG:-unknown})" || \
+                echo "  ⚠️  Failed to delete release $rid"
+              if [ -n "$TAG" ]; then
+                gh api --method DELETE "repos/$REPO/git/refs/tags/$TAG" 2>/dev/null && \
+                  echo "     🏷️  Deleted tag $TAG" || \
+                  echo "     ⚠️  Tag $TAG not found or already deleted"
+              fi
+            done
+          fi
+
+      # ── Keep newest 10 runs per workflow ──────────────────────────────────
+      - name: 🧹 Delete old workflow runs (keep newest 10 per workflow)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO:     ${{ github.repository }}
+          KEEP:     10
+        run: |
+          set -e
+          echo "── Workflow Runs ──────────────────────────────"
+
+          WORKFLOW_IDS=$(gh api "repos/$REPO/actions/workflows" \
+            --paginate \
+            --jq '.workflows[].id')
+
+          for WF_ID in $WORKFLOW_IDS; do
+            WF_NAME=$(gh api "repos/$REPO/actions/workflows/$WF_ID" \
+              --jq '.name' 2>/dev/null || echo "id=$WF_ID")
+            echo ""
+            echo "  Workflow: $WF_NAME (id=$WF_ID)"
+
+            RUN_IDS=$(gh api "repos/$REPO/actions/workflows/$WF_ID/runs" \
+              --paginate \
+              --jq '.workflow_runs[].id' \
+              | head -200)
+
+            TOTAL=$(echo "$RUN_IDS" | grep -c . || true)
+            echo "  Total runs: $TOTAL  |  Keeping newest: $KEEP"
+
+            if [ "$TOTAL" -le "$KEEP" ]; then
+              echo "  Nothing to delete."
+              continue
+            fi
+
+            TO_DELETE=$(echo "$RUN_IDS" | tail -n "+$(( KEEP + 1 ))")
+            COUNT=$(echo "$TO_DELETE" | grep -c . || true)
+            echo "  Deleting $COUNT old run(s)..."
+
+            echo "$TO_DELETE" | while read -r run_id; do
+              [ -z "$run_id" ] && continue
+              gh api --method DELETE "repos/$REPO/actions/runs/$run_id" && \
+                echo "    ✅ Deleted run $run_id" || \
+                echo "    ⚠️  Failed to delete run $run_id"
+            done
+          done
+
+          echo ""
+          echo "=== Cleanup complete ==="
