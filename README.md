@@ -254,13 +254,19 @@ app/src/main/java/com/school/manager/
 │       └── AppRepository.kt         # single source of truth; merges 6 flows → AppState
 ├── ui/
 │   ├── components/
+│   │   ├── AvatarComponents.kt
 │   │   ├── CommonComponents.kt
-│   │   └── FluentComponentAliases.kt
+│   │   ├── FluentComponentAliases.kt
+│   │   └── SpeedDialFab.kt
 │   ├── screens/
-│   │   ├── AttendanceScreen.kt
 │   │   ├── ClassesScreen.kt
 │   │   ├── ExportScreen.kt
-│   │   ├── ScheduleScreen.kt
+│   │   ├── LessonBatchDialogs.kt
+│   │   ├── LessonDialogs.kt
+│   │   ├── LessonFilterSheet.kt
+│   │   ├── LessonScreen.kt
+│   │   ├── LessonTimeHelpers.kt
+│   │   ├── LessonViews.kt
 │   │   ├── StatsScreen.kt
 │   │   ├── StudentsScreen.kt
 │   │   ├── SubjectsScreen.kt
@@ -272,7 +278,8 @@ app/src/main/java/com/school/manager/
 ├── util/
 │   └── AvatarUtil.kt
 └── viewmodel/
-    └── AppViewModel.kt              # delegates all persistence to AppRepository
+    ├── AppViewModel.kt              # delegates all persistence to AppRepository
+    └── GsonModels.kt                # Gson transfer models for export/import boundary
 ```
 
 ---
@@ -286,3 +293,35 @@ This section defines how the AI assistant (Claude) should behave when working on
 When a task involves modifying an existing file, the AI **must ask the user to upload the current version of that file** before generating any output — unless the file's full and exact content is already available in the conversation or project knowledge.
 
 **Why this matters:** The AI's project knowledge snapshot may be outdated.
+
+### Keep individual files small (≤ 300 lines)
+
+**Rule:** No single `.kt` source file should exceed **300 lines**. When the AI creates or refactors code that would push a file beyond this limit, it **must split the file** into logically coherent smaller files.
+
+**Why this matters:** Large files consume a disproportionate number of tokens when uploaded for review or editing. Keeping files small means:
+- Faster context loading — only the relevant file needs to be uploaded, not a 600-line monolith.
+- Cheaper edits — a 150-line file costs roughly half the tokens of a 300-line file.
+- Cleaner diffs — patch zips contain only the changed file, not a giant merged blob.
+
+**Naming convention for split files** — use a consistent suffix pattern:
+
+| Original file | Split into |
+|---------------|-----------|
+| `FooScreen.kt` | `FooScreen.kt` (entry + scaffold) |
+| | `FooDialogs.kt` (all dialogs) |
+| | `FooComponents.kt` (local-only composables) |
+| | `FooHelpers.kt` (pure functions, constants) |
+
+This project already follows this convention for the Lesson screen:
+```
+LessonScreen.kt        ← entry point & state
+LessonViews.kt         ← Week / Month / Day / List views
+LessonDialogs.kt       ← detail & form dialogs
+LessonBatchDialogs.kt  ← batch generate / modify / delete dialogs
+LessonTimeHelpers.kt   ← time math, layout constants, status helpers
+LessonFilterSheet.kt   ← filter bottom sheet
+```
+
+**When the AI proposes a new feature** that would be added to an existing file, it must first check (or ask) whether that file is already near the 300-line limit. If it is, the AI must propose a split plan before writing any code.
+
+**Exemptions:** Auto-generated or config files (e.g. `Entities.kt`, `Daos.kt`, `Mappers.kt`) are exempt from this limit when their size is structurally determined by the number of database tables.
