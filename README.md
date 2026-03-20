@@ -27,7 +27,7 @@ An Android app for managing school timetables and class attendance records, buil
 | UI | Jetpack Compose + Material 3 |
 | Navigation | Navigation Compose |
 | State | ViewModel + StateFlow |
-| **Database** | **Room (SQLite) — 6 tables with FK constraints** |
+| **Database** | **Room (SQLite) — 5 tables with FK constraints** |
 | Image loading | Coil |
 | Serialization | Gson (export / import only) |
 | Build | Gradle 8.7 + AGP 8.5 |
@@ -40,13 +40,8 @@ All application data is persisted in a **Room SQLite database** (`school_manager
 
 | FK constraint | On delete |
 |--------------|-----------|
-| `schedule.classId → classes` | CASCADE — deletes orphan schedule rows |
-| `attendance.classId → classes` | CASCADE — deletes orphan attendance rows |
-| `schedule.subjectId → subjects` | SET NULL |
-| `attendance.subjectId → subjects` | SET NULL |
+| `lessons.classId → classes` | CASCADE |
 | `classes.subjectId → subjects` | SET NULL |
-| `schedule.teacherId → teachers` | SET NULL |
-| `attendance.teacherId → teachers` | SET NULL |
 | `classes.headTeacherId → teachers` | SET NULL |
 
 **Legacy migration:** On first launch after upgrading from the old JSON-in-SharedPreferences format, the app automatically reads the existing data, imports it into Room, and removes the old SharedPreferences key — no user action required.
@@ -54,7 +49,6 @@ All application data is persisted in a **Room SQLite database** (`school_manager
 **Export / Import:** The JSON and ZIP backup formats are unchanged. Gson is used only at the export/import boundary; the database itself is the single source of truth.
 
 ---
-
 ## Building Locally
 
 **Requirements:** Android Studio Ladybug 2024.2+, JDK 17, Android SDK 35, min API 26
@@ -79,8 +73,9 @@ Triggers on every push to any branch. The workflow:
 
 1. Looks for a patch zip in `zip_update/patches/`
 2. If found — extracts it, runs `zip_update/patches/apply.sh` (if present), then optionally compiles
-3. If not found — proceeds with current source (warning printed in log)
-4. On success with APK compilation — commits changes, tags a release, attaches APKs
+3. Regenerates `README.md` from `docs/*.md` source files
+4. If not found — proceeds with current source (warning printed in log)
+5. On success with APK compilation — commits changes, tags a release, attaches APKs
 
 **Skip conditions** (workflow exits early, no build):
 - Only `.github/` files changed
@@ -158,7 +153,7 @@ zip_update/CHANGELOG.md                  .github/workflows/build.yml
 zip_update/patches/apply.sh
 ```
 
-Verify with `unzip -l update_xxx.zip` — paths must start with `app/`, `zip_update/`, etc.
+Verify with `unzip -l update_xxx.zip` — paths must start with `app/`, `zip_update/`, `docs/`, etc.
 
 ### Creating a zip (run from repo root)
 
@@ -174,6 +169,7 @@ zip -r zip_update/patches/update_$(date +%s).zip \
 | File | Required | Purpose |
 |------|----------|---------|
 | `app/src/.../*.kt` | optional | Source file replacements |
+| `docs/*.md` | optional | README section updates (regenerated at build time) |
 | `zip_update/CHANGELOG.md` | recommended | First line = build flag; rest = release notes and commit message |
 | `zip_update/patches/apply.sh` | optional | Script for changes that can't be done by file replacement |
 
@@ -185,8 +181,8 @@ For changes beyond simple file replacement (renaming symbols, deleting files, re
 
 **Execution order:**
 ```
-Extract zip → Run apply.sh → [Stamp version] → [Build APK] → Commit → [GitHub Release]
-                                      ↑ skipped when #!no-build ↑
+Extract zip → Generate README → Run apply.sh → [Stamp version] → [Build APK] → Commit → [GitHub Release]
+                                                       ↑ skipped when #!no-build ↑
 ```
 
 **Rules:**
@@ -236,7 +232,6 @@ zip_update/
 | `repo_snapshot.md` | Workflow (auto) | Full file list snapshot after each patch apply |
 
 ---
-
 ## Project Structure
 
 ```
@@ -251,7 +246,7 @@ app/src/main/java/com/school/manager/
 │   │   ├── Entities.kt              # Room entities with FK annotations
 │   │   └── Mappers.kt               # entity ↔ domain model converters
 │   └── repository/
-│       └── AppRepository.kt         # single source of truth; merges 6 flows → AppState
+│       └── AppRepository.kt         # single source of truth; merges 5 flows → AppState
 ├── ui/
 │   ├── components/
 │   │   ├── AvatarComponents.kt
@@ -261,9 +256,12 @@ app/src/main/java/com/school/manager/
 │   ├── screens/
 │   │   ├── ClassesScreen.kt
 │   │   ├── ExportScreen.kt
+│   │   ├── ExportImportDialog.kt
+│   │   ├── LessonBatchActionDialog.kt
 │   │   ├── LessonBatchDialogs.kt
 │   │   ├── LessonDialogs.kt
 │   │   ├── LessonFilterSheet.kt
+│   │   ├── LessonListView.kt
 │   │   ├── LessonScreen.kt
 │   │   ├── LessonTimeHelpers.kt
 │   │   ├── LessonViews.kt
@@ -279,11 +277,17 @@ app/src/main/java/com/school/manager/
 │   └── AvatarUtil.kt
 └── viewmodel/
     ├── AppViewModel.kt              # delegates all persistence to AppRepository
+    ├── BackupManager.kt             # ZIP backup/restore logic
     └── GsonModels.kt                # Gson transfer models for export/import boundary
+
+docs/                                # README source files — auto-assembled at build time
+├── readme_header.md                 # Features, Tech Stack, Data Storage
+├── readme_build.md                  # Building, CI/CD, Patch delivery, apply.sh
+├── readme_structure.md              # Project Structure (this file)
+└── readme_ai_rules.md               # AI Rules
 ```
 
 ---
-
 ## AI Rules
 
 This section defines how the AI assistant (Claude) should behave when working on this project.
@@ -293,6 +297,8 @@ This section defines how the AI assistant (Claude) should behave when working on
 When a task involves modifying an existing file, the AI **must ask the user to upload the current version of that file** before generating any output — unless the file's full and exact content is already available in the conversation or project knowledge.
 
 **Why this matters:** The AI's project knowledge snapshot may be outdated.
+
+---
 
 ### Keep individual files small (≤ 300 lines)
 
@@ -315,9 +321,11 @@ When a task involves modifying an existing file, the AI **must ask the user to u
 This project already follows this convention for the Lesson screen:
 ```
 LessonScreen.kt        ← entry point & state
-LessonViews.kt         ← Week / Month / Day / List views
+LessonViews.kt         ← Week / Month / Day views
+LessonListView.kt      ← List view + LessonCard
 LessonDialogs.kt       ← detail & form dialogs
 LessonBatchDialogs.kt  ← batch generate / modify / delete dialogs
+LessonBatchActionDialog.kt ← multi-select batch action dialog
 LessonTimeHelpers.kt   ← time math, layout constants, status helpers
 LessonFilterSheet.kt   ← filter bottom sheet
 ```
@@ -326,6 +334,8 @@ LessonFilterSheet.kt   ← filter bottom sheet
 
 **Exemptions:** Auto-generated or config files (e.g. `Entities.kt`, `Daos.kt`, `Mappers.kt`) are exempt from this limit when their size is structurally determined by the number of database tables.
 
+---
+
 ### Three-step workflow for all change requests
 
 When the user raises a requirement or change request, the AI **must follow this three-step process** and **must not skip or merge steps**:
@@ -333,20 +343,24 @@ When the user raises a requirement or change request, the AI **must follow this 
 **Step 1 — Solution proposal (no code)**
 - Describe what will change and in which files, at a high level.
 - Do not write any code or detailed logic.
-- End with: "请确认方案是否正确？确认后进入第二步。"
+- End with: "Please confirm the proposal before proceeding to Step 2."
 - Wait for the user's explicit confirmation before continuing.
 
 **Step 2 — Change plan (no code)**
 - List each file to be modified, the specific location within the file, and exactly what will be added, removed, or replaced.
 - Do not write any code.
-- End with: "请确认流程是否正确？确认后进入第三步。"
+- End with: "Please confirm the plan before proceeding to Step 3."
 - Wait for the user's explicit confirmation before continuing.
 
-**Step 3 — Code generation**
+**Step 3 — Code generation and ZIP delivery**
 - Generate the complete modified file(s) only after Step 2 is confirmed.
 - Output one file at a time using the file creation tool.
+- **After all files are generated, package them into a ZIP patch file** following the format defined in "Delivering a Patch" (named `update_<timestamp>.zip`, paths relative to repo root, includes `zip_update/CHANGELOG.md`).
+- Deliver the ZIP to the user as the primary output — do not rely on pasting raw file content into the chat as the final deliverable.
 
 **Why three steps matter:** Merging planning and coding into one pass causes the AI to spend excessive time in a single reasoning block, which increases the risk of context overflow, repeated rethinking, and output failure. Keeping steps separated ensures each phase is short, focused, and verifiable.
+
+---
 
 ### Separate internal reasoning from code output
 
@@ -357,3 +371,20 @@ When executing Step 3 (code generation), the AI **must not interleave extended r
 3. If a mid-generation decision is needed (e.g. a naming conflict is discovered), stop, surface the question to the user, and wait — do not silently re-plan and restart.
 
 **Avoid:** Outputting a file, then re-analysing requirements, then outputting a revised version of the same file in the same response. This wastes tokens and confuses the diff.
+
+---
+
+### README.md is auto-generated — do not edit directly
+
+`README.md` is assembled automatically by the CI workflow from source files in `docs/`:
+
+| Source file | Contents |
+|-------------|----------|
+| `docs/readme_header.md` | Features, Tech Stack, Data Storage |
+| `docs/readme_build.md` | Building Locally, CI/CD, Patch delivery, apply.sh |
+| `docs/readme_structure.md` | Project Structure |
+| `docs/readme_ai_rules.md` | AI Rules (this file) |
+
+**To update the README**, edit the relevant `docs/*.md` file and include it in the patch ZIP. The workflow will regenerate `README.md` automatically on the next build.
+
+**Never include `README.md` directly in a patch ZIP** — it will be overwritten by the workflow anyway.
