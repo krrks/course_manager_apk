@@ -50,12 +50,6 @@ jobs:
           fetch-depth: 0
 
       # ── Check if app/ or zip_update/ has any changes ──────────────────────
-      #
-      #   Skip the build entirely when the push touches neither app/ nor
-      #   zip_update/ (e.g. only README, .github/, keys/, or other root
-      #   files changed). This is stricter than the old "only .github/" check
-      #   and avoids unnecessary builds for any non-code change.
-      #
       - name: Check if app/ or zip_update/ changed
         id: relevance
         if: github.event_name == 'push'
@@ -64,9 +58,9 @@ jobs:
           if [ -z "$CHANGED" ]; then
             echo "no_relevant_changes=false" >> "$GITHUB_OUTPUT"
           else
-            RELEVANT=$(echo "$CHANGED" | grep -E '^(app/|zip_update/)' || true)
+            RELEVANT=$(echo "$CHANGED" | grep -E '^(app/|zip_update/|docs/)' || true)
             if [ -z "$RELEVANT" ]; then
-              echo "ℹ️  No changes in app/ or zip_update/ — skipping build"
+              echo "ℹ️  No changes in app/, zip_update/ or docs/ — skipping build"
               echo "no_relevant_changes=true" >> "$GITHUB_OUTPUT"
             else
               echo "Relevant changes detected:"
@@ -124,18 +118,6 @@ jobs:
           fi
 
       # ── Read build flag from CHANGELOG.md first line ─────────────────────
-      #
-      #   First line of zip_update/CHANGELOG.md controls APK compilation:
-      #
-      #     #!build      →  apply patch + compile APK + create GitHub Release
-      #     #!no-build   →  apply patch only, skip compilation and release
-      #
-      #   If the flag is absent, #!build is assumed (default).
-      #   workflow_dispatch with force_build=true always compiles regardless.
-      #
-      #   The flag is read from inside the zip (not the repo file) so it
-      #   reflects the new patch, not the previously committed CHANGELOG.md.
-      #
       - name: Read build flag from CHANGELOG.md
         id: build_flag
         env:
@@ -202,7 +184,7 @@ jobs:
           elif [ "$NO_RELEVANT_CHANGES" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             echo "compile_apk=false"  >> "$GITHUB_OUTPUT"
-            echo "Skipping: no changes in app/ or zip_update/"
+            echo "Skipping: no changes in app/, zip_update/ or docs/"
 
           elif [ "$PATCH_FOUND" = "true" ] && [ "$ALREADY_RELEASED" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
@@ -305,7 +287,24 @@ jobs:
             echo "No apply.sh found — skipping"
           fi
 
-      # ── 4. Commit patch changes & clean up ───────────────────────────────
+      # ── 4. Generate README.md from docs/ ──────────────────────────────────
+      - name: Generate README.md from docs/
+        run: |
+          DOCS_DIR="docs"
+          if [ -d "$DOCS_DIR" ]; then
+            echo "Assembling README.md from $DOCS_DIR/*.md ..."
+            cat \
+              "$DOCS_DIR/readme_header.md" \
+              "$DOCS_DIR/readme_build.md" \
+              "$DOCS_DIR/readme_structure.md" \
+              "$DOCS_DIR/readme_ai_rules.md" \
+              > README.md
+            echo "✅ README.md generated ($(wc -l < README.md) lines)"
+          else
+            echo "ℹ️  No docs/ directory found — README.md unchanged"
+          fi
+
+      # ── 5. Commit patch changes & clean up ───────────────────────────────
       - name: Commit patch changes & clean up
         if: needs.check.outputs.patch_found == 'true'
         env:
@@ -338,7 +337,7 @@ jobs:
             echo "✅ Commit pushed"
           fi
 
-      # ── 4b. Update repo snapshot ──────────────────────────────────────────
+      # ── 5b. Update repo snapshot ──────────────────────────────────────────
       - name: Update repo snapshot
         if: needs.check.outputs.patch_found == 'true'
         run: |
@@ -372,7 +371,7 @@ jobs:
             echo "✅ repo_snapshot.md updated"
           fi
 
-      # ── 5. Compute next version tag ───────────────────────────────────────
+      # ── 6. Compute next version tag ───────────────────────────────────────
       - name: Compute next version tag
         id: version
         if: needs.check.outputs.compile_apk == 'true'
@@ -393,7 +392,7 @@ jobs:
           echo "✅ Latest: ${LATEST:-none}  →  Next: $NEXT"
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
-      # ── 5b. Stamp versionName & versionCode ───────────────────────────────
+      # ── 6b. Stamp versionName & versionCode ───────────────────────────────
       - name: Stamp version in build.gradle.kts
         if: needs.check.outputs.compile_apk == 'true'
         env:
@@ -409,7 +408,7 @@ jobs:
           echo "✅ versionName=$VERSION  versionCode=$VCODE"
           grep -E 'versionCode|versionName' app/build.gradle.kts
 
-      # ── 6. Set up JDK 17 ─────────────────────────────────────────────────
+      # ── 7. Set up JDK 17 ─────────────────────────────────────────────────
       - name: Set up JDK 17
         if: needs.check.outputs.compile_apk == 'true'
         uses: actions/setup-java@v4
@@ -417,7 +416,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # ── 7. Ensure gradle-wrapper.jar ─────────────────────────────────────
+      # ── 8. Ensure gradle-wrapper.jar ─────────────────────────────────────
       - name: Ensure gradle-wrapper.jar
         if: needs.check.outputs.compile_apk == 'true'
         run: |
@@ -427,7 +426,7 @@ jobs:
               https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar
           fi
 
-      # ── 8. Cache Gradle ───────────────────────────────────────────────────
+      # ── 9. Cache Gradle ───────────────────────────────────────────────────
       - name: Cache Gradle
         if: needs.check.outputs.compile_apk == 'true'
         uses: actions/cache@v4
@@ -438,19 +437,19 @@ jobs:
           key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      # ── 9. Grant execute permission ───────────────────────────────────────
+      # ── 10. Grant execute permission ──────────────────────────────────────
       - name: Grant execute permission for gradlew
         if: needs.check.outputs.compile_apk == 'true'
         run: chmod +x gradlew
 
-      # ── 10. Build Debug APK ───────────────────────────────────────────────
+      # ── 11. Build Debug APK ───────────────────────────────────────────────
       - name: Build Debug APK
         if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_debug == 'true'
         run: ./gradlew assembleDebug --no-daemon --build-cache
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
 
-      # ── 11. Load keystore credentials ─────────────────────────────────────
+      # ── 12. Load keystore credentials ─────────────────────────────────────
       - name: Load keystore credentials
         if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_release == 'true'
         run: |
@@ -495,7 +494,7 @@ jobs:
             echo "✅ Keystore credentials loaded from $PROPS"
           fi
 
-      # ── 12. Build Release APK ─────────────────────────────────────────────
+      # ── 13. Build Release APK ─────────────────────────────────────────────
       - name: Build Release APK
         if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_release == 'true'
         run: ./gradlew assembleRelease --no-daemon --build-cache
@@ -503,7 +502,7 @@ jobs:
           GRADLE_OPTS:   "-Dorg.gradle.jvmargs=-Xmx4g"
           KEYSTORE_PATH: ${{ github.workspace }}/keys/release.jks
 
-      # ── 13. Upload APK artifacts ──────────────────────────────────────────
+      # ── 14. Upload APK artifacts ──────────────────────────────────────────
       - name: Upload Debug APK artifact
         if: needs.check.outputs.compile_apk == 'true' && needs.check.outputs.do_debug == 'true'
         uses: actions/upload-artifact@v4
@@ -518,7 +517,7 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/app-release.apk
 
-      # ── 14. Create GitHub Release ─────────────────────────────────────────
+      # ── 15. Create GitHub Release ─────────────────────────────────────────
       - name: Create GitHub Release
         if: needs.check.outputs.compile_apk == 'true'
         env:
@@ -555,14 +554,13 @@ jobs:
   cleanup:
     name: Cleanup Old Releases & Runs
     needs: [check, build]
-    # Only run after a successful build that created a release
     if: |
       needs.check.outputs.compile_apk == 'true' &&
       needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # delete releases & tags
-      actions: write    # delete workflow runs
+      contents: write
+      actions: write
 
     steps:
       # ── Keep newest 10 releases ───────────────────────────────────────────
@@ -575,7 +573,6 @@ jobs:
           set -e
           echo "── Releases ──────────────────────────────────"
 
-          # IDs are returned newest-first by the API
           RELEASE_IDS=$(gh api "repos/$REPO/releases" \
             --paginate \
             --jq '.[].id' \
