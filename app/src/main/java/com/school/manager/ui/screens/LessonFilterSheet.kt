@@ -16,10 +16,14 @@ import com.school.manager.ui.theme.*
 @Composable
 internal fun FilterBottomSheet(
     state: AppState,
-    fClass: Long,    onClassChange: (Long) -> Unit,
-    fStatus: String, onStatusChange: (String) -> Unit,
-    fTeacher: Long,  onTeacherChange: (Long) -> Unit,
-    fStudent: Long,  onStudentChange: (Long) -> Unit,
+    fClass: Long,         onClassChange: (Long) -> Unit,
+    fStatus: String,      onStatusChange: (String) -> Unit,
+    fTeacher: Long,       onTeacherChange: (Long) -> Unit,
+    fStudent: Long,       onStudentChange: (Long) -> Unit,
+    fSubjects: Set<Long>, onSubjectsChange: (Set<Long>) -> Unit,
+    fDayOfWeek: Set<Int>, onDayOfWeekChange: (Set<Int>) -> Unit,
+    fFromDate: String,    onFromDateChange: (String) -> Unit,
+    fToDate: String,      onToDateChange: (String) -> Unit,
     hasActive: Boolean,
     onClearAll: () -> Unit,
     onDismiss: () -> Unit
@@ -39,21 +43,77 @@ internal fun FilterBottomSheet(
                 .padding(bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // ── Header ────────────────────────────────────────────────────────
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically
             ) {
                 Text("筛选条件",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
                 if (hasActive) {
                     TextButton(onClick = onClearAll) {
-                        Text("清除全部", color = FluentRed, style = MaterialTheme.typography.labelMedium)
+                        Text("清除全部", color = FluentRed,
+                            style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
 
             HorizontalDivider(color = FluentBorder)
+
+            // ── 日期范围 ──────────────────────────────────────────────────────
+            Text("日期范围", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) {
+                    DatePickerField("开始日期", fFromDate) { onFromDateChange(it) }
+                }
+                Box(Modifier.weight(1f)) {
+                    DatePickerField("结束日期", fToDate) { onToDateChange(it) }
+                }
+            }
+
+            // ── 星期 ──────────────────────────────────────────────────────────
+            Text("星期", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement   = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf(1 to "周一", 2 to "周二", 3 to "周三", 4 to "周四",
+                       5 to "周五", 6 to "周六", 7 to "周日").forEach { (d, label) ->
+                    FilterChip(
+                        selected = fDayOfWeek.contains(d),
+                        onClick  = {
+                            onDayOfWeekChange(
+                                if (fDayOfWeek.contains(d)) fDayOfWeek - d else fDayOfWeek + d
+                            )
+                        },
+                        label = { Text(label) }
+                    )
+                }
+            }
+
+            // ── 科目 ──────────────────────────────────────────────────────────
+            if (state.subjects.isNotEmpty()) {
+                Text("科目", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement   = Arrangement.spacedBy(4.dp)
+                ) {
+                    state.subjects.forEach { sub ->
+                        FilterChip(
+                            selected = fSubjects.contains(sub.id),
+                            onClick  = {
+                                onSubjectsChange(
+                                    if (fSubjects.contains(sub.id)) fSubjects - sub.id
+                                    else fSubjects + sub.id
+                                )
+                            },
+                            label = { Text(sub.name) }
+                        )
+                    }
+                }
+            }
 
             // ── 班级 ──────────────────────────────────────────────────────────
             Text("班级", style = MaterialTheme.typography.labelSmall, color = FluentMuted)

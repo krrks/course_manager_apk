@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import com.school.manager.data.*
 import com.school.manager.ui.components.*
+import com.school.manager.ui.theme.*
 import java.time.LocalDate
 import com.school.manager.viewmodel.AppViewModel
 
@@ -17,16 +18,29 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     var view    by remember { mutableStateOf("week") }
     var calDate by remember { mutableStateOf(LocalDate.now()) }
 
-    // Filters
+    // Existing filters
     var fClass   by remember { mutableLongStateOf(0L) }
     var fStatus  by remember { mutableStateOf("") }
     var fTeacher by remember { mutableLongStateOf(0L) }
     var fStudent by remember { mutableLongStateOf(0L) }
 
-    var showFilterSheet by remember { mutableStateOf(false) }
-    val hasActiveFilters = fClass != 0L || fStatus.isNotEmpty() || fTeacher != 0L || fStudent != 0L
+    // New filters
+    var fSubjects  by remember { mutableStateOf(emptySet<Long>()) }
+    var fDayOfWeek by remember { mutableStateOf(emptySet<Int>()) }
+    var fFromDate  by remember { mutableStateOf("") }
+    var fToDate    by remember { mutableStateOf("") }
 
-    // Dialog state
+    // Multi-select (list view only)
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedIds     by remember { mutableStateOf(emptySet<Long>()) }
+    var showBatchAction by remember { mutableStateOf(false) }
+
+    var showFilterSheet by remember { mutableStateOf(false) }
+    val hasActiveFilters = fClass != 0L || fStatus.isNotEmpty() || fTeacher != 0L ||
+                          fStudent != 0L || fSubjects.isNotEmpty() || fDayOfWeek.isNotEmpty() ||
+                          fFromDate.isNotBlank() || fToDate.isNotBlank()
+
+    // Existing dialog state
     var viewing      by remember { mutableStateOf<Lesson?>(null) }
     var editing      by remember { mutableStateOf<Lesson?>(null) }
     var showAdd      by remember { mutableStateOf(false) }
@@ -40,37 +54,52 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
         }
     }
 
-    val filtered = state.lessons
-        .filter { l ->
-            (fClass == 0L      || l.classId == fClass) &&
-            (fStatus.isBlank() || l.status  == fStatus) &&
-            (fTeacher == 0L    || l.effectiveTeacherId(state.classes) == fTeacher) &&
-            (fStudent == 0L    || run {
-                val s = state.students.find { it.id == fStudent }
-                s != null && s.classIds.contains(l.classId)
-            })
-        }
-        .sortedWith(compareBy({ it.date }, { it.startTime }))
+    fun clearAllFilters() {
+        fClass = 0L; fStatus = ""; fTeacher = 0L; fStudent = 0L
+        fSubjects = emptySet(); fDayOfWeek = emptySet()
+        fFromDate = ""; fToDate = ""
+    }
+
+    val filtered = state.lessons.filter { l ->
+        (fClass == 0L      || l.classId == fClass) &&
+        (fStatus.isBlank() || l.status  == fStatus) &&
+        (fTeacher == 0L    || l.effectiveTeacherId(state.classes) == fTeacher) &&
+        (fStudent == 0L    || run {
+            val s = state.students.find { it.id == fStudent }
+            s != null && s.classIds.contains(l.classId)
+        }) &&
+        (fSubjects.isEmpty() || run {
+            val subId = state.classes.find { it.id == l.classId }?.subjectId
+            subId != null && subId in fSubjects
+        }) &&
+        (fDayOfWeek.isEmpty() || runCatching {
+            LocalDate.parse(l.date).dayOfWeek.value in fDayOfWeek
+        }.getOrDefault(false)) &&
+        (fFromDate.isBlank() || l.date >= fFromDate) &&
+        (fToDate.isBlank()   || l.date <= fToDate)
+    }.sortedWith(compareBy({ it.date }, { it.startTime }))
 
     Scaffold(
         floatingActionButton = {
-            ScreenSpeedDialFab(
-                addLabel     = "添加单节课",
-                addIcon      = Icons.Default.Add,
-                onAdd        = { showAdd = true },
-                onOpenDrawer = onOpenDrawer,
-                extraItems   = {
-                    SpeedDialItem(
-                        label    = "筛选条件",
-                        icon     = Icons.Default.FilterList,
-                        color    = if (hasActiveFilters) com.school.manager.ui.theme.FluentOrange
-                                   else com.school.manager.ui.theme.FluentMuted,
-                        selected = hasActiveFilters
-                    ) { showFilterSheet = true }
-                    SpeedDialItem("批量生成课次", Icons.Default.AutoAwesome,
-                        com.school.manager.ui.theme.FluentGreen) { showBatchGen = true }
-                }
-            )
+            if (!isSelectionMode) {
+                ScreenSpeedDialFab(
+                    addLabel     = "添加单节课",
+                    addIcon      = Icons.Default.Add,
+                    onAdd        = { showAdd = true },
+                    onOpenDrawer = onOpenDrawer,
+                    extraItems   = {
+                        SpeedDialItem(
+                            label    = "筛选条件",
+                            icon     = Icons.Default.FilterList,
+                            color    = if (hasActiveFilters) FluentOrange else FluentMuted,
+                            selected = hasActiveFilters
+                        ) { showFilterSheet = true }
+                        SpeedDialItem("批量生成课次", Icons.Default.AutoAwesome, FluentGreen) {
+                            showBatchGen = true
+                        }
+                    }
+                )
+            }
         }
     ) { inner ->
         Column(
@@ -84,30 +113,52 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                                view, { view = it }) { viewing = it }
                 "day"   -> DayView(filtered, calDate, { calDate = it }, state, progressMap,
                                view, { view = it }) { viewing = it }
-                "list"  -> ListView(filtered, state, progressMap,
-                               currentView   = view, onViewChange = { view = it },
-                               onLessonClick = { viewing = it },
-                               onBatchModify = { batchModCls = it },
-                               onBatchDelete = { batchDelCls = it })
+                "list"  -> ListView(
+                               lessons              = filtered,
+                               state                = state,
+                               progressMap          = progressMap,
+                               currentView          = view,
+                               onViewChange         = {
+                                   view = it
+                                   isSelectionMode = false
+                                   selectedIds = emptySet()
+                               },
+                               onLessonClick        = { viewing = it },
+                               onBatchModify        = { batchModCls = it },
+                               onBatchDelete        = { batchDelCls = it },
+                               isSelectionMode      = isSelectionMode,
+                               selectedIds          = selectedIds,
+                               onSelectionChange    = { selectedIds = it },
+                               onEnterSelectionMode = { isSelectionMode = true },
+                               onExitSelectionMode  = {
+                                   isSelectionMode = false
+                                   selectedIds = emptySet()
+                               },
+                               onBatchAction        = { showBatchAction = true }
+                           )
             }
         }
     }
 
-    // ── Filter bottom sheet ───────────────────────────────────────────────────
+    // ── Filter bottom sheet ───────────────────────────────────────────────
     if (showFilterSheet) {
         FilterBottomSheet(
-            state          = state,
-            fClass         = fClass,   onClassChange   = { fClass   = it },
-            fStatus        = fStatus,  onStatusChange  = { fStatus  = it },
-            fTeacher       = fTeacher, onTeacherChange = { fTeacher = it },
-            fStudent       = fStudent, onStudentChange = { fStudent = it },
-            hasActive      = hasActiveFilters,
-            onClearAll     = { fClass = 0L; fStatus = ""; fTeacher = 0L; fStudent = 0L },
-            onDismiss      = { showFilterSheet = false }
+            state             = state,
+            fClass            = fClass,     onClassChange      = { fClass   = it },
+            fStatus           = fStatus,    onStatusChange     = { fStatus  = it },
+            fTeacher          = fTeacher,   onTeacherChange    = { fTeacher = it },
+            fStudent          = fStudent,   onStudentChange    = { fStudent = it },
+            fSubjects         = fSubjects,  onSubjectsChange   = { fSubjects  = it },
+            fDayOfWeek        = fDayOfWeek, onDayOfWeekChange  = { fDayOfWeek = it },
+            fFromDate         = fFromDate,  onFromDateChange   = { fFromDate  = it },
+            fToDate           = fToDate,    onToDateChange     = { fToDate    = it },
+            hasActive         = hasActiveFilters,
+            onClearAll        = { clearAllFilters() },
+            onDismiss         = { showFilterSheet = false }
         )
     }
 
-    // ── Dialogs ───────────────────────────────────────────────────────────────
+    // ── Existing dialogs ──────────────────────────────────────────────────
     viewing?.let { l ->
         LessonDetailDialog(l, state, vm, progressMap,
             onDismiss = { viewing = null },
@@ -132,13 +183,21 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
             }
         )
     }
-    if (showBatchGen) {
-        BatchGenerateDialog(state, vm, onDismiss = { showBatchGen = false })
-    }
-    if (batchModCls > 0L) {
-        BatchModifyDialog(batchModCls, state, vm, onDismiss = { batchModCls = 0L })
-    }
-    if (batchDelCls > 0L) {
-        BatchDeleteDialog(batchDelCls, state, vm, onDismiss = { batchDelCls = 0L })
+    if (showBatchGen) BatchGenerateDialog(state, vm, onDismiss = { showBatchGen = false })
+    if (batchModCls > 0L) BatchModifyDialog(batchModCls, state, vm, onDismiss = { batchModCls = 0L })
+    if (batchDelCls > 0L) BatchDeleteDialog(batchDelCls, state, vm, onDismiss = { batchDelCls = 0L })
+
+    // ── New unified batch action dialog ───────────────────────────────────
+    if (showBatchAction && selectedIds.isNotEmpty()) {
+        BatchActionDialog(
+            selectedIds = selectedIds,
+            state       = state,
+            vm          = vm,
+            onDismiss   = {
+                showBatchAction = false
+                isSelectionMode = false
+                selectedIds     = emptySet()
+            }
+        )
     }
 }

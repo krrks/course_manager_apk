@@ -1,26 +1,29 @@
 #!build
-# 重构导入导出：统一 ZIP 格式，增加导入预览
+# 课次列表：新增筛选维度 + 多选批量操作
 
 ## 变更内容
 
-移除独立 JSON 导出/导入，统一为单一 ZIP 格式。
-
 ### 新增文件
-- `data/BackupModels.kt` — BackupMeta / BackupCounts / FilterDescription / ImportResult / filterForExport()
-- `viewmodel/BackupManager.kt` — ZIP 构建与解析，与 ViewModel 解耦
-- `ui/screens/ExportImportDialog.kt` — 导入前预览弹窗
+- `LessonListView.kt` — ListView 和 LessonCard 从 LessonViews.kt 拆出，新增多选逻辑
+- `LessonBatchActionDialog.kt` — 针对多选课次的统一批量操作弹窗（修改时间/修改状态/删除）
 
 ### 修改文件
-- `viewmodel/AppViewModel.kt` — 删除旧 exportFullStateJson / exportLessonsJson / exportFullBackupZip / importFullBackupZip / importMerge，新增 exportFullZip / exportFilteredZip / peekImportZip / commitImportZip
-- `ui/screens/ExportScreen.kt` — 全部 JSON 入口替换为两个 ZIP 入口（完整 + 筛选），导入走预览弹窗
+- `LessonFilterSheet.kt` — 新增三个筛选维度：日期范围、星期（周一~周日）、科目
+- `LessonViews.kt` — 移除 ListView 和 LessonCard（已迁移至 LessonListView.kt）
+- `LessonScreen.kt` — 接入新筛选参数、多选状态管理、BatchActionDialog
 
-### ZIP 格式（schema v2）
-```
-meta.json   ← BackupMeta（版本、时间、各实体数量、筛选描述）
-state.json  ← AppState（与旧版相同结构，向后兼容）
-avatars/    ← 头像图片（仅完整导出包含）
-```
+### 功能说明
+筛选维度（全部视图生效）：
+  - 原有：班级、状态、教师、学生
+  - 新增：科目（多选）、星期（多选）、日期范围（开始/结束）
 
-### 向后兼容
-旧版 ZIP（无 meta.json）导入时 peekZip 返回 Failure，用户会看到"旧版备份"提示而非崩溃。
-state.json 结构未变，parseGsonState() 无需修改。
+多选批量操作（仅列表视图）：
+  - 点击列表头部 ☑ 按钮进入选择模式
+  - 班级分组头部 Checkbox 可全选/取消该班级所有课次
+  - 底部操作栏显示已选数量，点击「批量操作」弹出 BatchActionDialog
+  - 三种操作：修改时间、修改状态、删除（删除需二次确认）
+  - 切换视图或退出选择模式时自动清空选中
+
+### 不变内容
+- 周视图、月视图、日视图逻辑完全不变
+- 原有 BatchModifyDialog / BatchDeleteDialog（按班级批量操作）保持不变
