@@ -1,19 +1,18 @@
 #!no-build
-# README split into docs/ source files; build.yml auto-assembles README on each build
+# build.yml: README assembly now driven by docs/readme_order.txt
 
 ## Changes
 
-### New files
-- `docs/readme_header.md` — Features, Tech Stack, Data Storage
-- `docs/readme_build.md` — Building, CI/CD, Patch delivery, apply.sh, zip_update reference
-- `docs/readme_structure.md` — Project Structure
-- `docs/readme_ai_rules.md` — AI Rules (full English, ZIP delivery rule added)
+### New file
+- `docs/readme_order.txt` — controls assembly order of README sections;
+  add new sections here without touching build.yml
 
-### Modified files
-- `README.md` — replaced with auto-generation stub comment
-- `.github/workflows/build.yml` — added step 4 "Generate README.md from docs/" between apply.sh and commit
+### Modified file
+- `.github/workflows/build.yml` — generate README step rewritten:
+  reads docs/readme_order.txt line by line; falls back to alphabetical
+  sort if order file absent; skips missing files with a warning
 
-### Notes
-- docs/ changes trigger build (relevance check updated to include docs/)
-- README.md is never edited directly; always update docs/*.md instead
-- build.yml must be committed directly, not via patch zip
+### How to add a new README section in future
+1. Create `docs/readme_mynewsection.md`
+2. Add `readme_mynewsection.md` at the desired line in `docs/readme_order.txt`
+3. Include both files in the patch zip — no build.yml change needed
