@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-20T00:10:09Z`
-> Commit:  `9f03caf995727e1601d721995f200034db719150`
+> Updated: `2026-03-20T04:53:35Z`
+> Commit:  `319015b657e1b2d88a23f3a858df5010923308ed`
 
 ```
 ./.github/workflows/build.yml
@@ -14,6 +14,7 @@
 ./app/src/main/AndroidManifest.xml
 ./app/src/main/java/com/school/manager/MainActivity.kt
 ./app/src/main/java/com/school/manager/Navigation.kt
+./app/src/main/java/com/school/manager/data/BackupModels.kt
 ./app/src/main/java/com/school/manager/data/Models.kt
 ./app/src/main/java/com/school/manager/data/db/AppDatabase.kt
 ./app/src/main/java/com/school/manager/data/db/Daos.kt
@@ -25,6 +26,7 @@
 ./app/src/main/java/com/school/manager/ui/components/FluentComponentAliases.kt
 ./app/src/main/java/com/school/manager/ui/components/SpeedDialFab.kt
 ./app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
+./app/src/main/java/com/school/manager/ui/screens/ExportImportDialog.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonBatchDialogs.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonDialogs.kt
@@ -41,6 +43,7 @@
 ./app/src/main/java/com/school/manager/ui/theme/Type.kt
 ./app/src/main/java/com/school/manager/util/AvatarUtil.kt
 ./app/src/main/java/com/school/manager/viewmodel/AppViewModel.kt
+./app/src/main/java/com/school/manager/viewmodel/BackupManager.kt
 ./app/src/main/java/com/school/manager/viewmodel/GsonModels.kt
 ./app/src/main/res/drawable/ic_launcher_foreground.xml
 ./app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
