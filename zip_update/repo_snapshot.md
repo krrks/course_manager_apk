@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-20T16:07:32Z`
-> Commit:  `aa7160aa9fae92d1cc469c3cc335dde3d5a9dd6b`
+> Updated: `2026-03-20T16:21:19Z`
+> Commit:  `0e24b00ce853f69c8af1de0ce88aba7381b29042`
 
 ```
 ./.github/workflows/build.yml
@@ -54,6 +54,10 @@
 ./app/src/main/res/values/strings.xml
 ./app/src/main/res/values/themes.xml
 ./build.gradle.kts
+./docs/readme_ai_rules.md
+./docs/readme_build.md
+./docs/readme_header.md
+./docs/readme_structure.md
 ./gradle.properties
 ./gradle/libs.versions.toml
 ./gradle/wrapper/gradle-wrapper.jar
