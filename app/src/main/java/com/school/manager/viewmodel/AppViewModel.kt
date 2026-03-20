@@ -10,13 +10,7 @@ import com.school.manager.data.*
 import com.school.manager.data.repository.AppRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.File
 import java.time.LocalDate
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -105,48 +99,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     enum class RecurrenceType { WEEKLY, DAILY, ONCE }
 
     fun batchGenerateLessons(
-        classId: Long,
-        recurrenceType: RecurrenceType,
-        startDate: LocalDate,
-        endDate: LocalDate,
-        dayOfWeek: Int = 1,
-        startTime: String,
-        endTime: String,
-        excludeDates: Set<String> = emptySet(),
-        teacherIdOverride: Long? = null
+        classId: Long, recurrenceType: RecurrenceType,
+        startDate: LocalDate, endDate: LocalDate,
+        dayOfWeek: Int = 1, startTime: String, endTime: String,
+        excludeDates: Set<String> = emptySet(), teacherIdOverride: Long? = null
     ) {
         viewModelScope.launch {
             val dates: List<LocalDate> = when (recurrenceType) {
                 RecurrenceType.WEEKLY -> buildList {
                     var d = startDate
-                    while (!d.isAfter(endDate)) {
-                        if (d.dayOfWeek.value == dayOfWeek) add(d)
-                        d = d.plusDays(1)
-                    }
+                    while (!d.isAfter(endDate)) { if (d.dayOfWeek.value == dayOfWeek) add(d); d = d.plusDays(1) }
                 }
                 RecurrenceType.DAILY  -> buildList {
-                    var d = startDate
-                    while (!d.isAfter(endDate)) { add(d); d = d.plusDays(1) }
+                    var d = startDate; while (!d.isAfter(endDate)) { add(d); d = d.plusDays(1) }
                 }
                 RecurrenceType.ONCE   -> listOf(startDate)
             }
-            val existing = state.value.lessons
-                .filter { it.classId == classId }.map { it.date }.toSet()
+            val existing = state.value.lessons.filter { it.classId == classId }.map { it.date }.toSet()
             val baseTime = System.currentTimeMillis()
-            dates.forEachIndexed { index, d ->
-                val dateStr = d.toString()
-                if (dateStr !in excludeDates && dateStr !in existing) {
-                    repo.addLesson(Lesson(
-                        id = baseTime + index, classId = classId, date = dateStr,
-                        startTime = startTime, endTime = endTime, status = "pending",
-                        code = genCode("L"), teacherIdOverride = teacherIdOverride
-                    ))
-                }
+            dates.forEachIndexed { i, d ->
+                val ds = d.toString()
+                if (ds !in excludeDates && ds !in existing)
+                    repo.addLesson(Lesson(baseTime + i, classId, ds, startTime, endTime,
+                        "pending", code = genCode("L"), teacherIdOverride = teacherIdOverride))
             }
         }
     }
 
-    // ─── Lessons — batch modify ───────────────────────────────────────────────
+    // ─── Lessons — batch modify / delete ──────────────────────────────────────
     fun batchModifyLessons(
         classId: Long, fromDate: String, toDate: String,
         newStartTime: String? = null, newEndTime: String? = null,
@@ -154,8 +134,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         viewModelScope.launch {
             state.value.lessons.filter { l ->
-                l.classId == classId &&
-                l.date >= fromDate && l.date <= toDate &&
+                l.classId == classId && l.date in fromDate..toDate &&
                 (includeNonPending || l.status == "pending") &&
                 (!skipModified || !l.isModified)
             }.forEach { l ->
@@ -167,7 +146,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ─── Lessons — batch delete ───────────────────────────────────────────────
     fun batchDeleteLessons(
         classId: Long, fromDate: String, toDate: String,
         includeNonPending: Boolean = false, includeModified: Boolean = false
@@ -177,65 +155,52 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ─── Export ───────────────────────────────────────────────────────────────
-    fun exportFullStateJson(): String = gson.toJson(state.value)
+    // ─── Backup — export ──────────────────────────────────────────────────────
 
-    fun exportLessonsJson(teacherId: Long?): String {
-        val cids = if (teacherId == null) null
-                   else state.value.classes.filter { it.headTeacherId == teacherId }.map { it.id }.toSet()
-        val list = if (cids == null) state.value.lessons
-                   else state.value.lessons.filter { it.classId in cids }
-        return gson.toJson(list)
+    /** Full ZIP: all entities + avatars. */
+    fun exportFullZip(context: Context): ByteArray? =
+        backupManager(context).buildFullZip(state.value)
+
+    /** Filtered ZIP: lesson-filtered subset, no avatars. */
+    fun exportFilteredZip(
+        context: Context,
+        teacherId: Long?,
+        classId: Long?,
+        fromDate: String?,
+        toDate: String?
+    ): ByteArray? {
+        val filtered = state.value.filterForExport(teacherId, classId, fromDate, toDate)
+        val filter = FilterDescription(
+            teacherName = teacherId?.let { id -> state.value.teachers.find { it.id == id }?.name },
+            className   = classId?.let   { id -> state.value.classes.find  { it.id == id }?.name },
+            fromDate    = fromDate,
+            toDate      = toDate
+        )
+        return backupManager(context).buildFilteredZip(filtered, filter)
     }
 
-    fun exportFullBackupZip(context: Context): ByteArray? {
-        return try {
-            val baos = ByteArrayOutputStream()
-            ZipOutputStream(baos).use { zip ->
-                zip.putNextEntry(ZipEntry("state.json"))
-                zip.write(gson.toJson(state.value).toByteArray())
-                zip.closeEntry()
-                File(context.filesDir, "avatars").takeIf { it.exists() }
-                    ?.listFiles()?.forEach { f ->
-                        zip.putNextEntry(ZipEntry("avatars/${f.name}"))
-                        zip.write(f.readBytes())
-                        zip.closeEntry()
-                    }
-            }
-            baos.toByteArray()
-        } catch (_: Exception) { null }
-    }
+    // ─── Backup — import ──────────────────────────────────────────────────────
 
-    fun importFullBackupZip(context: Context, bytes: ByteArray): Boolean {
-        return try {
-            var json: String? = null
-            val avatarEntries = mutableMapOf<String, ByteArray>()
-            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    val data = zip.readBytes()
-                    when {
-                        entry.name == "state.json"        -> json = data.toString(Charsets.UTF_8)
-                        entry.name.startsWith("avatars/") ->
-                            avatarEntries[entry.name.removePrefix("avatars/")] = data
-                    }
-                    entry = zip.nextEntry
-                }
-            }
-            if (json == null) return false
-            val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
-            val pathRemap = avatarEntries.mapValues { (name, data) ->
-                File(avatarDir, name).also { it.writeBytes(data) }.absolutePath
-            }
-            importMerge(json!!, pathRemap)
-        } catch (_: Exception) { false }
-    }
+    /** Read meta.json only — no database writes. Use for the preview dialog. */
+    fun peekImportZip(bytes: ByteArray, context: Context): ImportResult =
+        backupManager(context).peekZip(bytes)
 
-    fun importMerge(json: String, pathRemap: Map<String, String> = emptyMap()): Boolean {
-        val parsed = parseGsonState(json, gson, pathRemap) ?: return false
-        viewModelScope.launch { repo.mergeAll(parsed) }
+    /** Parse + merge into database. Call after user confirms the preview. */
+    fun commitImportZip(bytes: ByteArray, context: Context): Boolean {
+        val appState = backupManager(context).extractState(bytes) ?: return false
+        viewModelScope.launch { repo.mergeAll(appState) }
         return true
     }
 
     fun resetToSampleData() { viewModelScope.launch { repo.importAll(sampleAppState()) } }
+
+    // ─── Private helpers ──────────────────────────────────────────────────────
+
+    private fun backupManager(context: Context) = BackupManager(
+        context    = context,
+        gson       = gson,
+        appVersion = runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
+        }.getOrDefault("")
+    )
 }

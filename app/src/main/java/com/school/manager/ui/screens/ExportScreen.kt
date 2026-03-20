@@ -2,14 +2,13 @@ package com.school.manager.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.EventNote
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -19,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
+import com.school.manager.data.*
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 import com.school.manager.viewmodel.AppViewModel
@@ -30,63 +30,63 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     val state   by vm.state.collectAsState()
     var toast   by remember { mutableStateOf<String?>(null) }
 
+    // Import flow: pick file → show preview dialog → user confirms → write to DB
+    var pendingBytes  by remember { mutableStateOf<ByteArray?>(null) }
+    var importPreview by remember { mutableStateOf<ImportResult?>(null) }
+
+    // Filtered export filter state
+    var fTeacherId by remember { mutableLongStateOf(0L) }
+    var fClassId   by remember { mutableLongStateOf(0L) }
+    var fFromDate  by remember { mutableStateOf("") }
+    var fToDate    by remember { mutableStateOf("") }
+
     val appVersion = remember {
-        try {
-            val pi = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
-                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
-            else @Suppress("DEPRECATION") context.packageManager.getPackageInfo(context.packageName, 0)
-            pi.versionName ?: "─"
-        } catch (_: Exception) { "─" }
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "─"
+        }.getOrDefault("─")
     }
 
     LaunchedEffect(toast) { if (toast != null) { delay(2500); toast = null } }
 
-    var pendingJson  by remember { mutableStateOf<String?>(null) }
-    var jsonFilename by remember { mutableStateOf("school_backup.json") }
-    val createFileLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null && pendingJson != null) {
-            try {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(pendingJson!!.toByteArray()) }
-                toast = "✅ 已导出 JSON"
-            } catch (_: Exception) { toast = "❌ 导出失败" }
-        }
-    }
-    fun exportWith(json: String, filename: String) { pendingJson = json; createFileLauncher.launch(filename) }
+    // ── SAF launchers ──────────────────────────────────────────────────────
+    var pendingFullBytes     by remember { mutableStateOf<ByteArray?>(null) }
+    var pendingFilteredBytes by remember { mutableStateOf<ByteArray?>(null) }
 
-    val openFileLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                val json = context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
-                toast = if (vm.importMerge(json)) "✅ 导入成功" else "❌ 导入失败：格式错误"
-            } catch (_: Exception) { toast = "❌ 读取文件失败" }
-        }
-    }
-
-    var pendingZipBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var zipFilename     by remember { mutableStateOf("school_backup.zip") }
-    val createZipLauncher = rememberLauncherForActivityResult(
+    val saveFullLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")) { uri ->
-        if (uri != null && pendingZipBytes != null) {
-            try {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(pendingZipBytes!!) }
-                toast = "✅ ZIP 备份已保存"
-            } catch (_: Exception) { toast = "❌ 保存失败" }
+        if (uri != null && pendingFullBytes != null) {
+            runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(pendingFullBytes!!) } }
+            toast = "✅ 完整备份已保存"
         }
     }
-    val openZipLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
-                toast = if (vm.importFullBackupZip(context, bytes)) "✅ ZIP 恢复成功" else "❌ 恢复失败"
-            } catch (_: Exception) { toast = "❌ 读取文件失败" }
+    val saveFilteredLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null && pendingFilteredBytes != null) {
+            runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(pendingFilteredBytes!!) } }
+            toast = "✅ 筛选备份已保存"
         }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val bytes = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull()
+        if (bytes == null) { toast = "❌ 读取文件失败"; return@rememberLauncherForActivityResult }
+        pendingBytes  = bytes
+        importPreview = vm.peekImportZip(bytes, context)
     }
 
-    var selectedTeacherId by remember { mutableLongStateOf(0L) }
-    val selectedTeacher   = state.teachers.firstOrNull { it.id == selectedTeacherId }
+    // ── Filtered lesson count (live preview) ───────────────────────────────
+    val filteredCount = remember(state.lessons, fTeacherId, fClassId, fFromDate, fToDate) {
+        state.lessons.count { l ->
+            (fTeacherId == 0L       || l.effectiveTeacherId(state.classes) == fTeacherId) &&
+            (fClassId   == 0L       || l.classId == fClassId) &&
+            (fFromDate.isBlank()    || l.date >= fFromDate) &&
+            (fToDate.isBlank()      || l.date <= fToDate)
+        }
+    }
+    val hasFilter = fTeacherId != 0L || fClassId != 0L || fFromDate.isNotBlank() || fToDate.isNotBlank()
 
     Scaffold(floatingActionButton = { ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer) }) { inner ->
         Column(
@@ -98,74 +98,63 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                     start  = 16.dp, end = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // ── ZIP backup ────────────────────────────────────────────────
-            Text("📦 ZIP 完整备份（推荐）",
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("将课次、教师、学生及所有头像打包成 ZIP，可在新设备还原。",
-                style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-            FilenameField("备份文件名", zipFilename, "school_backup.zip") {
-                zipFilename = it.trim().ifBlank { "school_backup.zip" }
-            }
-            IoCard(Icons.Default.FolderZip, "导出 ZIP 完整备份", FluentBlue,
-                "包含全部数据 + 头像图片") {
-                val bytes = vm.exportFullBackupZip(context)
-                if (bytes != null) { pendingZipBytes = bytes; createZipLauncher.launch(zipFilename) }
+
+            // ── Full export ───────────────────────────────────────────────
+            SectionTitle("📦 完整备份", "全部数据 + 头像，适合换机迁移")
+            IoCard(Icons.Default.FolderZip, "导出完整备份", FluentBlue,
+                "${state.lessons.size} 节课 · ${state.students.size} 名学生") {
+                val bytes = vm.exportFullZip(context)
+                if (bytes != null) { pendingFullBytes = bytes; saveFullLauncher.launch("school_backup_full.zip") }
                 else toast = "❌ 生成备份失败"
             }
-            IoCard(Icons.Default.Unarchive, "导入 ZIP 完整备份", FluentOrange,
-                "选择本应用导出的 ZIP 文件，按 ID 合并恢复") {
-                openZipLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
-            }
 
             HorizontalDivider(color = FluentBorder)
 
-            // ── JSON backup ───────────────────────────────────────────────
-            Text("🗂 JSON 数据备份",
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("仅导出结构化数据（不含头像），体积小，方便查阅和编辑。",
-                style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-            FilenameField("JSON 文件名", jsonFilename, "school_backup.json") {
-                jsonFilename = it.trim().ifBlank { "school_backup.json" }
-            }
-            IoCard(Icons.Default.Backup, "导出完整数据（JSON）", FluentBlue,
-                "全部科目、教师、班级、学生、课次") {
-                exportWith(vm.exportFullStateJson(), jsonFilename)
-            }
+            // ── Filtered export ───────────────────────────────────────────
+            SectionTitle("🔍 筛选导出", "导出部分数据，不含头像，适合分享归档")
 
-            if (state.teachers.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("按教师筛选：", style = MaterialTheme.typography.bodySmall, color = FluentMuted)
-                    DropdownFilterChip("全部",
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (state.teachers.isNotEmpty())
+                    DropdownFilterChip("全部教师",
                         items    = state.teachers.map { it.id to it.name },
-                        selected = selectedTeacherId) { selectedTeacherId = it }
-                }
+                        selected = fTeacherId) { fTeacherId = it }
+                if (state.classes.isNotEmpty())
+                    DropdownFilterChip("全部班级",
+                        items    = state.classes.map { it.id to it.name },
+                        selected = fClassId) { fClassId = it }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { DatePickerField("开始日期（可选）", fFromDate) { fFromDate = it } }
+                Box(Modifier.weight(1f)) { DatePickerField("结束日期（可选）", fToDate)   { fToDate   = it } }
             }
 
-            IoCard(Icons.AutoMirrored.Outlined.EventNote, "导出课次记录（JSON）", FluentPurple,
-                if (selectedTeacher != null) "筛选：${selectedTeacher.name}" else "全部课次") {
-                exportWith(
-                    vm.exportLessonsJson(selectedTeacherId.takeIf { it != 0L }),
-                    jsonFilename.replace(".json", "_lessons.json")
+            IoCard(Icons.Default.FilterList, "导出筛选数据", FluentPurple,
+                if (hasFilter) "筛选后 $filteredCount 节课" else "请先设置至少一个筛选条件") {
+                if (!hasFilter) { toast = "⚠️ 请先设置至少一个筛选条件"; return@IoCard }
+                val bytes = vm.exportFilteredZip(
+                    context   = context,
+                    teacherId = fTeacherId.takeIf { it != 0L },
+                    classId   = fClassId.takeIf   { it != 0L },
+                    fromDate  = fFromDate.ifBlank { null },
+                    toDate    = fToDate.ifBlank   { null }
                 )
+                if (bytes != null) { pendingFilteredBytes = bytes; saveFilteredLauncher.launch("school_backup_filtered.zip") }
+                else toast = "❌ 生成失败"
             }
 
             HorizontalDivider(color = FluentBorder)
 
-            // ── Import JSON ───────────────────────────────────────────────
-            Text("📥 导入数据",
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            IoCard(Icons.Default.FileOpen, "导入 JSON 数据", FluentAmber,
-                "选择本应用导出的 JSON 文件，按 ID 合并") {
-                openFileLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+            // ── Import ────────────────────────────────────────────────────
+            SectionTitle("📥 导入数据", "选择本应用导出的 ZIP，导入前显示预览")
+            IoCard(Icons.Default.FileOpen, "选择 ZIP 文件", FluentAmber, "按 ID 合并，不丢失已有数据") {
+                importLauncher.launch(arrayOf("application/zip", "*/*"))
             }
 
             HorizontalDivider(color = FluentBorder)
 
             // ── Danger zone ───────────────────────────────────────────────
-            Text("⚠️ 危险操作",
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            SectionTitle("⚠️ 危险操作", "")
             var confirmReset by remember { mutableStateOf(false) }
             if (!confirmReset) {
                 IoCard(Icons.Default.DeleteForever, "重置为示例数据", Color(0xFFE53935),
@@ -183,7 +172,8 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                             Button(onClick = { vm.resetToSampleData(); confirmReset = false },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))) {
-                                Text("确认重置", color = Color.White) }
+                                Text("确认重置", color = Color.White)
+                            }
                         }
                     }
                 }
@@ -195,32 +185,50 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
 
-        // Toast
+        // ── Toast ──────────────────────────────────────────────────────────
         toast?.let { msg ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 Surface(modifier = Modifier.padding(bottom = 100.dp).widthIn(max = 320.dp),
                     shape = RoundedCornerShape(12.dp),
-                    color = if (msg.startsWith("✅")) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.errorContainer,
+                    color = if (msg.startsWith("✅")) Color(0xFFE8F5E9)
+                            else MaterialTheme.colorScheme.errorContainer,
                     shadowElevation = 4.dp) {
                     Text(msg, modifier = Modifier.padding(12.dp),
-                        color = if (msg.startsWith("✅")) FluentGreen else MaterialTheme.colorScheme.onErrorContainer,
+                        color = if (msg.startsWith("✅")) FluentGreen
+                                else MaterialTheme.colorScheme.onErrorContainer,
                         fontWeight = FontWeight.Medium)
                 }
             }
         }
     }
+
+    // ── Import preview dialog ──────────────────────────────────────────────
+    importPreview?.let { preview ->
+        ImportPreviewDialog(
+            result    = preview,
+            onDismiss = { importPreview = null; pendingBytes = null },
+            onConfirm = {
+                pendingBytes?.let { bytes ->
+                    toast = if (vm.commitImportZip(bytes, context)) "✅ 导入成功" else "❌ 导入失败"
+                }
+                importPreview = null; pendingBytes = null
+            }
+        )
+    }
 }
 
 @Composable
-private fun FilenameField(label: String, value: String, placeholder: String, onValueChange: (String) -> Unit) {
-    OutlinedTextField(value = value, onValueChange = onValueChange, label = { Text(label) },
-        placeholder = { Text(placeholder, color = FluentMuted) }, singleLine = true,
-        shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
+private fun SectionTitle(title: String, subtitle: String) {
+    Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    if (subtitle.isNotBlank())
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
 }
 
 @Composable
-private fun IoCard(icon: ImageVector, title: String, color: Color, subtitle: String, onClick: () -> Unit) {
+private fun IoCard(
+    icon: ImageVector, title: String, color: Color,
+    subtitle: String, onClick: () -> Unit
+) {
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface,
         shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
@@ -230,11 +238,13 @@ private fun IoCard(icon: ImageVector, title: String, color: Color, subtitle: Str
             }
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = FluentMuted)
+                if (subtitle.isNotBlank())
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = FluentMuted)
             }
             Button(onClick = onClick, shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = color)) {
-                Text("执行", color = Color.White) }
+                Text("执行", color = Color.White)
+            }
         }
     }
 }
