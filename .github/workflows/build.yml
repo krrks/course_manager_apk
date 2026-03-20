@@ -288,20 +288,60 @@ jobs:
           fi
 
       # ── 4. Generate README.md from docs/ ──────────────────────────────────
+      #
+      #   Assembly order is driven by docs/readme_order.txt (one filename per
+      #   line, relative to docs/).  This means new sections can be added via
+      #   a normal patch zip — no changes to build.yml are ever needed.
+      #
+      #   Fallback chain (most → least preferred):
+      #     1. docs/readme_order.txt exists  → use listed order
+      #     2. docs/ exists, no order file   → sort *.md alphabetically
+      #     3. docs/ does not exist          → leave README.md unchanged
+      #
+      #   Missing files listed in readme_order.txt produce a warning and are
+      #   skipped; the build continues.
+      #
       - name: Generate README.md from docs/
         run: |
           DOCS_DIR="docs"
-          if [ -d "$DOCS_DIR" ]; then
-            echo "Assembling README.md from $DOCS_DIR/*.md ..."
-            cat \
-              "$DOCS_DIR/readme_header.md" \
-              "$DOCS_DIR/readme_build.md" \
-              "$DOCS_DIR/readme_structure.md" \
-              "$DOCS_DIR/readme_ai_rules.md" \
-              > README.md
+          ORDER_FILE="$DOCS_DIR/readme_order.txt"
+          TMP_README=$(mktemp)
+
+          if [ ! -d "$DOCS_DIR" ]; then
+            echo "ℹ️  No docs/ directory found — README.md unchanged"
+            exit 0
+          fi
+
+          if [ -f "$ORDER_FILE" ]; then
+            echo "📋 Using assembly order from $ORDER_FILE"
+            MISSING=0
+            while IFS= read -r line || [ -n "$line" ]; do
+              # skip blank lines and comments
+              [[ -z "$line" || "$line" == \#* ]] && continue
+              FILE="$DOCS_DIR/$line"
+              if [ -f "$FILE" ]; then
+                cat "$FILE" >> "$TMP_README"
+                echo "  ✔ $FILE"
+              else
+                echo "  ⚠️  WARNING: listed file not found — skipping: $FILE"
+                MISSING=$((MISSING + 1))
+              fi
+            done < "$ORDER_FILE"
+            [ "$MISSING" -gt 0 ] && echo "⚠️  $MISSING file(s) listed in readme_order.txt were missing"
+          else
+            echo "ℹ️  No readme_order.txt found — assembling docs/*.md alphabetically"
+            for f in $(ls "$DOCS_DIR"/*.md 2>/dev/null | sort); do
+              cat "$f" >> "$TMP_README"
+              echo "  ✔ $f"
+            done
+          fi
+
+          if [ -s "$TMP_README" ]; then
+            mv "$TMP_README" README.md
             echo "✅ README.md generated ($(wc -l < README.md) lines)"
           else
-            echo "ℹ️  No docs/ directory found — README.md unchanged"
+            rm -f "$TMP_README"
+            echo "⚠️  Generated README would be empty — README.md unchanged"
           fi
 
       # ── 5. Commit patch changes & clean up ───────────────────────────────
