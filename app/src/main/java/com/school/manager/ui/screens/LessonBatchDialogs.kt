@@ -28,7 +28,7 @@ internal fun BatchGenerateDialog(
     var startDate by remember { mutableStateOf(LocalDate.now().toString()) }
     var endDate   by remember { mutableStateOf(LocalDate.now().plusWeeks(12).toString()) }
     var startTime by remember { mutableStateOf("08:00") }
-    var endTime   by remember { mutableStateOf("08:45") }
+    var endTime   by remember { mutableStateOf("10:00") }
     var excludeSet by remember { mutableStateOf(emptySet<String>()) }
 
     var teacherOverrideId by remember {
@@ -221,7 +221,7 @@ internal fun BatchModifyDialog(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) { StartTimeCompact(newStart.ifBlank { "08:00" }) { newStart = it } }
-            Box(Modifier.weight(1f)) { StartTimeCompact(newEnd.ifBlank   { "08:45" }) { newEnd   = it } }
+            Box(Modifier.weight(1f)) { StartTimeCompact(newEnd.ifBlank   { "10:00" }) { newEnd   = it } }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp),
             verticalAlignment     = Alignment.CenterVertically,

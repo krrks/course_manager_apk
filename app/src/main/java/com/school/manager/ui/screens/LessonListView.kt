@@ -132,26 +132,6 @@ internal fun ListView(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = FluentMuted)
                             }
-                            if (!isSelectionMode) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    TextButton(
-                                        onClick        = { onBatchModify(classId) },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Text("批量修改",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = FluentBlue)
-                                    }
-                                    TextButton(
-                                        onClick        = { onBatchDelete(classId) },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Text("批量删除",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = FluentRed)
-                                    }
-                                }
-                            }
                         }
                         if (total > 0)
                             FluentProgressBar(done.toFloat() / total, color,

@@ -124,7 +124,7 @@ internal fun LessonFormDialog(
     var classId   by remember { mutableLongStateOf(initial?.classId ?: state.classes.firstOrNull()?.id ?: 0L) }
     var date      by remember { mutableStateOf(initial?.date      ?: LocalDate.now().toString()) }
     var startTime by remember { mutableStateOf(initial?.startTime ?: "08:00") }
-    var endTime   by remember { mutableStateOf(initial?.endTime   ?: "08:45") }
+    var endTime   by remember { mutableStateOf(initial?.endTime   ?: "10:00") }
     var status    by remember { mutableStateOf(initial?.status    ?: "pending") }
     var topic     by remember { mutableStateOf(initial?.topic     ?: "") }
     var notes     by remember { mutableStateOf(initial?.notes     ?: "") }

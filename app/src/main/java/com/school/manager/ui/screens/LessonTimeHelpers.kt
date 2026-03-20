@@ -43,7 +43,7 @@ internal fun addMinutesToTime(hhmm: String, minutes: Int): String {
 }
 
 internal fun minutesBetween(start: String, end: String): Int =
-    if (start.isBlank() || end.isBlank()) 45
+    if (start.isBlank() || end.isBlank()) 120
     else (timeToMinutes(end) - timeToMinutes(start)).coerceAtLeast(0)
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ internal fun DurationChipsCompact(
     startTime: String, endTime: String, onEndChange: (String) -> Unit
 ) {
     var durMins by remember {
-        mutableIntStateOf(minutesBetween(startTime, endTime).takeIf { it > 0 } ?: 45)
+        mutableIntStateOf(minutesBetween(startTime, endTime).takeIf { it > 0 } ?: 120)
     }
     fun push(m: Int) { onEndChange(addMinutesToTime(startTime.ifBlank { "08:00" }, m)) }
     val h = durMins / 60

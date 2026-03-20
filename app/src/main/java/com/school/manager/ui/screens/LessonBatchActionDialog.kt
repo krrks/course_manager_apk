@@ -115,12 +115,10 @@ internal fun BatchActionDialog(
                     style    = MaterialTheme.typography.bodySmall, color = FluentMuted,
                     modifier = Modifier.padding(horizontal = 16.dp))
                 StartTimeCompact(newStart.ifBlank { "08:00" }) { newStart = it }
-                if (newStart.isNotBlank()) {
-                    DurationChipsCompact(
-                        startTime = newStart,
-                        endTime   = newEnd.ifBlank { addMinutesToTime(newStart, 45) }
-                    ) { newEnd = it }
-                }
+                DurationChipsCompact(
+                    startTime = newStart.ifBlank { "08:00" },
+                    endTime   = newEnd.ifBlank { addMinutesToTime(newStart.ifBlank { "08:00" }, 120) }
+                ) { newEnd = it }
             }
 
             "status" -> {
@@ -162,9 +160,9 @@ internal fun BatchActionDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("我确认要删除这 $count 节课次",
-                        style    = MaterialTheme.typography.bodyMedium,
+                        style      = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f))
+                        modifier   = Modifier.weight(1f))
                     Switch(checked = deleteConfirmed, onCheckedChange = { deleteConfirmed = it })
                 }
             }

@@ -325,3 +325,35 @@ LessonFilterSheet.kt   ← filter bottom sheet
 **When the AI proposes a new feature** that would be added to an existing file, it must first check (or ask) whether that file is already near the 300-line limit. If it is, the AI must propose a split plan before writing any code.
 
 **Exemptions:** Auto-generated or config files (e.g. `Entities.kt`, `Daos.kt`, `Mappers.kt`) are exempt from this limit when their size is structurally determined by the number of database tables.
+
+### Three-step workflow for all change requests
+
+When the user raises a requirement or change request, the AI **must follow this three-step process** and **must not skip or merge steps**:
+
+**Step 1 — Solution proposal (no code)**
+- Describe what will change and in which files, at a high level.
+- Do not write any code or detailed logic.
+- End with: "请确认方案是否正确？确认后进入第二步。"
+- Wait for the user's explicit confirmation before continuing.
+
+**Step 2 — Change plan (no code)**
+- List each file to be modified, the specific location within the file, and exactly what will be added, removed, or replaced.
+- Do not write any code.
+- End with: "请确认流程是否正确？确认后进入第三步。"
+- Wait for the user's explicit confirmation before continuing.
+
+**Step 3 — Code generation**
+- Generate the complete modified file(s) only after Step 2 is confirmed.
+- Output one file at a time using the file creation tool.
+
+**Why three steps matter:** Merging planning and coding into one pass causes the AI to spend excessive time in a single reasoning block, which increases the risk of context overflow, repeated rethinking, and output failure. Keeping steps separated ensures each phase is short, focused, and verifiable.
+
+### Separate internal reasoning from code output
+
+When executing Step 3 (code generation), the AI **must not interleave extended reasoning with code writing**. The correct approach is:
+
+1. Complete all planning and reasoning *before* starting to write any file.
+2. Then output files one by one, without pausing to re-plan between files.
+3. If a mid-generation decision is needed (e.g. a naming conflict is discovered), stop, surface the question to the user, and wait — do not silently re-plan and restart.
+
+**Avoid:** Outputting a file, then re-analysing requirements, then outputting a revised version of the same file in the same response. This wastes tokens and confuses the diff.

@@ -68,7 +68,7 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                                 ColorChip(cls.grade, gradeCol)
                             }
                             Text(
-                                "班主任：${state.teachers.find { it.id == cls.headTeacherId }?.name ?: "未设置"}" +
+                                "教师：${state.teachers.find { it.id == cls.headTeacherId }?.name ?: "未设置"}" +
                                 if (subjectDisplay != null) "   📚 $subjectDisplay" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
                             LinearProgressIndicator(
@@ -131,7 +131,7 @@ private fun ClassDetailDialog(
         DetailRow("班级名称", cls.name)
         DetailRow("年级",     cls.grade)
         if (subjectDisplay != null) DetailRow("科目", subjectDisplay)
-        DetailRow("班主任",   ht?.name ?: "未设置")
+        DetailRow("教师",     ht?.name ?: "未设置")
         DetailRow("编制人数", "${cls.count} 人")
         DetailRow("在籍学生", "${sts.size} 人")
         if (sts.isNotEmpty()) {
@@ -208,7 +208,7 @@ private fun ClassFormDialog(
         FluentTextField("班级名称", name, { name = it })
         DropdownField("年级", grade, GRADES) { grade = it }
         FluentTextField("编制人数", count, { count = it })
-        DropdownField("班主任", teacher,
+        DropdownField("教师", teacher,
             listOf("") + state.teachers.map { it.name }) { teacher = it }
 
         if (state.subjects.isNotEmpty()) {
