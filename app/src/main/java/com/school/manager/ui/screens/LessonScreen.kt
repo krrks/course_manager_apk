@@ -18,13 +18,15 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     var view    by remember { mutableStateOf("week") }
     var calDate by remember { mutableStateOf(LocalDate.now()) }
 
-    // Existing filters
+    // Zoom state (week + day views only)
+    var zoomIdx   by remember { mutableIntStateOf(ZOOM_DEFAULT_IDX) }
+    val dpPerHour = ZOOM_LEVELS[zoomIdx]
+
+    // Filters
     var fClass   by remember { mutableLongStateOf(0L) }
     var fStatus  by remember { mutableStateOf("") }
     var fTeacher by remember { mutableLongStateOf(0L) }
     var fStudent by remember { mutableLongStateOf(0L) }
-
-    // New filters
     var fSubjects  by remember { mutableStateOf(emptySet<Long>()) }
     var fDayOfWeek by remember { mutableStateOf(emptySet<Int>()) }
     var fFromDate  by remember { mutableStateOf("") }
@@ -40,7 +42,6 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                           fStudent != 0L || fSubjects.isNotEmpty() || fDayOfWeek.isNotEmpty() ||
                           fFromDate.isNotBlank() || fToDate.isNotBlank()
 
-    // Existing dialog state
     var viewing      by remember { mutableStateOf<Lesson?>(null) }
     var editing      by remember { mutableStateOf<Lesson?>(null) }
     var showAdd      by remember { mutableStateOf(false) }
@@ -88,6 +89,21 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                     onAdd        = { showAdd = true },
                     onOpenDrawer = onOpenDrawer,
                     extraItems   = {
+                        // Zoom controls — only in week / day views
+                        if (view == "week" || view == "day") {
+                            SpeedDialItem(
+                                label    = "放大",
+                                icon     = Icons.Default.ZoomIn,
+                                color    = FluentBlue,
+                                selected = zoomIdx == ZOOM_LEVELS.lastIndex
+                            ) { zoomIdx = (zoomIdx + 1).coerceAtMost(ZOOM_LEVELS.lastIndex) }
+                            SpeedDialItem(
+                                label    = "缩小",
+                                icon     = Icons.Default.ZoomOut,
+                                color    = FluentMuted,
+                                selected = zoomIdx == 0
+                            ) { zoomIdx = (zoomIdx - 1).coerceAtLeast(0) }
+                        }
                         SpeedDialItem(
                             label    = "筛选条件",
                             icon     = Icons.Default.FilterList,
@@ -108,11 +124,11 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
         ) {
             when (view) {
                 "week"  -> WeekView(filtered, calDate, { calDate = it }, state, progressMap,
-                               view, { view = it }) { viewing = it }
+                               view, { view = it }, dpPerHour) { viewing = it }
                 "month" -> MonthView(filtered, calDate, { calDate = it }, state, progressMap,
                                view, { view = it }) { viewing = it }
                 "day"   -> DayView(filtered, calDate, { calDate = it }, state, progressMap,
-                               view, { view = it }) { viewing = it }
+                               view, { view = it }, dpPerHour) { viewing = it }
                 "list"  -> ListView(
                                lessons              = filtered,
                                state                = state,
@@ -158,7 +174,7 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
         )
     }
 
-    // ── Existing dialogs ──────────────────────────────────────────────────
+    // ── Dialogs ───────────────────────────────────────────────────────────
     viewing?.let { l ->
         LessonDetailDialog(l, state, vm, progressMap,
             onDismiss = { viewing = null },
@@ -187,7 +203,6 @@ fun LessonScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     if (batchModCls > 0L) BatchModifyDialog(batchModCls, state, vm, onDismiss = { batchModCls = 0L })
     if (batchDelCls > 0L) BatchDeleteDialog(batchDelCls, state, vm, onDismiss = { batchDelCls = 0L })
 
-    // ── New unified batch action dialog ───────────────────────────────────
     if (showBatchAction && selectedIds.isNotEmpty()) {
         BatchActionDialog(
             selectedIds = selectedIds,

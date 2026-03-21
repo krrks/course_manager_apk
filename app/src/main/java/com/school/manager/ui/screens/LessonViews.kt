@@ -32,11 +32,13 @@ internal fun WeekView(
     lessons: List<Lesson>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
     state: AppState, progressMap: Map<Long, Pair<Int, Int>>,
     currentView: String, onViewChange: (String) -> Unit,
+    dpPerHour: Float,
     onClick: (Lesson) -> Unit
 ) {
     val monday = current.with(DayOfWeek.MONDAY)
     val days   = (0..6).map { monday.plusDays(it.toLong()) }
     val fmt    = DateTimeFormatter.ofPattern("M/d")
+    val totalH = calTotalHeight(dpPerHour)
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -62,18 +64,20 @@ internal fun WeekView(
 
         val scrollV = rememberScrollState()
         Row(Modifier.fillMaxSize()) {
+            // Time gutter
             Box(Modifier.width(TIME_COL_W.dp).verticalScroll(scrollV)
                 .background(MaterialTheme.colorScheme.surfaceVariant)) {
-                Box(Modifier.height((CAL_TOTAL_HEIGHT + CAL_V_PAD * 2).dp)) {
+                Box(Modifier.height((totalH + CAL_V_PAD * 2).dp)) {
                     for (h in CAL_START_HOUR..CAL_END_HOUR) {
                         Text("%02d:00".format(h), style = MaterialTheme.typography.labelSmall,
                             color    = FluentMuted,
                             modifier = Modifier
-                                .offset(y = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD - 7f).dp)
+                                .offset(y = ((h - CAL_START_HOUR) * dpPerHour + CAL_V_PAD - 7f).dp)
                                 .padding(start = 4.dp))
                     }
                 }
             }
+            // Day columns
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
                 days.forEach { day ->
                     val dayLessons = lessons.filter { it.date == day.toString() }
@@ -95,23 +99,26 @@ internal fun WeekView(
                         }
                         Box(
                             Modifier.width(DAY_COL_W.dp).verticalScroll(scrollV)
-                                .height((CAL_TOTAL_HEIGHT + CAL_V_PAD * 2).dp)
+                                .height((totalH + CAL_V_PAD * 2).dp)
                                 .border(0.5.dp, FluentBorder)
                         ) {
+                            // Hour grid lines
                             for (h in CAL_START_HOUR..CAL_END_HOUR) {
                                 Box(Modifier
-                                    .offset(y = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD).dp)
+                                    .offset(y = ((h - CAL_START_HOUR) * dpPerHour + CAL_V_PAD).dp)
                                     .fillMaxWidth().height(0.5.dp).background(FluentBorder))
                             }
+                            // Lessons
                             dayLessons.forEach { l ->
                                 if (l.startTime.isBlank()) return@forEach
-                                val color   = statusColor(l.status)
-                                val subName = l.subjectName(state.classes, state.subjects)
+                                val color    = statusColor(l.status)
+                                val subName  = l.subjectName(state.classes, state.subjects)
+                                val clsName  = state.classes.find { it.id == l.classId }?.name ?: ""
                                 val (done, total) = progressMap[l.classId] ?: (0 to 0)
                                 Box(Modifier
-                                    .offset(y = (minuteOffsetDp(l.startTime) + CAL_V_PAD).dp)
+                                    .offset(y = (minuteOffsetDp(l.startTime, dpPerHour) + CAL_V_PAD).dp)
                                     .fillMaxWidth()
-                                    .height(durationDp(l.startTime, l.endTime).coerceAtLeast(42f).dp)
+                                    .height(durationDp(l.startTime, l.endTime, dpPerHour).coerceAtLeast(42f).dp)
                                     .padding(horizontal = 2.dp, vertical = 1.dp)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(color.copy(alpha = 0.15f))
@@ -120,16 +127,23 @@ internal fun WeekView(
                                     .padding(4.dp)
                                 ) {
                                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                        Text(subName, style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold, color = color, maxLines = 1)
+                                        Text(subName,
+                                            style      = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold, color = color,
+                                            maxLines   = 1, overflow = TextOverflow.Ellipsis)
                                         Text("${l.startTime}–${l.endTime}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = FluentMuted, maxLines = 1)
+                                            style   = MaterialTheme.typography.labelSmall,
+                                            color   = FluentMuted, maxLines = 1)
                                         if (total > 0)
                                             Text("$done/$total",
                                                 style      = MaterialTheme.typography.labelSmall,
                                                 color      = color,
                                                 fontWeight = FontWeight.SemiBold)
+                                        if (clsName.isNotBlank())
+                                            Text(clsName,
+                                                style    = MaterialTheme.typography.labelSmall,
+                                                color    = FluentMuted,
+                                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                             }
@@ -229,109 +243,6 @@ internal fun MonthView(
                 }
             }
             item { Spacer(Modifier.height(80.dp)) }
-        }
-    }
-}
-
-// ── Day view ──────────────────────────────────────────────────────────────────
-
-@Composable
-internal fun DayView(
-    lessons: List<Lesson>, current: LocalDate, onDateChange: (LocalDate) -> Unit,
-    state: AppState, progressMap: Map<Long, Pair<Int, Int>>,
-    currentView: String, onViewChange: (String) -> Unit,
-    onClick: (Lesson) -> Unit
-) {
-    val dow        = DAYS.getOrElse(current.dayOfWeek.value - 1) { "" }
-    val dayLessons = lessons.filter { it.date == current.toString() }
-
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            modifier          = Modifier.fillMaxWidth().background(FluentBlue)
-                                    .padding(horizontal = 4.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { onDateChange(current.minusDays(1)) }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.ChevronLeft, null, tint = Color.White)
-            }
-            Text(
-                text      = "${current.monthValue}月${current.dayOfMonth}日  周$dow",
-                color     = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp,
-                textAlign = TextAlign.Center, modifier = Modifier.weight(1f)
-            )
-            ViewSwitchIcons(currentView, onViewChange)
-            IconButton(onClick = { onDateChange(current.plusDays(1)) }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.ChevronRight, null, tint = Color.White)
-            }
-        }
-
-        val scrollV = rememberScrollState()
-        Row(Modifier.fillMaxSize()) {
-            Box(Modifier.width(TIME_COL_W.dp).verticalScroll(scrollV)
-                .background(MaterialTheme.colorScheme.surfaceVariant)) {
-                Box(Modifier.height((CAL_TOTAL_HEIGHT + CAL_V_PAD * 2).dp)) {
-                    for (h in CAL_START_HOUR..CAL_END_HOUR) {
-                        Text("%02d:00".format(h), style = MaterialTheme.typography.labelSmall,
-                            color    = FluentMuted,
-                            modifier = Modifier
-                                .offset(y = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD - 7f).dp)
-                                .padding(start = 4.dp))
-                    }
-                }
-            }
-            Box(
-                Modifier.weight(1f).verticalScroll(scrollV)
-                    .height((CAL_TOTAL_HEIGHT + CAL_V_PAD * 2).dp)
-                    .border(0.5.dp, FluentBorder)
-            ) {
-                for (h in CAL_START_HOUR..CAL_END_HOUR) {
-                    Box(Modifier
-                        .offset(y = ((h - CAL_START_HOUR) * DP_PER_HOUR + CAL_V_PAD).dp)
-                        .fillMaxWidth().height(0.5.dp).background(FluentBorder))
-                }
-                dayLessons.forEach { l ->
-                    if (l.startTime.isBlank()) return@forEach
-                    val color   = statusColor(l.status)
-                    val cls     = state.classes.find { it.id == l.classId }
-                    val teacher = state.teachers.find { it.id == l.effectiveTeacherId(state.classes) }
-                    val (done, total) = progressMap[l.classId] ?: (0 to 0)
-                    Box(Modifier
-                        .offset(y = (minuteOffsetDp(l.startTime) + CAL_V_PAD).dp)
-                        .fillMaxWidth()
-                        .height(durationDp(l.startTime, l.endTime).coerceAtLeast(56f).dp)
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(color.copy(0.15f))
-                        .border(1.dp, color.copy(0.5f), RoundedCornerShape(8.dp))
-                        .clickable { onClick(l) }
-                        .padding(8.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("${l.subjectName(state.classes, state.subjects)} · ${cls?.name ?: "?"}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold, color = color, maxLines = 1)
-                            Text("${l.startTime} – ${l.endTime}  👩‍🏫${teacher?.name ?: "─"}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = FluentMuted, maxLines = 1)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                StatusChip(l.status)
-                                if (total > 0)
-                                    Surface(shape = RoundedCornerShape(8.dp), color = color.copy(0.1f)) {
-                                        Text("已上 $done/$total 节",
-                                            style      = MaterialTheme.typography.labelSmall,
-                                            color      = color, fontWeight = FontWeight.SemiBold,
-                                            modifier   = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
-                                    }
-                            }
-                            if (l.topic.isNotBlank())
-                                Text("📌 ${l.topic}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = FluentMuted, maxLines = 1)
-                        }
-                    }
-                }
-            }
         }
     }
 }

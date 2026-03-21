@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.*
 import com.school.manager.data.*
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
+import java.time.LocalDate
 
 // ── List view ─────────────────────────────────────────────────────────────────
 
@@ -213,6 +214,14 @@ internal fun LessonCard(
     onToggleSelect: () -> Unit = {},
     onClick: (Lesson) -> Unit
 ) {
+    // Resolve day-of-week label from date string
+    val dowLabel = remember(l.date) {
+        runCatching {
+            val d = LocalDate.parse(l.date)
+            "周${DAYS.getOrElse(d.dayOfWeek.value - 1) { "?" }}"
+        }.getOrDefault("")
+    }
+
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         if (isSelectionMode) {
             Checkbox(
@@ -229,6 +238,7 @@ internal fun LessonCard(
             Row(Modifier.padding(12.dp),
                 verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Date column: day number + month + day-of-week
                 Column(horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.width(44.dp)) {
                     val parts = l.date.split("-")
@@ -237,6 +247,10 @@ internal fun LessonCard(
                         fontWeight = FontWeight.Bold, color = accentColor)
                     Text("${parts.getOrElse(1) { "?" }}月",
                         style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+                    if (dowLabel.isNotBlank())
+                        Text(dowLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accentColor, fontWeight = FontWeight.SemiBold)
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp),

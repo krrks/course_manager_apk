@@ -19,21 +19,27 @@ import com.school.manager.ui.components.ColorChip
 import com.school.manager.ui.theme.*
 
 // ── Calendar layout constants ─────────────────────────────────────────────────
-internal const val DP_PER_HOUR = 80f
-internal const val DP_PER_MIN  = DP_PER_HOUR / 60f
-internal const val TIME_COL_W  = 52
-internal const val DAY_COL_W   = 120
-internal const val CAL_V_PAD   = 10f
-internal val CAL_TOTAL_HEIGHT  get() = (CAL_END_HOUR - CAL_START_HOUR) * DP_PER_HOUR
+internal val  ZOOM_LEVELS       = listOf(60f, 80f, 100f, 120f)
+internal const val ZOOM_DEFAULT_IDX = 1                         // 80 dp/hour
 
-internal fun minuteOffsetDp(hhmm: String): Float {
+internal const val TIME_COL_W = 52
+internal const val DAY_COL_W  = 120
+internal const val CAL_V_PAD  = 10f
+
+/** Total scrollable height in dp for the given zoom level. */
+internal fun calTotalHeight(dpPerHour: Float) =
+    (CAL_END_HOUR - CAL_START_HOUR) * dpPerHour
+
+internal fun minuteOffsetDp(hhmm: String, dpPerHour: Float): Float {
     if (hhmm.isBlank()) return 0f
-    return ((timeToMinutes(hhmm) - CAL_START_HOUR * 60) * DP_PER_MIN).coerceAtLeast(0f)
+    val dpPerMin = dpPerHour / 60f
+    return ((timeToMinutes(hhmm) - CAL_START_HOUR * 60) * dpPerMin).coerceAtLeast(0f)
 }
 
-internal fun durationDp(start: String, end: String): Float {
-    if (start.isBlank() || end.isBlank()) return DP_PER_HOUR / 2f
-    return (timeToMinutes(end) - timeToMinutes(start)).coerceAtLeast(10) * DP_PER_MIN
+internal fun durationDp(start: String, end: String, dpPerHour: Float): Float {
+    if (start.isBlank() || end.isBlank()) return dpPerHour / 2f
+    val dpPerMin = dpPerHour / 60f
+    return (timeToMinutes(end) - timeToMinutes(start)).coerceAtLeast(10) * dpPerMin
 }
 
 internal fun addMinutesToTime(hhmm: String, minutes: Int): String {
@@ -74,7 +80,7 @@ internal fun ViewSwitchIcons(currentView: String, onViewChange: (String) -> Unit
             "week"  to Icons.Default.ViewWeek,
             "month" to Icons.Default.CalendarMonth,
             "day"   to Icons.Default.Today,
-            "list"  to Icons.Default.ViewList
+            "list"  to Icons.AutoMirrored.Filled.ViewList
         ).forEach { (v, icon) ->
             IconButton(onClick = { onViewChange(v) }, modifier = Modifier.size(28.dp)) {
                 Icon(

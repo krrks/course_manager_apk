@@ -1,23 +1,24 @@
-#!no-build
-# build.yml: replace mtime dedup with applied_patches.txt
+#!build
+# 课程日历：缩放、更多信息、列表星期字段
 
-## Changes
+## 1. 周视图 / 日视图 — FAB 缩放按钮
+- 新增 4 档缩放：60 / 80（默认）/ 100 / 120 dp/小时
+- 仅在 week / day 视图时在 FAB 菜单中显示「放大」「缩小」按钮
 
-### New file
-- `zip_update/applied_patches.txt` — tracks the last 20 applied patch names;
-  checked at start of each run to skip already-applied zips
+## 2. 周视图格子 — 增加班级名称
+- 在科目 / 时间 / 课次三行之后追加班级名称（小字，截断）
 
-### Modified file
-- `.github/workflows/build.yml`:
-  - check job: remove "Check if patch already released" step (mtime + gh release grep)
-  - check job: remove `patch_mtime` output; add "Check if patch already applied"
-    step that greps applied_patches.txt by zip filename
-  - check job: "Decide whether to build" uses ALREADY_APPLIED instead of ALREADY_RELEASED
-  - build job Step 5: before git add -A, append patch name to applied_patches.txt
-    and truncate to newest 20 lines; file is committed in the same pass
-  - build job Step 15: remove patch_mtime from Release body
+## 3. 日视图格子 — 增加出勤人数 + 备注
+- 出勤人数：`👥 N 人出勤`（有出勤记录时显示）
+- 备注预览：`💬 ...`（备注非空时显示，单行截断）
 
-## Why
-- mtime is unstable (changes on checkout/rsync/re-upload), causing false negatives
-- no-build patches were not protected by the old mtime check (no Release is created)
-- applied_patches.txt is auditable: `cat zip_update/applied_patches.txt`
+## 4. 列表视图 — 日期列增加星期字段
+- 日期列（日 / 月）下方新增第三行：`周X`（蓝色加粗小字）
+
+## 文件变更
+- `LessonTimeHelpers.kt`：DP_PER_HOUR 改为 ZOOM_LEVELS 档位常量；
+  minuteOffsetDp / durationDp / calTotalHeight 接受 dpPerHour 参数
+- `LessonViews.kt`：WeekView 接受 dpPerHour；DayView 迁出至新文件
+- `LessonDayView.kt`：新文件，承接 DayView，增加出勤 + 备注行
+- `LessonScreen.kt`：zoomIdx 状态；FAB 缩放按钮；传 dpPerHour
+- `LessonListView.kt`：LessonCard 日期列加星期行
