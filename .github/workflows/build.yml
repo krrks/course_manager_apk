@@ -39,7 +39,6 @@ jobs:
       compile_apk:  ${{ steps.decision.outputs.compile_apk }}
       patch_found:  ${{ steps.find_patch.outputs.patch_found }}
       patch_path:   ${{ steps.find_patch.outputs.patch_path }}
-      patch_mtime:  ${{ steps.find_patch.outputs.patch_mtime }}
       do_debug:     ${{ steps.variants.outputs.do_debug }}
       do_release:   ${{ steps.variants.outputs.do_release }}
 
@@ -77,15 +76,12 @@ jobs:
                 | sort -t_ -k2 -n | tail -n1 || echo "")
 
           if [ -n "$ZIP" ]; then
-            MTIME=$(stat -c '%y' "$ZIP" | cut -d'.' -f1)
             echo "patch_found=true"   >> "$GITHUB_OUTPUT"
             echo "patch_path=$ZIP"    >> "$GITHUB_OUTPUT"
-            echo "patch_mtime=$MTIME" >> "$GITHUB_OUTPUT"
-            echo "Found patch: $ZIP  (mtime: $MTIME)"
+            echo "Found patch: $ZIP"
           else
             echo "patch_found=false" >> "$GITHUB_OUTPUT"
             echo "patch_path="       >> "$GITHUB_OUTPUT"
-            echo "patch_mtime="      >> "$GITHUB_OUTPUT"
             echo ""
             echo "##################################################"
             echo "#                                                #"
@@ -100,21 +96,22 @@ jobs:
             echo ""
           fi
 
-      - name: Check if patch already released
-        id: already_released
+      # ── Check if patch already applied (via applied_patches.txt) ─────────
+      - name: Check if patch already applied
+        id: already_applied
         if: steps.find_patch.outputs.patch_found == 'true'
         env:
-          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
-          PATCH_MTIME: ${{ steps.find_patch.outputs.patch_mtime }}
+          PATCH_PATH: ${{ steps.find_patch.outputs.patch_path }}
         run: |
-          RELEASED=$(gh release list --limit 50 --json body \
-            -q ".[].body" 2>/dev/null \
-            | grep -F "$PATCH_MTIME" || echo "")
-          if [ -n "$RELEASED" ]; then
-            echo "already=true"  >> "$GITHUB_OUTPUT"
-            echo "ℹ️  This patch was already released"
+          PATCH_NAME=$(basename "$PATCH_PATH" .zip)
+          APPLIED_FILE="zip_update/applied_patches.txt"
+
+          if grep -qxF "$PATCH_NAME" "$APPLIED_FILE" 2>/dev/null; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "ℹ️  Patch $PATCH_NAME already recorded in $APPLIED_FILE — skipping"
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "Patch $PATCH_NAME not yet applied"
           fi
 
       # ── Read build flag from CHANGELOG.md first line ─────────────────────
@@ -172,7 +169,7 @@ jobs:
           EVENT:               ${{ github.event_name }}
           NO_RELEVANT_CHANGES: ${{ steps.relevance.outputs.no_relevant_changes }}
           PATCH_FOUND:         ${{ steps.find_patch.outputs.patch_found }}
-          ALREADY_RELEASED:    ${{ steps.already_released.outputs.already }}
+          ALREADY_APPLIED:     ${{ steps.already_applied.outputs.already }}
           FORCE:               ${{ github.event.inputs.force_build }}
           BUILD_FLAG:          ${{ steps.build_flag.outputs.flag }}
         run: |
@@ -186,10 +183,10 @@ jobs:
             echo "compile_apk=false"  >> "$GITHUB_OUTPUT"
             echo "Skipping: no changes in app/, zip_update/ or docs/"
 
-          elif [ "$PATCH_FOUND" = "true" ] && [ "$ALREADY_RELEASED" = "true" ]; then
+          elif [ "$PATCH_FOUND" = "true" ] && [ "$ALREADY_APPLIED" = "true" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             echo "compile_apk=false"  >> "$GITHUB_OUTPUT"
-            echo "Skipping: patch already released"
+            echo "Skipping: patch already applied"
 
           elif [ "$BUILD_FLAG" = "no-build" ]; then
             echo "should_build=true"  >> "$GITHUB_OUTPUT"
@@ -288,19 +285,6 @@ jobs:
           fi
 
       # ── 4. Generate README.md from docs/ ──────────────────────────────────
-      #
-      #   Assembly order is driven by docs/readme_order.txt (one filename per
-      #   line, relative to docs/).  This means new sections can be added via
-      #   a normal patch zip — no changes to build.yml are ever needed.
-      #
-      #   Fallback chain (most → least preferred):
-      #     1. docs/readme_order.txt exists  → use listed order
-      #     2. docs/ exists, no order file   → sort *.md alphabetically
-      #     3. docs/ does not exist          → leave README.md unchanged
-      #
-      #   Missing files listed in readme_order.txt produce a warning and are
-      #   skipped; the build continues.
-      #
       - name: Generate README.md from docs/
         run: |
           DOCS_DIR="docs"
@@ -316,7 +300,6 @@ jobs:
             echo "📋 Using assembly order from $ORDER_FILE"
             MISSING=0
             while IFS= read -r line || [ -n "$line" ]; do
-              # skip blank lines and comments
               [[ -z "$line" || "$line" == \#* ]] && continue
               FILE="$DOCS_DIR/$line"
               if [ -f "$FILE" ]; then
@@ -349,10 +332,19 @@ jobs:
         if: needs.check.outputs.patch_found == 'true'
         env:
           COMPILE_APK: ${{ needs.check.outputs.compile_apk }}
+          PATCH_PATH:  ${{ needs.check.outputs.patch_path }}
         run: |
           rm -f zip_update/patches/*.zip
           rm -f zip_update/patches/apply.sh
           echo "Removed patch zip and apply.sh from zip_update/patches/ (directory preserved)"
+
+          # ── Record applied patch (keep newest 20) ────────────────────────
+          PATCH_NAME=$(basename "$PATCH_PATH" .zip)
+          APPLIED_FILE="zip_update/applied_patches.txt"
+          echo "$PATCH_NAME" >> "$APPLIED_FILE"
+          tail -n 20 "$APPLIED_FILE" > /tmp/_ap.txt
+          mv /tmp/_ap.txt "$APPLIED_FILE"
+          echo "✅ Recorded $PATCH_NAME in $APPLIED_FILE"
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -561,9 +553,8 @@ jobs:
       - name: Create GitHub Release
         if: needs.check.outputs.compile_apk == 'true'
         env:
-          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
-          TAG:         ${{ steps.version.outputs.tag }}
-          PATCH_MTIME: ${{ needs.check.outputs.patch_mtime }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG:      ${{ steps.version.outputs.tag }}
         run: |
           CHANGELOG="zip_update/CHANGELOG.md"
           if [ -f "$CHANGELOG" ]; then
@@ -571,8 +562,6 @@ jobs:
           else
             BODY="Auto build — no changelog provided."
           fi
-
-          BODY=$(printf '%s\n\n---\n_patch mtime: %s_' "$BODY" "$PATCH_MTIME")
 
           UPLOAD_FILES=""
           for f in \
