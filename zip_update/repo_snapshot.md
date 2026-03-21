@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-21T07:01:07Z`
-> Commit:  `7c26b8c86d61d3f1d657acc8106af3db492a9c17`
+> Updated: `2026-03-21T07:26:53Z`
+> Commit:  `364744d3f84588aa794d79aa8663963280283c08`
 
 ```
 ./.github/workflows/build.yml
@@ -69,6 +69,7 @@
 ./keys/release.jks
 ./settings.gradle.kts
 ./zip_update/CHANGELOG.md
+./zip_update/applied_patches.txt
 ./zip_update/patches/test_file.txt
 ./zip_update/release_note.md
 ./zip_update/repo_snapshot.md
