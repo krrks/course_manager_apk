@@ -1,12 +1,23 @@
-#!build
-# Fix batch action dialog: pre-fill from first selected lesson, fix end-time bug
+#!no-build
+# build.yml: replace mtime dedup with applied_patches.txt
 
-## LessonBatchActionDialog.kt
-- On open, derive the first lesson (earliest date+startTime) from selectedIds
-- Pre-fill newStart, newEnd, newStatus from that lesson instead of hardcoded defaults
-- Fix StartTimeCompact callback to preserve duration when start time changes
-  (previously newEnd was not updated, causing each lesson to keep its own original endTime)
+## Changes
 
-## LessonTimeHelpers.kt
-- Key DurationChipsCompact's `remember` on `startTime` so the hour/minute
-  fields reinitialise correctly when the parent updates startTime
+### New file
+- `zip_update/applied_patches.txt` — tracks the last 20 applied patch names;
+  checked at start of each run to skip already-applied zips
+
+### Modified file
+- `.github/workflows/build.yml`:
+  - check job: remove "Check if patch already released" step (mtime + gh release grep)
+  - check job: remove `patch_mtime` output; add "Check if patch already applied"
+    step that greps applied_patches.txt by zip filename
+  - check job: "Decide whether to build" uses ALREADY_APPLIED instead of ALREADY_RELEASED
+  - build job Step 5: before git add -A, append patch name to applied_patches.txt
+    and truncate to newest 20 lines; file is committed in the same pass
+  - build job Step 15: remove patch_mtime from Release body
+
+## Why
+- mtime is unstable (changes on checkout/rsync/re-upload), causing false negatives
+- no-build patches were not protected by the old mtime check (no Release is created)
+- applied_patches.txt is auditable: `cat zip_update/applied_patches.txt`
