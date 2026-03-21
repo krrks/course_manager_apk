@@ -120,7 +120,8 @@ internal fun StartTimeCompact(startTime: String, onStartChange: (String) -> Unit
 internal fun DurationChipsCompact(
     startTime: String, endTime: String, onEndChange: (String) -> Unit
 ) {
-    var durMins by remember {
+    // Keyed on startTime so durMins reinitialises whenever the parent changes startTime
+    var durMins by remember(startTime) {
         mutableIntStateOf(minutesBetween(startTime, endTime).takeIf { it > 0 } ?: 120)
     }
     fun push(m: Int) { onEndChange(addMinutesToTime(startTime.ifBlank { "08:00" }, m)) }

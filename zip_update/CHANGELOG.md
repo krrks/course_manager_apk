@@ -1,18 +1,12 @@
-#!no-build
-# build.yml: README assembly now driven by docs/readme_order.txt
+#!build
+# Fix batch action dialog: pre-fill from first selected lesson, fix end-time bug
 
-## Changes
+## LessonBatchActionDialog.kt
+- On open, derive the first lesson (earliest date+startTime) from selectedIds
+- Pre-fill newStart, newEnd, newStatus from that lesson instead of hardcoded defaults
+- Fix StartTimeCompact callback to preserve duration when start time changes
+  (previously newEnd was not updated, causing each lesson to keep its own original endTime)
 
-### New file
-- `docs/readme_order.txt` — controls assembly order of README sections;
-  add new sections here without touching build.yml
-
-### Modified file
-- `.github/workflows/build.yml` — generate README step rewritten:
-  reads docs/readme_order.txt line by line; falls back to alphabetical
-  sort if order file absent; skips missing files with a warning
-
-### How to add a new README section in future
-1. Create `docs/readme_mynewsection.md`
-2. Add `readme_mynewsection.md` at the desired line in `docs/readme_order.txt`
-3. Include both files in the patch zip — no build.yml change needed
+## LessonTimeHelpers.kt
+- Key DurationChipsCompact's `remember` on `startTime` so the hour/minute
+  fields reinitialise correctly when the parent updates startTime

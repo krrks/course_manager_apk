@@ -25,10 +25,18 @@ internal fun BatchActionDialog(
     vm: AppViewModel,
     onDismiss: () -> Unit
 ) {
+    // Derive the first lesson (earliest date + startTime) from the selection
+    val firstLesson = remember(selectedIds) {
+        state.lessons
+            .filter { it.id in selectedIds }
+            .sortedWith(compareBy({ it.date }, { it.startTime }))
+            .firstOrNull()
+    }
+
     var actionType      by remember { mutableStateOf("time") }
-    var newStart        by remember { mutableStateOf("") }
-    var newEnd          by remember { mutableStateOf("") }
-    var newStatus       by remember { mutableStateOf("") }
+    var newStart        by remember { mutableStateOf(firstLesson?.startTime ?: "08:00") }
+    var newEnd          by remember { mutableStateOf(firstLesson?.endTime   ?: "10:00") }
+    var newStatus       by remember { mutableStateOf(firstLesson?.status    ?: "") }
     var deleteConfirmed by remember { mutableStateOf(false) }
 
     val count = selectedIds.size
@@ -114,10 +122,14 @@ internal fun BatchActionDialog(
                 Text("选择修改后的上课时间",
                     style    = MaterialTheme.typography.bodySmall, color = FluentMuted,
                     modifier = Modifier.padding(horizontal = 16.dp))
-                StartTimeCompact(newStart.ifBlank { "08:00" }) { newStart = it }
+                StartTimeCompact(newStart) { picked ->
+                    val dur = minutesBetween(newStart, newEnd).coerceAtLeast(30)
+                    newStart = picked
+                    newEnd   = addMinutesToTime(picked, dur)
+                }
                 DurationChipsCompact(
-                    startTime = newStart.ifBlank { "08:00" },
-                    endTime   = newEnd.ifBlank { addMinutesToTime(newStart.ifBlank { "08:00" }, 120) }
+                    startTime = newStart,
+                    endTime   = newEnd
                 ) { newEnd = it }
             }
 
