@@ -128,7 +128,6 @@ private fun StudentDetailDialog(
     onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     val classes  = s.classIds.mapNotNull { vm.schoolClass(it) }
-    // Use state.lessons instead of state.attendance
     val attended = state.lessons.count { it.attendees.contains(s.id) && it.status == "completed" }
 
     FluentDialog(title = "学生详情", onDismiss = onDismiss) {
@@ -139,12 +138,16 @@ private fun StudentDetailDialog(
         }
         DetailRow("姓名",   s.name)
         DetailRow("学号",   s.studentNo)
-        DetailRow("性别",   s.gender)
-        DetailRow("年级",   s.grade)
+
+        // 性别 + 年级 — both short, pair them
+        DetailRowPair("性别", s.gender, "年级", s.grade)
+
         DetailRow("出勤课次", "$attended 节")
+
         if (classes.isNotEmpty()) {
             SectionHeader("所在班级")
-            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp),
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 classes.forEach { cl -> ColorChip(cl.name, FluentBlue) }
             }
@@ -212,7 +215,8 @@ private fun StudentFormDialog(
         FormDropdown("年级", grade,  GRADES)              { grade  = it }
         if (state.classes.isNotEmpty()) {
             SectionHeader("所在班级（可多选）")
-            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp),
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement   = Arrangement.spacedBy(4.dp)) {
                 state.classes.forEach { cls ->

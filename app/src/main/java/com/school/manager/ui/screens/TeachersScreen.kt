@@ -52,7 +52,6 @@ fun TeachersScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
             } else {
                 items(state.teachers) { t ->
                     val teacherSubjects = state.subjects.filter { it.teacherId == t.id }
-                    // In the new model teacher is fixed via SchoolClass.headTeacherId
                     val lessonCount = state.lessons.count { l ->
                         state.classes.find { it.id == l.classId }?.headTeacherId == t.id &&
                         l.status == "completed"
@@ -142,20 +141,25 @@ private fun TeacherDetailDialog(
                 size     = 72.dp, imageUri = t.avatarUri)
         }
         if (t.code.isNotBlank()) DetailRow("编号", t.code)
-        DetailRow("姓名",     t.name)
-        DetailRow("性别",     t.gender)
-        DetailRow("手机",     t.phone)
-        DetailRow("完成课次", "$lessonCount 节")
+        DetailRow("姓名", t.name)
+
+        // 性别 + 完成课次 — both short, pair them
+        DetailRowPair("性别", t.gender, "完成课次", "$lessonCount 节")
+
+        if (t.phone.isNotBlank()) DetailRow("手机", t.phone)
+
         if (teacherSubjects.isNotEmpty()) {
             SectionHeader("任教科目")
-            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp),
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 teacherSubjects.forEach { sub -> ColorChip(sub.name, FluentBlue) }
             }
         }
         if (teacherClasses.isNotEmpty()) {
             SectionHeader("任课班级")
-            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp),
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 teacherClasses.forEach { c ->
                     val subjectDisplay = c.resolvedSubject(state.subjects)?.name

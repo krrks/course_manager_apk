@@ -93,13 +93,11 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
             onDelete  = { vm.deleteSchoolClass(cls.id); viewing = null }
         )
     }
-
     editing?.let { cls ->
         ClassFormDialog("编辑班级", cls, state, vm, onDismiss = { editing = null }) { updated ->
             vm.updateSchoolClass(updated); editing = null
         }
     }
-
     if (showAdd) {
         ClassFormDialog("添加班级", null, state, vm, onDismiss = { showAdd = false }) { c ->
             vm.addSchoolClass(c.name, c.grade, c.count, c.headTeacherId, c.subjectId, code = c.code)
@@ -129,15 +127,25 @@ private fun ClassDetailDialog(
     FluentDialog(title = "班级详情", onDismiss = onDismiss) {
         if (cls.code.isNotBlank()) DetailRow("编号", cls.code)
         DetailRow("班级名称", cls.name)
-        DetailRow("年级",     cls.grade)
-        if (subjectDisplay != null) DetailRow("科目", subjectDisplay)
-        DetailRow("教师",     ht?.name ?: "未设置")
-        DetailRow("编制人数", "${cls.count} 人")
-        DetailRow("在籍学生", "${sts.size} 人")
+
+        // 年级 + 科目 — side by side when subject exists; year alone when not
+        if (subjectDisplay != null) {
+            DetailRowPair("年级", cls.grade, "科目", subjectDisplay)
+        } else {
+            DetailRow("年级", cls.grade)
+        }
+
+        DetailRow("教师", ht?.name ?: "未设置")
+
+        // 编制人数 + 在籍学生 — both short numbers, pair them
+        DetailRowPair("编制人数", "${cls.count} 人", "在籍学生", "${sts.size} 人")
+
         if (sts.isNotEmpty()) {
             SectionHeader("班级学生")
-            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 sts.forEach { s -> ColorChip(s.name, FluentBlue) }
             }
         }
@@ -168,7 +176,7 @@ private fun ClassFormDialog(
     val initialSubject: Subject? = remember(state.subjects, initial) {
         initial?.let { cls -> state.subjects.find { it.id == cls.subjectId } }
     }
-    var selectedSubjectId by remember { mutableStateOf(initialSubject?.id) }
+    var selectedSubjectId   by remember { mutableStateOf(initialSubject?.id) }
     val selectedSubjectName = state.subjects.find { it.id == selectedSubjectId }?.name ?: ""
 
     val initialStudentIds = remember(state.students, initial) {
@@ -221,35 +229,28 @@ private fun ClassFormDialog(
                                     else state.subjects.firstOrNull { it.name == picked }?.id
             }
             if (selectedSubjectName.isBlank()) {
-                Text(
-                    "如需新增科目，请前往「科目管理」页面",
+                Text("如需新增科目，请前往「科目管理」页面",
                     style    = MaterialTheme.typography.bodySmall,
                     color    = FluentMuted,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                )
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
             }
         } else {
-            // ── Compact warning (was a full-width Surface) ────────────────
-            Text(
-                "⚠️ 暂无科目，请先在「科目管理」页面添加",
+            Text("⚠️ 暂无科目，请先在「科目管理」页面添加",
                 style    = MaterialTheme.typography.labelSmall,
                 color    = FluentAmber,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
 
         FluentTextField("班级编号", code, { code = it })
 
         if (initial != null && state.students.isNotEmpty()) {
             SectionHeader("班级学生")
-            Text(
-                "勾选属于此班级的学生",
+            Text("勾选属于此班级的学生",
                 style    = MaterialTheme.typography.bodySmall,
                 color    = FluentMuted,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+                modifier = Modifier.padding(horizontal = 16.dp))
             androidx.compose.foundation.layout.FlowRow(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier              = Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement   = Arrangement.spacedBy(4.dp)
             ) {
@@ -259,9 +260,7 @@ private fun ClassFormDialog(
                         selected = isSelected,
                         onClick  = {
                             selectedStudents = if (isSelected)
-                                selectedStudents - s.id
-                            else
-                                selectedStudents + s.id
+                                selectedStudents - s.id else selectedStudents + s.id
                         },
                         label = { Text(s.name) }
                     )

@@ -45,7 +45,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
         text     = title,
         style    = MaterialTheme.typography.labelMedium,
         color    = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 3.dp)   // ← was 6.dp
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 3.dp)
     )
 }
 
@@ -60,17 +60,55 @@ fun ColorChip(text: String, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-// ─── Detail Row ───────────────────────────────────────────────────────────────
+// ─── Detail Row (single, full-width) ─────────────────────────────────────────
 
 @Composable
 fun DetailRow(label: String, value: String, modifier: Modifier = Modifier) {
     Row(
-        modifier              = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),  // ← was 8.dp
+        modifier              = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+    HorizontalDivider(color = FluentBorder, thickness = 0.5.dp,
+        modifier = Modifier.padding(horizontal = 16.dp))
+}
+
+// ─── Detail Row Pair (two short items side by side) ───────────────────────────
+
+@Composable
+fun DetailRowPair(
+    label1: String, value1: String,
+    label2: String, value2: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 5.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label1,
+                style  = MaterialTheme.typography.bodyMedium,
+                color  = FluentMuted)
+            Text(value1,
+                style      = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines   = 1,
+                overflow   = TextOverflow.Ellipsis)
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label2,
+                style  = MaterialTheme.typography.bodyMedium,
+                color  = FluentMuted)
+            Text(value2,
+                style      = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines   = 1,
+                overflow   = TextOverflow.Ellipsis)
+        }
     }
     HorizontalDivider(color = FluentBorder, thickness = 0.5.dp,
         modifier = Modifier.padding(horizontal = 16.dp))
@@ -119,7 +157,7 @@ fun FluentDialog(
         text = {
             Column(
                 modifier            = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp),   // ← was 10.dp
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 content             = content
             )
         },

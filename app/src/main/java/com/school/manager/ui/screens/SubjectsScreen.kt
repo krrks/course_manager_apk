@@ -96,7 +96,6 @@ private fun SubjectRow(
         ) {
             Box(Modifier.width(4.dp).height(52.dp)
                 .clip(RoundedCornerShape(2.dp)).background(color))
-
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -111,7 +110,6 @@ private fun SubjectRow(
                     }
                 }
             }
-
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SubjectStatChip("课次 $totalCount", color)
                 SubjectStatChip("完成 $doneCount",  color)
@@ -129,7 +127,7 @@ private fun SubjectStatChip(label: String, color: Color) {
     }
 }
 
-// ─── Detail dialog (teacher removed per requirement) ─────────────────────────
+// ─── Detail dialog ────────────────────────────────────────────────────────────
 
 @Composable
 private fun SubjectDetailDialog(
@@ -142,11 +140,14 @@ private fun SubjectDetailDialog(
     val doneCount = state.lessons.count { l ->
         state.classes.find { it.id == l.classId }?.subjectId == s.id && l.status == "completed"
     }
+
     FluentDialog(title = "科目详情", onDismiss = onDismiss) {
         if (s.code.isNotBlank()) DetailRow("编号", s.code)
         DetailRow("科目名称", s.name)
-        DetailRow("课次总数", "$totalCount 节")
-        DetailRow("已完成",   "$doneCount 节")
+
+        // 课次总数 + 已完成 — both short counts, pair them
+        DetailRowPair("课次总数", "$totalCount 节", "已完成", "$doneCount 节")
+
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onEdit,   shape = RoundedCornerShape(12.dp),

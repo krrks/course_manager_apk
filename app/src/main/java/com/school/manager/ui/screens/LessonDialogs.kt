@@ -31,14 +31,18 @@ internal fun LessonDetailDialog(
     val ats     = l.attendees.mapNotNull { vm.student(it) }
     val (done, total) = progressMap[l.classId] ?: (0 to 0)
 
-    // Local state for status dropdown
     var statusExpanded by remember { mutableStateOf(false) }
 
     FluentDialog(title = "课次详情", onDismiss = onDismiss) {
         if (l.code.isNotBlank()) DetailRow("编号", l.code)
         DetailRow("班级", cls?.name ?: "─")
-        DetailRow("科目", sub?.name ?: "─")
-        DetailRow("教师", teacher?.name ?: "─")
+
+        // 科目 + 教师 — two short values, side by side
+        DetailRowPair(
+            label1 = "科目", value1 = sub?.name     ?: "─",
+            label2 = "教师", value2 = teacher?.name ?: "─"
+        )
+
         if (l.teacherIdOverride != null) {
             Surface(
                 shape    = RoundedCornerShape(6.dp),
@@ -50,8 +54,16 @@ internal fun LessonDetailDialog(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
             }
         }
-        DetailRow("日期", l.date)
-        if (l.startTime.isNotBlank()) DetailRow("时间", "${l.startTime} – ${l.endTime}")
+
+        // 日期 + 时间 — side by side when time is present, alone when absent
+        if (l.startTime.isNotBlank()) {
+            DetailRowPair(
+                label1 = "日期", value1 = l.date,
+                label2 = "时间", value2 = "${l.startTime} – ${l.endTime}"
+            )
+        } else {
+            DetailRow("日期", l.date)
+        }
 
         // ── Compact progress row ──────────────────────────────────────────
         if (total > 0) {
@@ -207,7 +219,6 @@ internal fun LessonFormDialog(
             attendees = emptyList()
             teacherOverrideId = state.classes.firstOrNull { it.name == name }?.headTeacherId
         }
-        // ── Compact subject badge ─────────────────────────────────────────
         selectedClass?.resolvedSubject(state.subjects)?.let { sub ->
             Row(Modifier.padding(horizontal = 16.dp),
                 verticalAlignment     = Alignment.CenterVertically,
@@ -241,7 +252,7 @@ internal fun LessonFormDialog(
             SectionHeader("出勤学生")
             androidx.compose.foundation.layout.FlowRow(
                 Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),  // ← was 6.dp
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement   = Arrangement.spacedBy(4.dp)
             ) {
                 classStudents.forEach { s ->
