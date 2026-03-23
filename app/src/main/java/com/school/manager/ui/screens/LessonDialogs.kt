@@ -1,7 +1,10 @@
 package com.school.manager.ui.screens
 
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -28,6 +31,9 @@ internal fun LessonDetailDialog(
     val ats     = l.attendees.mapNotNull { vm.student(it) }
     val (done, total) = progressMap[l.classId] ?: (0 to 0)
 
+    // Local state for status dropdown
+    var statusExpanded by remember { mutableStateOf(false) }
+
     FluentDialog(title = "课次详情", onDismiss = onDismiss) {
         if (l.code.isNotBlank()) DetailRow("编号", l.code)
         DetailRow("班级", cls?.name ?: "─")
@@ -46,62 +52,81 @@ internal fun LessonDetailDialog(
         }
         DetailRow("日期", l.date)
         if (l.startTime.isNotBlank()) DetailRow("时间", "${l.startTime} – ${l.endTime}")
+
+        // ── Compact progress row ──────────────────────────────────────────
         if (total > 0) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("上课进度", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-                Text("已完成 $done / $total 节",
-                    style      = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color      = statusColor("completed"))
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("上课进度", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
+                    Text("$done / $total 节",
+                        style      = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = statusColor("completed"))
+                }
+                Spacer(Modifier.height(3.dp))
+                FluentProgressBar(done.toFloat() / total, statusColor("completed"), Modifier.fillMaxWidth())
             }
-            FluentProgressBar(
-                if (total > 0) done.toFloat() / total else 0f,
-                statusColor("completed"),
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            )
-            HorizontalDivider(
-                color    = FluentBorder, thickness = 0.5.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            HorizontalDivider(color = FluentBorder, thickness = 0.5.dp,
+                modifier = Modifier.padding(horizontal = 16.dp))
         }
+
+        // ── Status row with inline dropdown ───────────────────────────────
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.CenterVertically
         ) {
             Text("状态", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
-            StatusChip(l.status)
+            Box {
+                Row(
+                    Modifier.clickable { statusExpanded = true },
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    StatusChip(l.status)
+                    Icon(Icons.Default.ArrowDropDown, null,
+                        tint     = statusColor(l.status),
+                        modifier = Modifier.size(14.dp))
+                }
+                DropdownMenu(
+                    expanded         = statusExpanded,
+                    onDismissRequest = { statusExpanded = false }
+                ) {
+                    listOf("pending", "completed", "absent", "cancelled", "postponed").forEach { s ->
+                        DropdownMenuItem(
+                            text    = {
+                                Text(statusLabel(s), color = statusColor(s),
+                                    fontWeight = FontWeight.SemiBold)
+                            },
+                            onClick = {
+                                vm.updateLesson(l.copy(status = s), markModified = true)
+                                statusExpanded = false
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
+            }
         }
+        HorizontalDivider(color = FluentBorder, thickness = 0.5.dp,
+            modifier = Modifier.padding(horizontal = 16.dp))
+
         if (l.topic.isNotBlank()) DetailRow("课题", l.topic)
         if (l.notes.isNotBlank()) DetailRow("备注", l.notes)
         if (l.isModified) DetailRow("标记", "已单独修改")
+
         if (ats.isNotEmpty()) {
             SectionHeader("出勤学生 (${ats.size}人)")
             androidx.compose.foundation.layout.FlowRow(
                 Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement   = Arrangement.spacedBy(4.dp)
             ) { ats.forEach { s -> ColorChip(s.name, FluentGreen) } }
         }
-        Spacer(Modifier.height(8.dp))
-        SectionHeader("快速更改状态")
-        androidx.compose.foundation.layout.FlowRow(
-            Modifier.padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement   = Arrangement.spacedBy(6.dp)
-        ) {
-            listOf("pending", "completed", "absent", "cancelled", "postponed").forEach { s ->
-                FilterChip(
-                    selected = l.status == s,
-                    onClick  = { vm.updateLesson(l.copy(status = s), markModified = true); onDismiss() },
-                    label    = { Text(statusLabel(s), style = MaterialTheme.typography.labelSmall) },
-                    colors   = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = statusColor(s),
-                        selectedLabelColor     = Color.White)
-                )
-            }
-        }
+
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onEdit, shape = RoundedCornerShape(12.dp),
@@ -182,12 +207,13 @@ internal fun LessonFormDialog(
             attendees = emptyList()
             teacherOverrideId = state.classes.firstOrNull { it.name == name }?.headTeacherId
         }
+        // ── Compact subject badge ─────────────────────────────────────────
         selectedClass?.resolvedSubject(state.subjects)?.let { sub ->
-            Surface(shape = RoundedCornerShape(8.dp), color = FluentPurple.copy(0.1f)) {
-                Text("科目：${sub.name}",
-                    style      = MaterialTheme.typography.bodySmall,
-                    color      = FluentPurple, fontWeight = FontWeight.SemiBold,
-                    modifier   = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+            Row(Modifier.padding(horizontal = 16.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("科目", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+                ColorChip(sub.name, FluentPurple)
             }
         }
         FormDropdown(
@@ -215,7 +241,8 @@ internal fun LessonFormDialog(
             SectionHeader("出勤学生")
             androidx.compose.foundation.layout.FlowRow(
                 Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),  // ← was 6.dp
+                verticalArrangement   = Arrangement.spacedBy(4.dp)
             ) {
                 classStudents.forEach { s ->
                     val on = attendees.contains(s.id)

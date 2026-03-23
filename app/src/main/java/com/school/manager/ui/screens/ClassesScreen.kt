@@ -72,9 +72,9 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                                 if (subjectDisplay != null) "   📚 $subjectDisplay" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
                             LinearProgressIndicator(
-                                progress  = { if (cls.count > 0) sts.size.toFloat() / cls.count else 0f },
-                                modifier  = Modifier.fillMaxWidth().height(4.dp),
-                                color     = gradeCol,
+                                progress   = { if (cls.count > 0) sts.size.toFloat() / cls.count else 0f },
+                                modifier   = Modifier.fillMaxWidth().height(4.dp),
+                                color      = gradeCol,
                                 trackColor = gradeCol.copy(alpha = 0.15f),
                             )
                             Text("${sts.size} / ${cls.count} 人",
@@ -229,18 +229,13 @@ private fun ClassFormDialog(
                 )
             }
         } else {
-            Surface(
-                shape    = RoundedCornerShape(12.dp),
-                color    = FluentAmber.copy(alpha = 0.1f),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            ) {
-                Text(
-                    "暂无科目，请先在「科目管理」页面添加科目",
-                    style    = MaterialTheme.typography.bodySmall,
-                    color    = FluentAmber,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
+            // ── Compact warning (was a full-width Surface) ────────────────
+            Text(
+                "⚠️ 暂无科目，请先在「科目管理」页面添加",
+                style    = MaterialTheme.typography.labelSmall,
+                color    = FluentAmber,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
         }
 
         FluentTextField("班级编号", code, { code = it })

@@ -71,20 +71,29 @@ internal fun BatchGenerateDialog(
                                 else state.teachers.firstOrNull { it.name == picked }?.id
         }
 
-        SectionHeader("重复类型")
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // ── Recurrence type — inline label ────────────────────────────────
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text("重复", style = MaterialTheme.typography.labelSmall,
+                color = FluentMuted, modifier = Modifier.padding(end = 2.dp))
             listOf("WEEKLY" to "每周", "DAILY" to "连续每天", "ONCE" to "单次").forEach { (v, label) ->
                 FilterChip(selected = recType == v, onClick = { recType = v },
                     label = { Text(label) })
             }
         }
 
+        // ── Day of week — inline label ────────────────────────────────────
         if (recType == "WEEKLY") {
-            SectionHeader("星期")
             Row(
                 Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState()),
+                verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                Text("星期", style = MaterialTheme.typography.labelSmall,
+                    color = FluentMuted, modifier = Modifier.padding(end = 2.dp))
                 DAYS.forEachIndexed { i, d ->
                     FilterChip(selected = dayOfWeek == i + 1, onClick = { dayOfWeek = i + 1 },
                         label = { Text("周$d") })
@@ -115,12 +124,12 @@ internal fun BatchGenerateDialog(
         }
         DurationChipsCompact(startTime, endTime) { endTime = it }
 
+        // ── Skip dates — no header, button is self-describing ─────────────
         if (recType != "ONCE") {
-            SectionHeader("跳过日期")
             ExcludeDatePicker(excludeSet) { date -> excludeSet = excludeSet + date }
             if (excludeSet.isNotEmpty()) {
                 androidx.compose.foundation.layout.FlowRow(
-                    modifier              = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    modifier              = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement   = Arrangement.spacedBy(4.dp)
                 ) {
@@ -138,7 +147,7 @@ internal fun BatchGenerateDialog(
             } else {
                 Text("暂未跳过任何日期",
                     style    = MaterialTheme.typography.bodySmall, color = FluentMuted,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
             }
         }
     }
@@ -209,7 +218,8 @@ internal fun BatchModifyDialog(
             onDismiss()
         }
     ) {
-        Text("默认不修改今天之前的课次。留空表示不修改该字段。",
+        // Merged hint — no separate SectionHeader for time fields
+        Text("时间留空表示不修改，默认跳过今天之前的课次。",
             style    = MaterialTheme.typography.bodySmall, color = FluentMuted,
             modifier = Modifier.padding(horizontal = 16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -217,7 +227,7 @@ internal fun BatchModifyDialog(
             Box(Modifier.weight(1f)) { DatePickerField("开始日期", fromDate) { fromDate = it } }
             Box(Modifier.weight(1f)) { DatePickerField("结束日期", toDate)   { toDate   = it } }
         }
-        SectionHeader("修改时间（留空则不修改）")
+        // Time fields directly — label comes from StartTimeCompact's own OutlinedTextField
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) { StartTimeCompact(newStart.ifBlank { "08:00" }) { newStart = it } }
@@ -272,7 +282,7 @@ internal fun BatchDeleteDialog(
             modifier = Modifier.fillMaxWidth()) {
             Text("⚠️ 此操作不可撤销！将删除 $targetCount 节课次。",
                 style    = MaterialTheme.typography.bodySmall, color = FluentRed,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))  // ← was 12/8
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {

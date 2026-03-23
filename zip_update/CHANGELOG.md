@@ -1,24 +1,37 @@
 #!build
-# 课程日历：缩放、更多信息、列表星期字段
+# 对话框布局精简：减少空间占用
 
-## 1. 周视图 / 日视图 — FAB 缩放按钮
-- 新增 4 档缩放：60 / 80（默认）/ 100 / 120 dp/小时
-- 仅在 week / day 视图时在 FAB 菜单中显示「放大」「缩小」按钮
+## 全局
+- `FluentDialog` 列间距 10→6 dp
+- `DetailRow` 上下内边距 8→5 dp
+- `SectionHeader` 上下内边距 6→3 dp
 
-## 2. 周视图格子 — 增加班级名称
-- 在科目 / 时间 / 课次三行之后追加班级名称（小字，截断）
+## LessonDetailDialog
+- 「快速更改状态」FlowRow（5 个 FilterChip，~80-100 dp）移除
+- 状态行改为内联下拉菜单（点击 StatusChip 旁的箭头即可更改）
+- 上课进度块合并为紧凑 Column（原来的独立进度条行 + 分隔线折叠进同一容器）
 
-## 3. 日视图格子 — 增加出勤人数 + 备注
-- 出勤人数：`👥 N 人出勤`（有出勤记录时显示）
-- 备注预览：`💬 ...`（备注非空时显示，单行截断）
+## LessonFormDialog
+- 科目 Surface badge（独占一行）改为紧凑的 `Text + ColorChip` 行
+- 出勤学生 FlowRow 水平间距 6→4 dp
 
-## 4. 列表视图 — 日期列增加星期字段
-- 日期列（日 / 月）下方新增第三行：`周X`（蓝色加粗小字）
+## BatchGenerateDialog
+- 移除「重复类型」SectionHeader，改为行内「重复」小标签
+- 移除「星期」SectionHeader，改为行内标签
+- 移除「跳过日期」SectionHeader（按钮文字已自解释）
+
+## BatchModifyDialog
+- 移除「修改时间（留空则不修改）」SectionHeader
+- 合并提示文字为单行
+
+## BatchDeleteDialog
+- 警告 Surface 内边距 12/8→10/6 dp
+
+## ClassFormDialog
+- 「暂无科目」全宽 Surface 改为单行 labelSmall 提示文字
 
 ## 文件变更
-- `LessonTimeHelpers.kt`：DP_PER_HOUR 改为 ZOOM_LEVELS 档位常量；
-  minuteOffsetDp / durationDp / calTotalHeight 接受 dpPerHour 参数
-- `LessonViews.kt`：WeekView 接受 dpPerHour；DayView 迁出至新文件
-- `LessonDayView.kt`：新文件，承接 DayView，增加出勤 + 备注行
-- `LessonScreen.kt`：zoomIdx 状态；FAB 缩放按钮；传 dpPerHour
-- `LessonListView.kt`：LessonCard 日期列加星期行
+- `app/src/main/java/com/school/manager/ui/components/CommonComponents.kt`
+- `app/src/main/java/com/school/manager/ui/screens/LessonDialogs.kt`
+- `app/src/main/java/com/school/manager/ui/screens/LessonBatchDialogs.kt`
+- `app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt`

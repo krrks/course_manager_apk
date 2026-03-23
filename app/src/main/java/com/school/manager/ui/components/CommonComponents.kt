@@ -45,7 +45,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
         text     = title,
         style    = MaterialTheme.typography.labelMedium,
         color    = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 3.dp)   // ← was 6.dp
     )
 }
 
@@ -65,7 +65,7 @@ fun ColorChip(text: String, color: Color, modifier: Modifier = Modifier) {
 @Composable
 fun DetailRow(label: String, value: String, modifier: Modifier = Modifier) {
     Row(
-        modifier              = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier              = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),  // ← was 8.dp
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
@@ -96,9 +96,9 @@ fun EmptyState(icon: String = "📭", text: String = "暂无数据", modifier: M
 @Composable
 fun FluentProgressBar(progress: Float, color: Color, modifier: Modifier = Modifier) {
     LinearProgressIndicator(
-        progress  = { progress.coerceIn(0f, 1f) },
-        modifier  = modifier.height(4.dp).clip(RoundedCornerShape(2.dp)),
-        color     = color,
+        progress   = { progress.coerceIn(0f, 1f) },
+        modifier   = modifier.height(4.dp).clip(RoundedCornerShape(2.dp)),
+        color      = color,
         trackColor = color.copy(alpha = 0.15f)
     )
 }
@@ -119,7 +119,7 @@ fun FluentDialog(
         text = {
             Column(
                 modifier            = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),   // ← was 10.dp
                 content             = content
             )
         },
