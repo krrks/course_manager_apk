@@ -21,9 +21,18 @@ import com.school.manager.viewmodel.AppViewModel
 @Composable
 fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
     val state   by vm.state.collectAsState()
-    var showAdd by remember { mutableStateOf(false) }
-    var viewing by remember { mutableStateOf<SchoolClass?>(null) }
-    var editing by remember { mutableStateOf<SchoolClass?>(null) }
+    var showAdd  by remember { mutableStateOf(false) }
+    var viewing  by remember { mutableStateOf<SchoolClass?>(null) }
+    var editing  by remember { mutableStateOf<SchoolClass?>(null) }
+    var fGrade   by remember { mutableStateOf("") }
+    var fTeacher by remember { mutableLongStateOf(0L) }
+    var fSubject by remember { mutableLongStateOf(0L) }
+
+    val filtered = state.classes.filter { cls ->
+        (fGrade.isBlank() || cls.grade == fGrade) &&
+        (fTeacher == 0L   || cls.headTeacherId == fTeacher) &&
+        (fSubject == 0L   || cls.subjectId == fSubject)
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -35,19 +44,58 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
             )
         }
     ) { inner ->
-        LazyColumn(
-            contentPadding = PaddingValues(
-                top    = inner.calculateTopPadding() + 8.dp,
-                bottom = inner.calculateBottomPadding() + 80.dp,
-                start  = 12.dp, end = 12.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxSize()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding())
         ) {
-            if (state.classes.isEmpty()) {
-                item { EmptyState("🏫", "暂无班级") }
-            } else {
-                items(state.classes) { cls ->
+            // ── 筛选行 ────────────────────────────────────────────────────
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                DropdownFilterChip(
+                    allLabel = "全部年级",
+                    items    = GRADES.mapIndexed { i, g -> (i + 1).toLong() to g },
+                    selected = GRADES.indexOf(fGrade).let { if (it < 0) 0L else (it + 1).toLong() }
+                ) { idx -> fGrade = if (idx == 0L) "" else GRADES.getOrElse((idx - 1).toInt()) { "" } }
+                if (state.teachers.isNotEmpty()) {
+                    DropdownFilterChip(
+                        allLabel = "全部教师",
+                        items    = state.teachers.map { it.id to it.name },
+                        selected = fTeacher
+                    ) { fTeacher = it }
+                }
+                if (state.subjects.isNotEmpty()) {
+                    DropdownFilterChip(
+                        allLabel = "全部科目",
+                        items    = state.subjects.map { it.id to it.name },
+                        selected = fSubject
+                    ) { fSubject = it }
+                }
+            }
+            Text(
+                text     = "共 ${filtered.size} 个班级",
+                style    = MaterialTheme.typography.labelMedium,
+                color    = FluentMuted,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+            )
+            LazyColumn(
+                contentPadding      = PaddingValues(
+                    top    = 4.dp,
+                    bottom = 80.dp,
+                    start  = 12.dp, end = 12.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier            = Modifier.fillMaxSize()
+            ) {
+                if (filtered.isEmpty()) {
+                    item { EmptyState("🏫", "暂无班级") }
+                } else {
+                    items(filtered) { cls ->
                     val sts      = state.students.filter { s -> s.classIds.contains(cls.id) }
                     val gradeCol = gradeColor(cls.grade)
                     val subjectDisplay = cls.resolvedSubject(state.subjects)?.name
@@ -85,6 +133,7 @@ fun ClassesScreen(vm: AppViewModel, onOpenDrawer: () -> Unit) {
                         }
                     }
                 }
+            }
             }
         }
     }
