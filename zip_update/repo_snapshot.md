@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-23T08:51:38Z`
-> Commit:  `e9cc7a99dfd698f0c8bea706e589f2a9c746a5f8`
+> Updated: `2026-03-23T08:57:01Z`
+> Commit:  `eafe21a6b4ca5fd3d10a6b1a176d956a23d5ed9e`
 
 ```
 ./.github/workflows/build.yml
@@ -57,6 +57,7 @@
 ./build.gradle.kts
 ./docs/readme_ai_rules.md
 ./docs/readme_build.md
+./docs/readme_deprecated.md
 ./docs/readme_header.md
 ./docs/readme_order.txt
 ./docs/readme_structure.md
