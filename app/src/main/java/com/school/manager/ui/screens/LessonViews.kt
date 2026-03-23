@@ -2,8 +2,6 @@ package com.school.manager.ui.screens
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -195,16 +193,16 @@ internal fun MonthView(
                     color = FluentMuted, textAlign = TextAlign.Center)
             }
         }
-        LazyColumn(Modifier.fillMaxSize()) {
-            val rows = ((offset + days) + 6) / 7
-            items(rows) { row ->
-                Row(Modifier.fillMaxWidth()) {
+        val rows = ((offset + days) + 6) / 7
+        Column(Modifier.fillMaxSize()) {
+            repeat(rows) { row ->
+                Row(Modifier.fillMaxWidth().weight(1f)) {
                     for (col in 0..6) {
                         val idx = row * 7 + col
                         val day = if (idx < offset || idx >= offset + days) null
                                   else first.plusDays((idx - offset).toLong())
                         Box(
-                            Modifier.weight(1f).height(68.dp)
+                            Modifier.weight(1f).fillMaxHeight()
                                 .border(0.25.dp, FluentBorder)
                                 .background(
                                     if (day == LocalDate.now()) FluentBlue.copy(0.08f)
@@ -242,7 +240,6 @@ internal fun MonthView(
                     }
                 }
             }
-            item { Spacer(Modifier.height(80.dp)) }
         }
     }
 }

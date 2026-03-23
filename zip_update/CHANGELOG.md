@@ -1,9 +1,9 @@
-#!no-build
-# 新增 deprecated 符号记录文档
+#!build
+# MonthView：月视图撑满全屏
 
-新增 docs/readme_deprecated.md，记录 AI 使用过的 deprecated 函数/符号及推荐替代写法，
-避免后续重复使用。更新 docs/readme_order.txt 将其合并进 README。
+将月视图的日期行由固定 68dp 高度改为 weight(1f) 均分，
+LazyColumn 替换为普通 Column，格子改用 fillMaxHeight()，
+月份网格现在自动占满整个屏幕高度。
 
-当前记录：
-- Icons.Outlined.MenuBook → Icons.AutoMirrored.Outlined.MenuBook
-- menuAnchor() (no-arg) → menuAnchor(MenuAnchorType.PrimaryNotEditable)
+## 文件变更
+- `app/src/main/java/com/school/manager/ui/screens/LessonViews.kt`
