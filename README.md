@@ -388,3 +388,14 @@ When executing Step 3 (code generation), the AI **must not interleave extended r
 **To update the README**, edit the relevant `docs/*.md` file and include it in the patch ZIP. The workflow will regenerate `README.md` automatically on the next build.
 
 **Never include `README.md` directly in a patch ZIP** — it will be overwritten by the workflow anyway.
+## Deprecated Symbols
+
+This section tracks deprecated functions and symbols that have appeared in build warnings.
+AI must avoid using these and prefer the listed replacements.
+
+| Deprecated | Replacement | File / Context | Source |
+|------------|-------------|----------------|--------|
+| `Icons.Outlined.MenuBook` | `Icons.AutoMirrored.Outlined.MenuBook` | `Navigation.kt` — Subjects screen icon | Build warning v1.029 |
+| `ExposedDropdownMenuBox` + `.menuAnchor()` (no-arg) | `.menuAnchor(MenuAnchorType.PrimaryNotEditable)` | `CommonComponents.kt`, `FluentComponentAliases.kt` — dropdowns | Kapt warning |
+
+---
