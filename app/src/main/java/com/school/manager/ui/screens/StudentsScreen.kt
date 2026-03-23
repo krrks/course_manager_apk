@@ -3,9 +3,11 @@ package com.school.manager.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -138,10 +140,7 @@ private fun StudentDetailDialog(
         }
         DetailRow("姓名",   s.name)
         DetailRow("学号",   s.studentNo)
-
-        // 性别 + 年级 — both short, pair them
         DetailRowPair("性别", s.gender, "年级", s.grade)
-
         DetailRow("出勤课次", "$attended 节")
 
         if (classes.isNotEmpty()) {
@@ -175,6 +174,7 @@ private fun StudentFormDialog(
     var grade     by remember { mutableStateOf(initial?.grade     ?: GRADES[0]) }
     var selClass  by remember { mutableStateOf(initial?.classIds?.toSet() ?: emptySet<Long>()) }
     var avatarUri by remember { mutableStateOf<String?>(initial?.avatarUri) }
+    var showClassPicker by remember { mutableStateOf(false) }
 
     val context  = LocalContext.current
     val entityId = initial?.id ?: System.currentTimeMillis()
@@ -196,6 +196,7 @@ private fun StudentFormDialog(
             ))
         }
     }) {
+        // ── 头像 ──────────────────────────────────────────────────────────
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
             Box {
                 AvatarWithImage(name = name.ifBlank { "?" },
@@ -209,21 +210,220 @@ private fun StudentFormDialog(
                 }
             }
         }
-        FormTextField("姓名",  name,      { name      = it })
-        FormTextField("学号",  studentNo, { studentNo = it }, "留空则自动生成")
-        FormDropdown("性别", gender, listOf("男", "女")) { gender = it }
-        FormDropdown("年级", grade,  GRADES)              { grade  = it }
+
+        // ── Row 1: 姓名 (1/2) + 学号 (1/2) ──────────────────────────────
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top
+        ) {
+            Box(Modifier.weight(1f)) { FormTextField("姓名", name, { name = it }) }
+            Box(Modifier.weight(1f)) { FormTextField("学号", studentNo, { studentNo = it }, "留空自动生成") }
+        }
+
+        // ── Row 2: 性别 (1/2) + 年级 (1/2) ──────────────────────────────
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top
+        ) {
+            Box(Modifier.weight(1f)) { FormDropdown("性别", gender, listOf("男", "女")) { gender = it } }
+            Box(Modifier.weight(1f)) { FormDropdown("年级", grade, GRADES) { grade = it } }
+        }
+
+        // ── 班级选择摘要行 ────────────────────────────────────────────────
         if (state.classes.isNotEmpty()) {
-            SectionHeader("所在班级（可多选）")
-            androidx.compose.foundation.layout.FlowRow(
-                Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement   = Arrangement.spacedBy(4.dp)) {
-                state.classes.forEach { cls ->
-                    val on = selClass.contains(cls.id)
-                    FilterChip(selected = on, onClick = {
-                        selClass = if (on) selClass - cls.id else selClass + cls.id
-                    }, label = { Text(cls.name) })
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("所在班级", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("已选 ${selClass.size} 个",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = FluentBlue, fontWeight = FontWeight.SemiBold)
+                }
+                TextButton(
+                    onClick        = { showClassPicker = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text("选择", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            // 已选班级 chips（最多 6 个，超出显示 +N）
+            if (selClass.isNotEmpty()) {
+                val selectedList = state.classes.filter { it.id in selClass }
+                val displayList  = selectedList.take(6)
+                val overflow     = selectedList.size - displayList.size
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier              = Modifier.padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement   = Arrangement.spacedBy(4.dp)
+                ) {
+                    displayList.forEach { cl -> ColorChip(cl.name, FluentBlue) }
+                    if (overflow > 0) ColorChip("+$overflow 个", FluentMuted)
+                }
+            }
+        }
+    }
+
+    // ── 班级选择 Sheet ────────────────────────────────────────────────────
+    if (showClassPicker) {
+        ClassPickerSheet(
+            allClasses  = state.classes,
+            allSubjects = state.subjects,
+            selected    = selClass,
+            onConfirm   = { selClass = it; showClassPicker = false },
+            onDismiss   = { showClassPicker = false }
+        )
+    }
+}
+
+// ── Class picker bottom sheet ─────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ClassPickerSheet(
+    allClasses: List<SchoolClass>,
+    allSubjects: List<Subject>,
+    selected: Set<Long>,
+    onConfirm: (Set<Long>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var draft      by remember { mutableStateOf(selected) }
+    var fGrade     by remember { mutableStateOf("") }
+    var query      by remember { mutableStateOf("") }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val filtered = allClasses.filter { c ->
+        (fGrade.isBlank() || c.grade == fGrade) &&
+        (query.isBlank()  || c.name.contains(query, ignoreCase = true))
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState       = sheetState,
+        shape            = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // ── 标题 + 确定 ────────────────────────────────────────────────
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Text("选择班级",
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = { onConfirm(draft) },
+                    shape   = RoundedCornerShape(10.dp),
+                    colors  = ButtonDefaults.buttonColors(containerColor = FluentBlue)
+                ) { Text("确定（${draft.size} 个）") }
+            }
+
+            HorizontalDivider(color = FluentBorder)
+
+            // ── 年级筛选 chips ─────────────────────────────────────────────
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                FilterChip(
+                    selected = fGrade.isBlank(),
+                    onClick  = { fGrade = "" },
+                    label    = { Text("全部") }
+                )
+                GRADES.forEach { g ->
+                    FilterChip(
+                        selected = fGrade == g,
+                        onClick  = { fGrade = if (fGrade == g) "" else g },
+                        label    = { Text(g) }
+                    )
+                }
+            }
+
+            // ── 搜索框 ────────────────────────────────────────────────────
+            OutlinedTextField(
+                value         = query,
+                onValueChange = { query = it },
+                label         = { Text("搜索班级名称") },
+                singleLine    = true,
+                shape         = RoundedCornerShape(12.dp),
+                modifier      = Modifier.fillMaxWidth(),
+                colors        = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor   = FluentBlue,
+                    unfocusedBorderColor = FluentBorder
+                )
+            )
+
+            // ── 全选 / 取消全选 / 清空 ────────────────────────────────────
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val filteredIds = filtered.map { it.id }.toSet()
+                val allChecked  = filteredIds.isNotEmpty() && filteredIds.all { it in draft }
+                OutlinedButton(
+                    onClick  = { draft = if (allChecked) draft - filteredIds else draft + filteredIds },
+                    shape    = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (allChecked) "取消全选" else "全选（${filtered.size}）") }
+                if (draft.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick  = { draft = emptySet() },
+                        shape    = RoundedCornerShape(10.dp),
+                        colors   = ButtonDefaults.outlinedButtonColors(contentColor = FluentRed),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("清空已选") }
+                }
+            }
+
+            // ── 班级列表 ──────────────────────────────────────────────────
+            if (filtered.isEmpty()) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center) {
+                    Text("没有符合条件的班级", color = FluentMuted,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                LazyColumn(
+                    modifier            = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(filtered, key = { it.id }) { cls ->
+                        val checked     = cls.id in draft
+                        val subjectName = cls.resolvedSubject(allSubjects)?.name
+                        Row(
+                            modifier              = Modifier
+                                .fillMaxWidth()
+                                .clickable { draft = if (checked) draft - cls.id else draft + cls.id }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Checkbox(
+                                checked         = checked,
+                                onCheckedChange = { draft = if (checked) draft - cls.id else draft + cls.id }
+                            )
+                            Text(cls.name,
+                                style    = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f))
+                            ColorChip(cls.grade, FluentGreen)
+                            if (subjectName != null) ColorChip(subjectName, FluentBlue)
+                        }
+                    }
+                    item { Spacer(Modifier.height(8.dp)) }
                 }
             }
         }
