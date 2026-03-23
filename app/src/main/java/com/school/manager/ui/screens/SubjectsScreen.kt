@@ -181,8 +181,17 @@ private fun SubjectFormDialog(
                 name.trim(), SUBJECT_COLORS[colorIdx], tId, code.trim()))
         }
     }) {
-        FluentTextField("科目编号", code, { code = it })
-        FluentTextField("科目名称", name, { name = it })
+        // ── 行1: 科目名称 (3/5) + 科目编号 (2/5) ─────────────────────────
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top
+        ) {
+            Box(Modifier.weight(3f)) { FluentTextField("科目名称", name, { name = it }) }
+            Box(Modifier.weight(2f)) { FluentTextField("编号",    code, { code = it }) }
+        }
+
+        // ── 行2: 主讲教师（全宽）────────────────────────────────────────
         DropdownField("主讲教师", teacher, listOf("") + state.teachers.map { it.name }) { teacher = it }
 
         SectionHeader("颜色")

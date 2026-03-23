@@ -1,12 +1,18 @@
 #!build
-# ClassesScreen：班级列表新增年级/教师/科目筛选
+# Form Dialog UI：短字段合并为双列，布局更紧凑
 
-参考学生页面，在班级列表顶部新增横向可滚动筛选行：
-- 年级筛选（全部年级 / 高一…初三）
-- 教师筛选（全部教师 / 各教师）
-- 科目筛选（全部科目 / 各科目）
+## 改动内容
 
-三个筛选条件叠加生效，筛选行下方显示「共 X 个班级」计数。
+### LessonDialogs.kt — LessonFormDialog
+- 科目只读展示 + 教师 dropdown 合并为一行（各 1/2）
+- 无科目时教师仍独占全宽（fallback 不变）
 
-## 文件变更
-- `app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt`
+### TeachersScreen.kt — TeacherFormDialog
+- 性别 dropdown (1/3) + 手机输入框 (2/3) 合并为一行
+
+### SubjectsScreen.kt — SubjectFormDialog
+- 科目名称 (3/5) + 科目编号 (2/5) 合并为一行
+
+### ClassesScreen.kt — ClassFormDialog
+- 教师 dropdown (1/2) + 科目 dropdown (1/2) 合并为一行
+- 科目提示文字保持全宽显示在行下方

@@ -212,6 +212,7 @@ private fun TeacherFormDialog(
             ))
         }
     }) {
+        // 头像
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
             Box {
                 AvatarWithImage(name = name.ifBlank { "?" },
@@ -225,9 +226,25 @@ private fun TeacherFormDialog(
                 }
             }
         }
-        FormTextField("姓名", name,  { name  = it })
-        FormDropdown("性别", gender, listOf("男", "女")) { gender = it }
-        FormTextField("手机", phone, { phone = it })
+
+        // ── 行1: 姓名（全宽）────────────────────────────────────────────
+        FormTextField("姓名", name, { name = it })
+
+        // ── 行2: 性别 (1/3) + 手机 (2/3) ────────────────────────────────
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top
+        ) {
+            Box(Modifier.weight(1f)) {
+                FormDropdown("性别", gender, listOf("男", "女")) { gender = it }
+            }
+            Box(Modifier.weight(2f)) {
+                FormTextField("手机", phone, { phone = it })
+            }
+        }
+
+        // ── 行3: 教师编号（全宽）────────────────────────────────────────
         FormTextField("教师编号", code, { code = it })
     }
 }

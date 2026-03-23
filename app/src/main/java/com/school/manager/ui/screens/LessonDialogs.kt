@@ -205,6 +205,7 @@ internal fun LessonFormDialog(
             ))
         }
     }) {
+        // ── 行1: 编号 (1/2) + 状态 (1/2) ─────────────────────────────────
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) { FormTextField("编号", code, { code = it }, "自动生成") }
@@ -213,28 +214,76 @@ internal fun LessonFormDialog(
                     listOf("pending", "completed", "absent", "cancelled", "postponed")) { status = it }
             }
         }
+
+        // ── 行2: 班级（全宽）─────────────────────────────────────────────
         FormDropdown("班级", selectedClass?.name ?: "",
             state.classes.map { it.name }) { name ->
             classId = state.classes.firstOrNull { it.name == name }?.id ?: classId
             attendees = emptyList()
             teacherOverrideId = state.classes.firstOrNull { it.name == name }?.headTeacherId
         }
-        selectedClass?.resolvedSubject(state.subjects)?.let { sub ->
-            Row(Modifier.padding(horizontal = 16.dp),
-                verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("科目", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
-                ColorChip(sub.name, FluentPurple)
+
+        // ── 行3: 科目 chip (1/2) + 教师 dropdown (1/2) ───────────────────
+        val resolvedSubject = selectedClass?.resolvedSubject(state.subjects)
+        if (resolvedSubject != null) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                // 科目只读展示
+                Box(Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value         = resolvedSubject.name,
+                        onValueChange = {},
+                        readOnly      = true,
+                        label         = { Text("科目") },
+                        shape         = RoundedCornerShape(12.dp),
+                        modifier      = Modifier.fillMaxWidth(),
+                        singleLine    = true,
+                        leadingIcon   = {
+                            ColorChip(resolvedSubject.name, FluentPurple)
+                        },
+                        colors        = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor   = FluentBorder,
+                            unfocusedBorderColor = FluentBorder,
+                            disabledBorderColor  = FluentBorder
+                        )
+                    )
+                }
+                // 教师 dropdown
+                Box(Modifier.weight(1f)) {
+                    FormDropdown(
+                        label    = if (classDefaultTeacherName != null) "教师" else "教师",
+                        selected = effectiveTeacherName.ifBlank { "无" },
+                        options  = listOf("无") + state.teachers.map { it.name }
+                    ) { picked ->
+                        teacherOverrideId = if (picked == "无") null
+                                            else state.teachers.firstOrNull { it.name == picked }?.id
+                    }
+                }
+            }
+            // 默认教师提示（科目行下方）
+            if (classDefaultTeacherName != null &&
+                effectiveTeacherName.isNotBlank() &&
+                effectiveTeacherName != classDefaultTeacherName) {
+                Text("默认：$classDefaultTeacherName",
+                    style    = MaterialTheme.typography.labelSmall, color = FluentMuted,
+                    modifier = Modifier.padding(horizontal = 4.dp))
+            }
+        } else {
+            // 无科目时教师独占全宽
+            FormDropdown(
+                label    = if (classDefaultTeacherName != null) "教师（默认：$classDefaultTeacherName）" else "教师",
+                selected = effectiveTeacherName.ifBlank { "无" },
+                options  = listOf("无") + state.teachers.map { it.name }
+            ) { picked ->
+                teacherOverrideId = if (picked == "无") null
+                                    else state.teachers.firstOrNull { it.name == picked }?.id
             }
         }
-        FormDropdown(
-            label    = if (classDefaultTeacherName != null) "教师（默认：$classDefaultTeacherName）" else "教师",
-            selected = effectiveTeacherName.ifBlank { "无" },
-            options  = listOf("无") + state.teachers.map { it.name }
-        ) { picked ->
-            teacherOverrideId = if (picked == "无") null
-                                else state.teachers.firstOrNull { it.name == picked }?.id
-        }
+
+        // ── 行4: 日期 (1/2) + 时间 (1/2) ─────────────────────────────────
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) { DatePickerField("日期", date) { date = it } }

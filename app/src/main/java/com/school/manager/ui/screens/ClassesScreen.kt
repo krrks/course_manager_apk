@@ -263,7 +263,7 @@ private fun ClassFormDialog(
             onSave(savedClass)
         }
     }) {
-        // ── Row 1: 班级名称 (2/3) + 班级编号 (1/3) ────────────────────────
+        // ── 行1: 班级名称 (2/3) + 班级编号 (1/3) ─────────────────────────
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 0.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -273,7 +273,7 @@ private fun ClassFormDialog(
             Box(Modifier.weight(1f)) { FluentTextField("编号",    code, { code = it }) }
         }
 
-        // ── Row 2: 年级 (1/2) + 编制人数 (1/2) ───────────────────────────
+        // ── 行2: 年级 (1/2) + 编制人数 (1/2) ────────────────────────────
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -283,31 +283,45 @@ private fun ClassFormDialog(
             Box(Modifier.weight(1f)) { FluentTextField("编制人数", count, { count = it }) }
         }
 
-        // ── 教师 (全宽) ───────────────────────────────────────────────────
-        DropdownField("教师", teacher,
-            listOf("") + state.teachers.map { it.name }) { teacher = it }
-
-        // ── 科目 (全宽) ───────────────────────────────────────────────────
-        if (state.subjects.isNotEmpty()) {
-            DropdownField(
-                label    = "科目",
-                selected = selectedSubjectName.ifBlank { "无科目" },
-                options  = listOf("无科目") + state.subjects.map { it.name }
-            ) { picked ->
-                selectedSubjectId = if (picked == "无科目") null
-                                    else state.subjects.firstOrNull { it.name == picked }?.id
+        // ── 行3: 教师 (1/2) + 科目 (1/2) ────────────────────────────────
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment     = Alignment.Top
+        ) {
+            Box(Modifier.weight(1f)) {
+                DropdownField("教师", teacher,
+                    listOf("") + state.teachers.map { it.name }) { teacher = it }
             }
-            if (selectedSubjectName.isBlank()) {
+            Box(Modifier.weight(1f)) {
+                if (state.subjects.isNotEmpty()) {
+                    DropdownField(
+                        label    = "科目",
+                        selected = selectedSubjectName.ifBlank { "无科目" },
+                        options  = listOf("无科目") + state.subjects.map { it.name }
+                    ) { picked ->
+                        selectedSubjectId = if (picked == "无科目") null
+                                            else state.subjects.firstOrNull { it.name == picked }?.id
+                    }
+                } else {
+                    // 无科目时占位，提示在下方显示
+                    DropdownField("科目", "无科目", listOf("无科目")) {}
+                }
+            }
+        }
+
+        // 科目提示文字（行3下方，全宽）
+        when {
+            state.subjects.isEmpty() ->
+                Text("⚠️ 暂无科目，请先在「科目管理」页面添加",
+                    style    = MaterialTheme.typography.labelSmall,
+                    color    = FluentAmber,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+            selectedSubjectName.isBlank() ->
                 Text("如需新增科目，请前往「科目管理」页面",
                     style    = MaterialTheme.typography.bodySmall,
                     color    = FluentMuted,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
-            }
-        } else {
-            Text("⚠️ 暂无科目，请先在「科目管理」页面添加",
-                style    = MaterialTheme.typography.labelSmall,
-                color    = FluentAmber,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
 
         // ── 学生选择摘要行 ────────────────────────────────────────────────
