@@ -56,11 +56,6 @@ import kotlinx.coroutines.flow.Flow
     @Query("DELETE FROM lessons WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    /**
-     * Batch delete within a date range for one class.
-     * includeNonPending = 1 → also delete completed/cancelled rows.
-     * includeModified   = 1 → also delete rows where isModified = 1.
-     */
     @Query("""
         DELETE FROM lessons
         WHERE classId  = :classId
@@ -79,4 +74,27 @@ import kotlinx.coroutines.flow.Flow
 
     @Query("DELETE FROM lessons")
     suspend fun deleteAll()
+}
+
+@Dao interface KnowledgePointDao {
+    @Query("SELECT * FROM knowledge_points ORDER BY grade, chapter, code")
+    fun allFlow(): Flow<List<KnowledgePointEntity>>
+
+    @Query("SELECT * FROM knowledge_points ORDER BY grade, chapter, code")
+    suspend fun all(): List<KnowledgePointEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(e: KnowledgePointEntity): Long
+
+    @Update
+    suspend fun update(e: KnowledgePointEntity)
+
+    @Query("DELETE FROM knowledge_points WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM knowledge_points")
+    suspend fun deleteAll()
+
+    @Query("SELECT COUNT(*) FROM knowledge_points")
+    suspend fun count(): Int
 }

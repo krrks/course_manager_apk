@@ -29,6 +29,7 @@ internal fun LessonDetailDialog(
     val sub     = cls?.resolvedSubject(state.subjects)
     val teacher = state.teachers.find { it.id == l.effectiveTeacherId(state.classes) }
     val ats     = l.attendees.mapNotNull { vm.student(it) }
+    val kps     = l.knowledgePointIds.mapNotNull { vm.knowledgePoint(it) }
     val (done, total) = progressMap[l.classId] ?: (0 to 0)
 
     var statusExpanded by remember { mutableStateOf(false) }
@@ -37,25 +38,20 @@ internal fun LessonDetailDialog(
         if (l.code.isNotBlank()) DetailRow("编号", l.code)
         DetailRow("班级", cls?.name ?: "─")
 
-        // 科目 + 教师 — two short values, side by side
         DetailRowPair(
             label1 = "科目", value1 = sub?.name     ?: "─",
             label2 = "教师", value2 = teacher?.name ?: "─"
         )
 
         if (l.teacherIdOverride != null) {
-            Surface(
-                shape    = RoundedCornerShape(6.dp),
-                color    = FluentAmber.copy(0.12f),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-            ) {
+            Surface(shape = RoundedCornerShape(6.dp), color = FluentAmber.copy(0.12f),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
                 Text("本节课教师已覆盖班级默认设置",
                     style    = MaterialTheme.typography.labelSmall, color = FluentAmber,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
             }
         }
 
-        // 日期 + 时间 — side by side when time is present, alone when absent
         if (l.startTime.isNotBlank()) {
             DetailRowPair(
                 label1 = "日期", value1 = l.date,
@@ -65,18 +61,13 @@ internal fun LessonDetailDialog(
             DetailRow("日期", l.date)
         }
 
-        // ── Compact progress row ──────────────────────────────────────────
         if (total > 0) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("上课进度", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
                     Text("$done / $total 节",
-                        style      = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color      = statusColor("completed"))
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold, color = statusColor("completed"))
                 }
                 Spacer(Modifier.height(3.dp))
                 FluentProgressBar(done.toFloat() / total, statusColor("completed"), Modifier.fillMaxWidth())
@@ -85,7 +76,7 @@ internal fun LessonDetailDialog(
                 modifier = Modifier.padding(horizontal = 16.dp))
         }
 
-        // ── Status row with inline dropdown ───────────────────────────────
+        // ── Status inline dropdown ─────────────────────────────────────────
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -93,30 +84,20 @@ internal fun LessonDetailDialog(
         ) {
             Text("状态", style = MaterialTheme.typography.bodyMedium, color = FluentMuted)
             Box {
-                Row(
-                    Modifier.clickable { statusExpanded = true },
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
+                Row(Modifier.clickable { statusExpanded = true },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     StatusChip(l.status)
                     Icon(Icons.Default.ArrowDropDown, null,
-                        tint     = statusColor(l.status),
-                        modifier = Modifier.size(14.dp))
+                        tint = statusColor(l.status), modifier = Modifier.size(14.dp))
                 }
-                DropdownMenu(
-                    expanded         = statusExpanded,
-                    onDismissRequest = { statusExpanded = false }
-                ) {
+                DropdownMenu(expanded = statusExpanded, onDismissRequest = { statusExpanded = false }) {
                     listOf("pending", "completed", "absent", "cancelled", "postponed").forEach { s ->
                         DropdownMenuItem(
-                            text    = {
-                                Text(statusLabel(s), color = statusColor(s),
-                                    fontWeight = FontWeight.SemiBold)
-                            },
+                            text    = { Text(statusLabel(s), color = statusColor(s), fontWeight = FontWeight.SemiBold) },
                             onClick = {
                                 vm.updateLesson(l.copy(status = s), markModified = true)
-                                statusExpanded = false
-                                onDismiss()
+                                statusExpanded = false; onDismiss()
                             }
                         )
                     }
@@ -128,8 +109,9 @@ internal fun LessonDetailDialog(
 
         if (l.topic.isNotBlank()) DetailRow("课题", l.topic)
         if (l.notes.isNotBlank()) DetailRow("备注", l.notes)
-        if (l.isModified) DetailRow("标记", "已单独修改")
+        if (l.isModified)         DetailRow("标记", "已单独修改")
 
+        // ── Attendees ──────────────────────────────────────────────────────
         if (ats.isNotEmpty()) {
             SectionHeader("出勤学生 (${ats.size}人)")
             androidx.compose.foundation.layout.FlowRow(
@@ -137,6 +119,36 @@ internal fun LessonDetailDialog(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement   = Arrangement.spacedBy(4.dp)
             ) { ats.forEach { s -> ColorChip(s.name, FluentGreen) } }
+        }
+
+        // ── Knowledge points ───────────────────────────────────────────────
+        if (kps.isNotEmpty()) {
+            SectionHeader("涉及知识点 (${kps.size}个)")
+            Column(
+                Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                kps.forEach { kp ->
+                    Surface(
+                        shape    = RoundedCornerShape(8.dp),
+                        color    = FluentBlueLight,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment     = Alignment.CenterVertically) {
+                                ColorChip(kp.code, FluentBlue)
+                                ColorChip(kp.grade, FluentGreen)
+                                if (kp.isCustom) ColorChip("自定义", FluentAmber)
+                            }
+                            Spacer(Modifier.height(3.dp))
+                            Text(kp.content,
+                                style  = MaterialTheme.typography.bodySmall,
+                                color  = FluentBlueDark)
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(4.dp))
@@ -167,6 +179,8 @@ internal fun LessonFormDialog(
     var notes     by remember { mutableStateOf(initial?.notes     ?: "") }
     var attendees by remember { mutableStateOf<List<Long>>(initial?.attendees ?: emptyList()) }
     var code      by remember { mutableStateOf(initial?.code?.ifBlank { null } ?: genCode("L")) }
+    var kpIds     by remember { mutableStateOf(initial?.knowledgePointIds?.toSet() ?: emptySet<Long>()) }
+    var showKpPicker by remember { mutableStateOf(false) }
 
     val selectedClass = state.classes.find { it.id == classId }
 
@@ -187,8 +201,7 @@ internal fun LessonFormDialog(
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         if (classId != 0L) {
             val classDefaultTeacherId = state.classes.find { it.id == classId }?.headTeacherId
-            val overrideToSave = if (teacherOverrideId == classDefaultTeacherId) null
-                                 else teacherOverrideId
+            val overrideToSave = if (teacherOverrideId == classDefaultTeacherId) null else teacherOverrideId
             onSave(Lesson(
                 id                = initial?.id ?: System.currentTimeMillis(),
                 classId           = classId,
@@ -201,11 +214,12 @@ internal fun LessonFormDialog(
                 attendees         = attendees,
                 isModified        = initial != null,
                 code              = code.trim().ifBlank { genCode("L") },
-                teacherIdOverride = overrideToSave
+                teacherIdOverride = overrideToSave,
+                knowledgePointIds = kpIds.toList()
             ))
         }
     }) {
-        // ── 行1: 编号 (1/2) + 状态 (1/2) ─────────────────────────────────
+        // ── 行1: 编号 + 状态 ──────────────────────────────────────────────
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) { FormTextField("编号", code, { code = it }, "自动生成") }
@@ -216,45 +230,30 @@ internal fun LessonFormDialog(
         }
 
         // ── 行2: 班级（全宽）─────────────────────────────────────────────
-        FormDropdown("班级", selectedClass?.name ?: "",
-            state.classes.map { it.name }) { name ->
+        FormDropdown("班级", selectedClass?.name ?: "", state.classes.map { it.name }) { name ->
             classId = state.classes.firstOrNull { it.name == name }?.id ?: classId
             attendees = emptyList()
             teacherOverrideId = state.classes.firstOrNull { it.name == name }?.headTeacherId
         }
 
-        // ── 行3: 科目 chip (1/2) + 教师 dropdown (1/2) ───────────────────
+        // ── 行3: 科目 + 教师 ──────────────────────────────────────────────
         val resolvedSubject = selectedClass?.resolvedSubject(state.subjects)
         if (resolvedSubject != null) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                // 科目只读展示
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
                     OutlinedTextField(
-                        value         = resolvedSubject.name,
-                        onValueChange = {},
-                        readOnly      = true,
-                        label         = { Text("科目") },
-                        shape         = RoundedCornerShape(12.dp),
-                        modifier      = Modifier.fillMaxWidth(),
-                        singleLine    = true,
-                        leadingIcon   = {
-                            ColorChip(resolvedSubject.name, FluentPurple)
-                        },
-                        colors        = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = FluentBorder,
-                            unfocusedBorderColor = FluentBorder,
-                            disabledBorderColor  = FluentBorder
-                        )
+                        value = resolvedSubject.name, onValueChange = {}, readOnly = true,
+                        label = { Text("科目") }, shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        leadingIcon = { ColorChip(resolvedSubject.name, FluentPurple) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = FluentBorder, unfocusedBorderColor = FluentBorder)
                     )
                 }
-                // 教师 dropdown
                 Box(Modifier.weight(1f)) {
                     FormDropdown(
-                        label    = if (classDefaultTeacherName != null) "教师" else "教师",
+                        label    = "教师",
                         selected = effectiveTeacherName.ifBlank { "无" },
                         options  = listOf("无") + state.teachers.map { it.name }
                     ) { picked ->
@@ -263,16 +262,13 @@ internal fun LessonFormDialog(
                     }
                 }
             }
-            // 默认教师提示（科目行下方）
-            if (classDefaultTeacherName != null &&
-                effectiveTeacherName.isNotBlank() &&
+            if (classDefaultTeacherName != null && effectiveTeacherName.isNotBlank() &&
                 effectiveTeacherName != classDefaultTeacherName) {
                 Text("默认：$classDefaultTeacherName",
-                    style    = MaterialTheme.typography.labelSmall, color = FluentMuted,
+                    style = MaterialTheme.typography.labelSmall, color = FluentMuted,
                     modifier = Modifier.padding(horizontal = 4.dp))
             }
         } else {
-            // 无科目时教师独占全宽
             FormDropdown(
                 label    = if (classDefaultTeacherName != null) "教师（默认：$classDefaultTeacherName）" else "教师",
                 selected = effectiveTeacherName.ifBlank { "无" },
@@ -283,20 +279,22 @@ internal fun LessonFormDialog(
             }
         }
 
-        // ── 行4: 日期 (1/2) + 时间 (1/2) ─────────────────────────────────
+        // ── 行4: 日期 + 时间 ──────────────────────────────────────────────
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top) {
             Box(Modifier.weight(1f)) { DatePickerField("日期", date) { date = it } }
             Box(Modifier.weight(1f)) {
                 StartTimeCompact(startTime) { newStart ->
                     val dur = minutesBetween(startTime, endTime).coerceAtLeast(30)
-                    startTime = newStart
-                    endTime   = addMinutesToTime(newStart, dur)
+                    startTime = newStart; endTime = addMinutesToTime(newStart, dur)
                 }
             }
         }
         DurationChipsCompact(startTime, endTime) { endTime = it }
+
         FormTextField("课题", topic, { topic = it }, "本节课主题")
+
+        // ── Attendees ──────────────────────────────────────────────────────
         if (classStudents.isNotEmpty()) {
             SectionHeader("出勤学生")
             androidx.compose.foundation.layout.FlowRow(
@@ -312,6 +310,54 @@ internal fun LessonFormDialog(
                 }
             }
         }
+
+        // ── Knowledge points ───────────────────────────────────────────────
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("涉及知识点", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (kpIds.isNotEmpty())
+                    Text("已选 ${kpIds.size} 个",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = FluentBlue, fontWeight = FontWeight.SemiBold)
+            }
+            TextButton(
+                onClick        = { showKpPicker = true },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) { Text("选择", style = MaterialTheme.typography.labelMedium) }
+        }
+        if (kpIds.isNotEmpty()) {
+            val selectedKps  = state.knowledgePoints.filter { it.id in kpIds }
+            val displayKps   = selectedKps.take(6)
+            val overflow     = selectedKps.size - displayKps.size
+            androidx.compose.foundation.layout.FlowRow(
+                modifier              = Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement   = Arrangement.spacedBy(4.dp)
+            ) {
+                displayKps.forEach { kp -> ColorChip("[${kp.code}] ${kp.content.take(12)}…", FluentBlue) }
+                if (overflow > 0) ColorChip("+$overflow 个", FluentMuted)
+            }
+        }
+
         FormTextField("备注", notes, { notes = it }, "可选")
+    }
+
+    // ── Knowledge point picker sheet ───────────────────────────────────────
+    if (showKpPicker) {
+        KnowledgePointPickerSheet(
+            allPoints = state.knowledgePoints,
+            selected  = kpIds,
+            onConfirm = { kpIds = it; showKpPicker = false },
+            onAddNew  = { grade, chapter, section, code, content ->
+                vm.addKnowledgePoint(grade, chapter, section, code, content)
+            },
+            onDismiss = { showKpPicker = false }
+        )
     }
 }

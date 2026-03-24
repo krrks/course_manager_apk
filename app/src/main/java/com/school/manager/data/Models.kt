@@ -53,30 +53,47 @@ data class Student(
  * status: pending / completed / absent / cancelled / postponed
  * isModified: true when this row was individually edited (not batch-generated).
  * teacherIdOverride: when non-null, overrides the class's headTeacherId for this lesson.
+ * knowledgePointIds: IDs of knowledge points covered in this lesson.
  */
 data class Lesson(
     val id: Long,
     val classId: Long,
-    val date: String,                       // YYYY-MM-DD
-    val startTime: String = "",             // HH:mm
-    val endTime: String = "",               // HH:mm
+    val date: String,                           // YYYY-MM-DD
+    val startTime: String = "",                 // HH:mm
+    val endTime: String = "",                   // HH:mm
     val status: String = "pending",
     val topic: String = "",
     val notes: String = "",
     val attendees: List<Long> = emptyList(),
     val isModified: Boolean = false,
     val code: String = "",
-    val teacherIdOverride: Long? = null     // null = use SchoolClass.headTeacherId
+    val teacherIdOverride: Long? = null,        // null = use SchoolClass.headTeacherId
+    val knowledgePointIds: List<Long> = emptyList()
+)
+
+/**
+ * A single knowledge point entry.
+ * isCustom: false = seeded from asset; true = user-created.
+ */
+data class KnowledgePoint(
+    val id: Long,
+    val grade: String,       // 初中 / 高中
+    val chapter: String,
+    val section: String,
+    val code: String,        // e.g. "1.1.1"
+    val content: String,
+    val isCustom: Boolean = false
 )
 
 // ─── App State ────────────────────────────────────────────────────────────────
 
 data class AppState(
-    val subjects:  List<Subject>     = emptyList(),
-    val teachers:  List<Teacher>     = emptyList(),
-    val classes:   List<SchoolClass> = emptyList(),
-    val students:  List<Student>     = emptyList(),
-    val lessons:   List<Lesson>      = emptyList()
+    val subjects:        List<Subject>        = emptyList(),
+    val teachers:        List<Teacher>        = emptyList(),
+    val classes:         List<SchoolClass>    = emptyList(),
+    val students:        List<Student>        = emptyList(),
+    val lessons:         List<Lesson>         = emptyList(),
+    val knowledgePoints: List<KnowledgePoint> = emptyList()
 )
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -86,8 +103,9 @@ val SUBJECT_COLORS = listOf(
     0xFFE3A008L, 0xFFE11D48L, 0xFF0891B2L, 0xFF65A30DL
 )
 
-val GRADES = listOf("高一", "高二", "高三", "初一", "初二", "初三")
-val DAYS   = listOf("一", "二", "三", "四", "五", "六", "日")
+val GRADES         = listOf("高一", "高二", "高三", "初一", "初二", "初三")
+val DAYS           = listOf("一", "二", "三", "四", "五", "六", "日")
+val PHYSICS_GRADES = listOf("初中", "高中")
 
 const val CAL_START_HOUR = 8
 const val CAL_END_HOUR   = 22
@@ -125,7 +143,6 @@ fun Lesson.durationHours(): Float = durationMinutes() / 60f
 
 /**
  * Returns (completedCount, totalCount) for the given classId.
- * Used for progress display: "已完成 X / Y 节".
  */
 fun List<Lesson>.progressFor(classId: Long): Pair<Int, Int> {
     val all  = filter { it.classId == classId }

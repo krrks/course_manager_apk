@@ -1,18 +1,36 @@
 #!build
-# Form Dialog UI：短字段合并为双列，布局更紧凑
+# 知识点功能：课次关联知识点 + 知识点管理页
 
-## 改动内容
+## 新增功能
 
-### LessonDialogs.kt — LessonFormDialog
-- 科目只读展示 + 教师 dropdown 合并为一行（各 1/2）
-- 无科目时教师仍独占全宽（fallback 不变）
+### 知识点数据模型
+- 新增 `KnowledgePoint` 域模型：grade / chapter / section / code / content / isCustom
+- Room 新增 `knowledge_points` 表（数据库版本 2→3，含迁移脚本）
+- `Lesson` 新增 `knowledgePointIds` 字段，记录本节课涉及的知识点 ID 列表
 
-### TeachersScreen.kt — TeacherFormDialog
-- 性别 dropdown (1/3) + 手机输入框 (2/3) 合并为一行
+### 种子数据
+- `assets/knowledge_points.json`：内置第1章·机械运动 19 个知识点（初中物理）
+- 首次启动自动写入 Room，后续仅使用数据库，不再读取 asset
 
-### SubjectsScreen.kt — SubjectFormDialog
-- 科目名称 (3/5) + 科目编号 (2/5) 合并为一行
+### 课次编辑（LessonFormDialog）
+- 新增「涉及知识点」区域，支持多选
+- 底部弹出选择器（KnowledgePointPickerSheet）：按章分组、学段过滤、关键词搜索
+- 支持在选择器内直接添加新知识点（inline 表单）
 
-### ClassesScreen.kt — ClassFormDialog
-- 教师 dropdown (1/2) + 科目 dropdown (1/2) 合并为一行
-- 科目提示文字保持全宽显示在行下方
+### 课次详情（LessonDetailDialog）
+- 新增「涉及知识点」展示区，以卡片形式显示已选知识点内容
+
+### 知识点管理页（KnowledgePointsScreen）
+- 导航菜单新增「知识点」入口（图标：Lightbulb）
+- 支持按学段过滤、关键词搜索、按章分组展示
+- 支持新增、编辑、删除知识点（自定义知识点 isCustom=true）
+
+### 文件变动
+- 新增：`assets/knowledge_points.json`
+- 新增：`LessonKnowledgePointPicker.kt`
+- 新增：`KnowledgePointsScreen.kt`
+- 新增：`docs/knowledge_points_schema.md`
+- 修改：`Models.kt` / `Entities.kt` / `Daos.kt` / `Mappers.kt`
+- 修改：`AppDatabase.kt`（版本3 + migration）
+- 修改：`AppRepository.kt` / `AppViewModel.kt` / `GsonModels.kt`
+- 修改：`LessonDialogs.kt` / `Navigation.kt` / `MainActivity.kt`

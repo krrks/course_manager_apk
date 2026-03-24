@@ -20,13 +20,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<AppState> = repo.appState
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppState())
 
-    init { viewModelScope.launch { if (repo.isEmpty()) repo.importAll(sampleAppState()) } }
+    init {
+        viewModelScope.launch {
+            if (repo.isEmpty()) repo.importAll(sampleAppState())
+            repo.seedKnowledgePoints(app)
+        }
+    }
 
     // ─── Lookups ──────────────────────────────────────────────────────────────
-    fun subject(id: Long?)     = state.value.subjects.find { it.id == id }
-    fun teacher(id: Long?)     = state.value.teachers.find { it.id == id }
-    fun schoolClass(id: Long?) = state.value.classes.find  { it.id == id }
-    fun student(id: Long?)     = state.value.students.find { it.id == id }
+    fun subject(id: Long?)        = state.value.subjects.find        { it.id == id }
+    fun teacher(id: Long?)        = state.value.teachers.find        { it.id == id }
+    fun schoolClass(id: Long?)    = state.value.classes.find         { it.id == id }
+    fun student(id: Long?)        = state.value.students.find        { it.id == id }
+    fun knowledgePoint(id: Long?) = state.value.knowledgePoints.find { it.id == id }
 
     fun lessonProgress(classId: Long): Pair<Int, Int> =
         state.value.lessons.progressFor(classId)
@@ -79,12 +85,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         classId: Long, date: String, startTime: String, endTime: String,
         status: String = "pending", topic: String = "", notes: String = "",
         attendees: List<Long> = emptyList(), code: String = "",
-        teacherIdOverride: Long? = null
+        teacherIdOverride: Long? = null, knowledgePointIds: List<Long> = emptyList()
     ) {
         viewModelScope.launch {
             repo.addLesson(Lesson(System.currentTimeMillis(), classId, date,
                 startTime, endTime, status, topic, notes, attendees, false,
-                code.ifBlank { genCode("L") }, teacherIdOverride))
+                code.ifBlank { genCode("L") }, teacherIdOverride, knowledgePointIds))
         }
     }
 
@@ -155,13 +161,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ─── Knowledge Points ─────────────────────────────────────────────────────
+    fun addKnowledgePoint(
+        grade: String, chapter: String, section: String,
+        code: String, content: String
+    ) {
+        viewModelScope.launch {
+            repo.addKnowledgePoint(KnowledgePoint(
+                id       = System.currentTimeMillis(),
+                grade    = grade,
+                chapter  = chapter,
+                section  = section,
+                code     = code,
+                content  = content,
+                isCustom = true
+            ))
+        }
+    }
+
+    fun updateKnowledgePoint(kp: KnowledgePoint) {
+        viewModelScope.launch { repo.updateKnowledgePoint(kp) }
+    }
+
+    fun deleteKnowledgePoint(id: Long) {
+        viewModelScope.launch { repo.deleteKnowledgePoint(id) }
+    }
+
     // ─── Backup — export ──────────────────────────────────────────────────────
 
-    /** Full ZIP: all entities + avatars. */
     fun exportFullZip(context: Context): ByteArray? =
         backupManager(context).buildFullZip(state.value)
 
-    /** Filtered ZIP: lesson-filtered subset, no avatars. */
     fun exportFilteredZip(
         context: Context,
         teacherId: Long?,
@@ -179,13 +209,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return backupManager(context).buildFilteredZip(filtered, filter)
     }
 
-    // ─── Backup — import ──────────────────────────────────────────────────────
-
-    /** Read meta.json only — no database writes. Use for the preview dialog. */
     fun peekImportZip(bytes: ByteArray, context: Context): ImportResult =
         backupManager(context).peekZip(bytes)
 
-    /** Parse + merge into database. Call after user confirms the preview. */
     fun commitImportZip(bytes: ByteArray, context: Context): Boolean {
         val appState = backupManager(context).extractState(bytes) ?: return false
         viewModelScope.launch { repo.mergeAll(appState) }

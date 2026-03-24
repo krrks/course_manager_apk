@@ -104,13 +104,14 @@ fun SchoolManagerApp() {
                 popEnterTransition  = { slideInHorizontally { -it / 6 } + fadeIn() },
                 popExitTransition   = { slideOutHorizontally { it / 6 } + fadeOut() },
             ) {
-                composable(Screen.Lesson.route)   { LessonScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Classes.route)  { ClassesScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Teachers.route) { TeachersScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Students.route) { StudentsScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Subjects.route) { SubjectsScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Stats.route)    { StatsScreen(vm, onOpenDrawer = openDrawer) }
-                composable(Screen.Export.route)   { ExportScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Lesson.route)          { LessonScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Classes.route)         { ClassesScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Teachers.route)        { TeachersScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Students.route)        { StudentsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Subjects.route)        { SubjectsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.KnowledgePoints.route) { KnowledgePointsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Stats.route)           { StatsScreen(vm, onOpenDrawer = openDrawer) }
+                composable(Screen.Export.route)          { ExportScreen(vm, onOpenDrawer = openDrawer) }
             }
         }
     }

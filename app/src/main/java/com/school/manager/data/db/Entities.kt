@@ -54,6 +54,7 @@ data class StudentEntity(
  * Lesson replaces both Schedule and Attendance.
  * classId → classes ON DELETE CASCADE.
  * teacherIdOverride: when non-null, overrides the class's headTeacherId for this lesson.
+ * knowledgePointIdsJson: JSON array of selected knowledge point IDs.
  */
 @Entity(
     tableName = "lessons",
@@ -74,5 +75,22 @@ data class LessonEntity(
     val attendeesJson: String,
     val isModified: Boolean,
     val code: String,
-    val teacherIdOverride: Long? = null
+    val teacherIdOverride: Long? = null,
+    val knowledgePointIdsJson: String = "[]"
+)
+
+/**
+ * A knowledge point entry.
+ * isCustom = false → seeded from assets/knowledge_points.json
+ * isCustom = true  → user-created at runtime
+ */
+@Entity(tableName = "knowledge_points")
+data class KnowledgePointEntity(
+    @PrimaryKey val id: Long,
+    val grade: String,
+    val chapter: String,
+    val section: String,
+    val code: String,
+    val content: String,
+    val isCustom: Boolean
 )

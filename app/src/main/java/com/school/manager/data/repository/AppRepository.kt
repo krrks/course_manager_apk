@@ -4,6 +4,8 @@ import android.content.Context
 import com.school.manager.data.*
 import com.school.manager.data.db.*
 import kotlinx.coroutines.flow.*
+import org.json.JSONArray
+import org.json.JSONObject
 
 class AppRepository(context: Context) {
 
@@ -17,14 +19,40 @@ class AppRepository(context: Context) {
         ) { subjects, teachers, classes -> Triple(subjects, teachers, classes) },
         combine(
             db.studentDao().allFlow().map { it.map(StudentEntity::toDomain) },
-            db.lessonDao().allFlow().map  { it.map(LessonEntity::toDomain)  }
-        ) { students, lessons -> students to lessons }
-    ) { (subjects, teachers, classes), (students, lessons) ->
-        AppState(subjects, teachers, classes, students, lessons)
+            db.lessonDao().allFlow().map  { it.map(LessonEntity::toDomain)  },
+            db.knowledgePointDao().allFlow().map { it.map(KnowledgePointEntity::toDomain) }
+        ) { students, lessons, kps -> Triple(students, lessons, kps) }
+    ) { (subjects, teachers, classes), (students, lessons, kps) ->
+        AppState(subjects, teachers, classes, students, lessons, kps)
     }
 
     suspend fun isEmpty(): Boolean =
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
+
+    // ── Knowledge point seeding ───────────────────────────────────────────
+
+    suspend fun seedKnowledgePoints(context: Context) {
+        if (db.knowledgePointDao().count() > 0) return
+        try {
+            val json = context.assets.open("knowledge_points.json")
+                .bufferedReader().use { it.readText() }
+            val arr = JSONArray(json)
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                db.knowledgePointDao().insert(
+                    KnowledgePointEntity(
+                        id       = obj.getLong("id"),
+                        grade    = obj.getString("grade"),
+                        chapter  = obj.getString("chapter"),
+                        section  = obj.getString("section"),
+                        code     = obj.getString("code"),
+                        content  = obj.getString("content"),
+                        isCustom = obj.optBoolean("isCustom", false)
+                    )
+                )
+            }
+        } catch (_: Exception) { /* asset missing or malformed — silently skip */ }
+    }
 
     // Subjects
     suspend fun addSubject(s: Subject)    = db.subjectDao().insert(s.toEntity())
@@ -55,24 +83,31 @@ class AppRepository(context: Context) {
         includeNonPending: Boolean, includeModified: Boolean
     ) = db.lessonDao().deleteBatch(classId, fromDate, toDate, includeNonPending, includeModified)
 
+    // Knowledge Points
+    suspend fun addKnowledgePoint(kp: KnowledgePoint)    = db.knowledgePointDao().insert(kp.toEntity())
+    suspend fun updateKnowledgePoint(kp: KnowledgePoint) = db.knowledgePointDao().update(kp.toEntity())
+    suspend fun deleteKnowledgePoint(id: Long)            = db.knowledgePointDao().deleteById(id)
+
     suspend fun clearAll() {
         db.lessonDao().deleteAll()
         db.classDao().deleteAll()
         db.studentDao().deleteAll()
         db.subjectDao().deleteAll()
         db.teacherDao().deleteAll()
+        // knowledge_points intentionally NOT cleared — user keeps their custom points
     }
 
     suspend fun importAll(state: AppState) { clearAll(); mergeAll(state) }
 
     suspend fun mergeAll(incoming: AppState) {
-        fun <E> upsert(insert: suspend (E) -> Long, update: suspend (E) -> Unit, entity: E) {
-            // caller runs this in a coroutine
-        }
         incoming.subjects.forEach { e -> val ent = e.toEntity(); if (db.subjectDao().insert(ent) == -1L) db.subjectDao().update(ent) }
         incoming.teachers.forEach { e -> val ent = e.toEntity(); if (db.teacherDao().insert(ent) == -1L) db.teacherDao().update(ent) }
         incoming.classes.forEach  { e -> val ent = e.toEntity(); if (db.classDao().insert(ent)   == -1L) db.classDao().update(ent)   }
         incoming.students.forEach { e -> val ent = e.toEntity(); if (db.studentDao().insert(ent) == -1L) db.studentDao().update(ent) }
         incoming.lessons.forEach  { e -> val ent = e.toEntity(); if (db.lessonDao().insert(ent)  == -1L) db.lessonDao().update(ent)  }
+        incoming.knowledgePoints.forEach { e ->
+            val ent = e.toEntity()
+            if (db.knowledgePointDao().insert(ent) == -1L) db.knowledgePointDao().update(ent)
+        }
     }
 }

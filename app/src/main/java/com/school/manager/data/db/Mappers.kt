@@ -23,10 +23,18 @@ fun Student.toEntity(): StudentEntity  = StudentEntity(id, name, studentNo, gend
 
 fun LessonEntity.toDomain(): Lesson = Lesson(
     id, classId, date, startTime, endTime, status,
-    topic, notes, attendeesJson.toLongList(), isModified, code, teacherIdOverride
+    topic, notes, attendeesJson.toLongList(), isModified, code, teacherIdOverride,
+    knowledgePointIdsJson.toLongList()
 )
 
 fun Lesson.toEntity(): LessonEntity = LessonEntity(
     id, classId, date, startTime, endTime, status,
-    topic, notes, attendees.toJson(), isModified, code, teacherIdOverride
+    topic, notes, attendees.toJson(), isModified, code, teacherIdOverride,
+    knowledgePointIds.toJson()
 )
+
+fun KnowledgePointEntity.toDomain(): KnowledgePoint =
+    KnowledgePoint(id, grade, chapter, section, code, content, isCustom)
+
+fun KnowledgePoint.toEntity(): KnowledgePointEntity =
+    KnowledgePointEntity(id, grade, chapter, section, code, content, isCustom)

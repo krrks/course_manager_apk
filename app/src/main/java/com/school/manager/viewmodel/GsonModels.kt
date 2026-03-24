@@ -5,7 +5,6 @@ import com.school.manager.data.*
 import java.io.File
 
 // ── Gson transfer models ──────────────────────────────────────────────────────
-// These are used only at the JSON export/import boundary.
 
 internal data class GsonTeacher(
     val id: Long? = null, val name: String? = null, val gender: String? = null,
@@ -23,16 +22,23 @@ internal data class GsonLesson(
     val startTime: String? = null, val endTime: String? = null, val status: String? = null,
     val topic: String? = null, val notes: String? = null,
     val attendees: List<Long>? = null, val isModified: Boolean? = null,
-    val code: String? = null, val teacherIdOverride: Long? = null
+    val code: String? = null, val teacherIdOverride: Long? = null,
+    val knowledgePointIds: List<Long>? = null
+)
+
+internal data class GsonKnowledgePoint(
+    val id: Long? = null, val grade: String? = null, val chapter: String? = null,
+    val section: String? = null, val code: String? = null,
+    val content: String? = null, val isCustom: Boolean? = null
 )
 
 internal data class GsonState(
-    val subjects: List<Subject>? = null,
-    val teachers: List<GsonTeacher>? = null,
-    val classes:  List<GsonClass>? = null,
-    val students: List<Student>? = null,
-    val lessons:  List<GsonLesson>? = null
-    // Legacy keys (schedule, attendance) are silently ignored by Gson
+    val subjects:        List<Subject>?           = null,
+    val teachers:        List<GsonTeacher>?        = null,
+    val classes:         List<GsonClass>?          = null,
+    val students:        List<Student>?            = null,
+    val lessons:         List<GsonLesson>?         = null,
+    val knowledgePoints: List<GsonKnowledgePoint>? = null
 )
 
 // ── Parser ────────────────────────────────────────────────────────────────────
@@ -61,9 +67,15 @@ internal fun parseGsonState(
             Lesson(gl.id ?: 0L, gl.classId ?: 0L, gl.date ?: "",
                 gl.startTime ?: "", gl.endTime ?: "", gl.status ?: "pending",
                 gl.topic ?: "", gl.notes ?: "", gl.attendees ?: emptyList(),
-                gl.isModified ?: false, gl.code ?: "", gl.teacherIdOverride)
+                gl.isModified ?: false, gl.code ?: "", gl.teacherIdOverride,
+                gl.knowledgePointIds ?: emptyList())
+        } ?: emptyList()
+        val knowledgePoints = raw.knowledgePoints?.map { gkp ->
+            KnowledgePoint(gkp.id ?: 0L, gkp.grade ?: "", gkp.chapter ?: "",
+                gkp.section ?: "", gkp.code ?: "", gkp.content ?: "",
+                gkp.isCustom ?: false)
         } ?: emptyList()
 
-        AppState(subjects, teachers, classes, students, lessons)
+        AppState(subjects, teachers, classes, students, lessons, knowledgePoints)
     } catch (_: Exception) { null }
 }
