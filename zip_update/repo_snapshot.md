@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-23T11:04:01Z`
-> Commit:  `69ebc055bbd195cc3902610ac9124ef8d679c38d`
+> Updated: `2026-03-24T07:24:14Z`
+> Commit:  `3f16c0f951a66d722baef3ad8e0faa266950d2fe`
 
 ```
 ./.github/workflows/build.yml
@@ -12,6 +12,7 @@
 ./app/build.gradle.kts
 ./app/proguard-rules.pro
 ./app/src/main/AndroidManifest.xml
+./app/src/main/assets/knowledge_points.json
 ./app/src/main/java/com/school/manager/MainActivity.kt
 ./app/src/main/java/com/school/manager/Navigation.kt
 ./app/src/main/java/com/school/manager/data/BackupModels.kt
@@ -28,11 +29,13 @@
 ./app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportImportDialog.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
+./app/src/main/java/com/school/manager/ui/screens/KnowledgePointsScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonBatchActionDialog.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonBatchDialogs.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonDayView.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonDialogs.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonFilterSheet.kt
+./app/src/main/java/com/school/manager/ui/screens/LessonKnowledgePointPicker.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonListView.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonTimeHelpers.kt
@@ -55,6 +58,7 @@
 ./app/src/main/res/values/strings.xml
 ./app/src/main/res/values/themes.xml
 ./build.gradle.kts
+./docs/knowledge_points_schema.md
 ./docs/readme_ai_rules.md
 ./docs/readme_build.md
 ./docs/readme_deprecated.md
