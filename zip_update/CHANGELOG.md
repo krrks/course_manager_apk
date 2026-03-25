@@ -1,36 +1,26 @@
 #!build
-# 知识点功能：课次关联知识点 + 知识点管理页
+# 知识点功能改进：种子数据精简 + 选择器章节筛选 + 管理页可折叠章节
 
-## 新增功能
+## 变更内容
 
-### 知识点数据模型
-- 新增 `KnowledgePoint` 域模型：grade / chapter / section / code / content / isCustom
-- Room 新增 `knowledge_points` 表（数据库版本 2→3，含迁移脚本）
-- `Lesson` 新增 `knowledgePointIds` 字段，记录本节课涉及的知识点 ID 列表
+### ① knowledge_points.json（种子数据）
+- 从 19 条精简为 20 条，覆盖 3 章 4 节
+  - 第1章·第1节（长度和时间的测量）：1.1.1–1.1.5
+  - 第1章·第3节（运动的快慢）：1.3.1–1.3.5
+  - 第2章·第1节（声音的产生与传播）：2.1.1–2.1.5
+  - 第3章·第1节（温度）：3.1.1–3.1.5
 
-### 种子数据
-- `assets/knowledge_points.json`：内置第1章·机械运动 19 个知识点（初中物理）
-- 首次启动自动写入 Room，后续仅使用数据库，不再读取 asset
+### ② LessonKnowledgePointPicker.kt（课次编辑选择器）
+- 在学段 chips 和搜索框之间新增章节筛选 chips 行（横向滚动）
+- 切换学段自动重置章节筛选
+- 已选章节以 InputChip 摘要显示，可点击清除
+- 搜索框新增 Clear 按钮
+- 单章视图下隐藏章节 header，避免重复
 
-### 课次编辑（LessonFormDialog）
-- 新增「涉及知识点」区域，支持多选
-- 底部弹出选择器（KnowledgePointPickerSheet）：按章分组、学段过滤、关键词搜索
-- 支持在选择器内直接添加新知识点（inline 表单）
-
-### 课次详情（LessonDetailDialog）
-- 新增「涉及知识点」展示区，以卡片形式显示已选知识点内容
-
-### 知识点管理页（KnowledgePointsScreen）
-- 导航菜单新增「知识点」入口（图标：Lightbulb）
-- 支持按学段过滤、关键词搜索、按章分组展示
-- 支持新增、编辑、删除知识点（自定义知识点 isCustom=true）
-
-### 文件变动
-- 新增：`assets/knowledge_points.json`
-- 新增：`LessonKnowledgePointPicker.kt`
-- 新增：`KnowledgePointsScreen.kt`
-- 新增：`docs/knowledge_points_schema.md`
-- 修改：`Models.kt` / `Entities.kt` / `Daos.kt` / `Mappers.kt`
-- 修改：`AppDatabase.kt`（版本3 + migration）
-- 修改：`AppRepository.kt` / `AppViewModel.kt` / `GsonModels.kt`
-- 修改：`LessonDialogs.kt` / `Navigation.kt` / `MainActivity.kt`
+### ③ KnowledgePointsScreen.kt（知识点管理页）
+- 列表改为可折叠章节卡片结构
+- 章节卡头显示条目数量徽章及自定义条目数
+- 点击章节卡头展开/折叠，带展开动画
+- 搜索时自动展开所有匹配章节，清空后恢复折叠
+- 顶部摘要行显示「全部展开/全部折叠」快捷按钮
+- 知识点条目卡左侧缩进，视觉层次更清晰

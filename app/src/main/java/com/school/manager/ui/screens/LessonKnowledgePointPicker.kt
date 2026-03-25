@@ -20,7 +20,7 @@ import com.school.manager.ui.theme.*
 
 /**
  * Bottom sheet for selecting knowledge points when editing a lesson.
- * Shows points grouped by chapter, filtered by grade, searchable.
+ * Shows points grouped by chapter, filtered by grade → chapter → search.
  * Also exposes an inline "add new point" form.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,22 +32,34 @@ internal fun KnowledgePointPickerSheet(
     onAddNew: (grade: String, chapter: String, section: String, code: String, content: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var draft      by remember { mutableStateOf(selected) }
-    var fGrade     by remember { mutableStateOf("") }
-    var query      by remember { mutableStateOf("") }
+    var draft       by remember { mutableStateOf(selected) }
+    var fGrade      by remember { mutableStateOf("") }
+    var fChapter    by remember { mutableStateOf("") }
+    var query       by remember { mutableStateOf("") }
     var showAddForm by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState  = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val filtered = allPoints.filter { kp ->
-        (fGrade.isBlank() || kp.grade == fGrade) &&
-        (query.isBlank()  || kp.content.contains(query, ignoreCase = true)
-                          || kp.code.contains(query, ignoreCase = true)
-                          || kp.chapter.contains(query, ignoreCase = true))
+    // When grade changes, reset chapter filter
+    LaunchedEffect(fGrade) { fChapter = "" }
+
+    // Chapters available for the current grade selection
+    val availableChapters = remember(allPoints, fGrade) {
+        allPoints
+            .filter { fGrade.isBlank() || it.grade == fGrade }
+            .map { it.chapter }
+            .distinct()
+            .sorted()
     }
 
-    // Group by chapter
-    val grouped = filtered.groupBy { it.chapter }
-        .toSortedMap()
+    val filtered = allPoints.filter { kp ->
+        (fGrade.isBlank()   || kp.grade   == fGrade) &&
+        (fChapter.isBlank() || kp.chapter == fChapter) &&
+        (query.isBlank()    || kp.content.contains(query, ignoreCase = true)
+                            || kp.code.contains(query, ignoreCase = true)
+                            || kp.chapter.contains(query, ignoreCase = true))
+    }
+
+    val grouped = filtered.groupBy { it.chapter }.toSortedMap()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -84,13 +96,36 @@ internal fun KnowledgePointPickerSheet(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 FilterChip(selected = fGrade.isBlank(), onClick = { fGrade = "" },
-                    label = { Text("全部") })
+                    label = { Text("全部学段") })
                 PHYSICS_GRADES.forEach { g ->
                     FilterChip(
                         selected = fGrade == g,
                         onClick  = { fGrade = if (fGrade == g) "" else g },
                         label    = { Text(g) }
                     )
+                }
+            }
+
+            // ── Chapter filter ────────────────────────────────────────────
+            if (availableChapters.size > 1) {
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = fChapter.isBlank(),
+                        onClick  = { fChapter = "" },
+                        label    = { Text("全部章节") }
+                    )
+                    availableChapters.forEach { ch ->
+                        // Show a short label: "第N章" extracted from the full chapter title
+                        val shortLabel = ch.substringBefore(" ").ifBlank { ch.take(4) }
+                        FilterChip(
+                            selected = fChapter == ch,
+                            onClick  = { fChapter = if (fChapter == ch) "" else ch },
+                            label    = { Text(shortLabel) }
+                        )
+                    }
                 }
             }
 
@@ -103,47 +138,88 @@ internal fun KnowledgePointPickerSheet(
                 shape         = RoundedCornerShape(12.dp),
                 modifier      = Modifier.fillMaxWidth(),
                 leadingIcon   = { Icon(Icons.Default.Search, null) },
-                colors        = OutlinedTextFieldDefaults.colors(
+                trailingIcon  = {
+                    if (query.isNotBlank()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor   = FluentBlue,
                     unfocusedBorderColor = FluentBorder
                 )
             )
 
+            // ── Active filter summary ─────────────────────────────────────
+            if (fChapter.isNotBlank() || query.isNotBlank()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Text("${filtered.size} 个知识点",
+                        style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+                    if (fChapter.isNotBlank()) {
+                        InputChip(
+                            selected     = true,
+                            onClick      = { fChapter = "" },
+                            label        = {
+                                Text(fChapter.substringBefore(" ").ifBlank { fChapter.take(4) },
+                                    style = MaterialTheme.typography.labelSmall)
+                            },
+                            trailingIcon = {
+                                Icon(Icons.Default.Close, null, Modifier.size(14.dp))
+                            }
+                        )
+                    }
+                }
+            }
+
             // ── Points list grouped by chapter ────────────────────────────
             LazyColumn(
-                modifier            = Modifier.fillMaxWidth().heightIn(max = 340.dp),
+                modifier            = Modifier.fillMaxWidth().heightIn(max = 320.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 if (grouped.isEmpty()) {
                     item {
-                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                            contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text("没有符合条件的知识点", color = FluentMuted,
                                 style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 } else {
                     grouped.forEach { (chapter, points) ->
-                        item(key = "header_$chapter") {
-                            Text(chapter,
-                                style    = MaterialTheme.typography.labelMedium,
-                                color    = FluentBlue, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                        // Show chapter header only when multiple chapters are visible
+                        if (grouped.size > 1) {
+                            item(key = "header_$chapter") {
+                                Text(chapter,
+                                    style      = MaterialTheme.typography.labelMedium,
+                                    color      = FluentBlue,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier   = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                            }
                         }
                         items(points, key = { it.id }) { kp ->
                             val checked = kp.id in draft
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { draft = if (checked) draft - kp.id else draft + kp.id }
+                                    .clickable {
+                                        draft = if (checked) draft - kp.id else draft + kp.id
+                                    }
                                     .padding(vertical = 3.dp),
                                 verticalAlignment     = Alignment.Top,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Checkbox(
                                     checked         = checked,
-                                    onCheckedChange = { draft = if (checked) draft - kp.id else draft + kp.id },
-                                    modifier        = Modifier.size(20.dp).padding(top = 2.dp)
+                                    onCheckedChange = {
+                                        draft = if (checked) draft - kp.id else draft + kp.id
+                                    },
+                                    modifier = Modifier.size(20.dp).padding(top = 2.dp)
                                 )
                                 Column(Modifier.weight(1f)) {
                                     Row(
@@ -156,8 +232,8 @@ internal fun KnowledgePointPickerSheet(
                                     }
                                     Spacer(Modifier.height(2.dp))
                                     Text(kp.content,
-                                        style   = MaterialTheme.typography.bodySmall,
-                                        color   = MaterialTheme.colorScheme.onSurface,
+                                        style    = MaterialTheme.typography.bodySmall,
+                                        color    = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 3)
                                 }
                             }

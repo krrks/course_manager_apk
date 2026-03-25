@@ -1,5 +1,7 @@
 package com.school.manager.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +29,9 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     var editing by remember { mutableStateOf<KnowledgePoint?>(null) }
     var viewing by remember { mutableStateOf<KnowledgePoint?>(null) }
 
+    // Track which chapters are expanded
+    var expandedChapters by remember { mutableStateOf(emptySet<String>()) }
+
     val filtered = state.knowledgePoints.filter { kp ->
         (fGrade.isBlank() || kp.grade == fGrade) &&
         (query.isBlank()  || kp.content.contains(query, ignoreCase = true)
@@ -35,6 +40,15 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     }
 
     val grouped = filtered.groupBy { it.chapter }.toSortedMap()
+
+    // Auto-expand matching chapters when searching; collapse all when search cleared
+    LaunchedEffect(query) {
+        expandedChapters = if (query.isNotBlank()) grouped.keys.toSet() else emptySet()
+    }
+    // Ensure newly visible chapters from grade-filter changes are not left in a broken state
+    LaunchedEffect(fGrade) {
+        expandedChapters = emptySet()
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -77,18 +91,42 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                 shape         = RoundedCornerShape(12.dp),
                 modifier      = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                 leadingIcon   = { Icon(Icons.Default.Search, null) },
-                colors        = OutlinedTextFieldDefaults.colors(
+                trailingIcon  = {
+                    if (query.isNotBlank()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor   = FluentBlue,
                     unfocusedBorderColor = FluentBorder
                 )
             )
 
-            Text("共 ${filtered.size} 个知识点",
-                style    = MaterialTheme.typography.labelMedium,
-                color    = FluentMuted,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+            // ── Summary row ───────────────────────────────────────────────
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Text("共 ${filtered.size} 个知识点 · ${grouped.size} 章",
+                    style = MaterialTheme.typography.labelMedium, color = FluentMuted)
+                if (grouped.isNotEmpty()) {
+                    val allExpanded = grouped.keys.all { it in expandedChapters }
+                    TextButton(
+                        onClick        = {
+                            expandedChapters = if (allExpanded) emptySet() else grouped.keys.toSet()
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text(if (allExpanded) "全部折叠" else "全部展开",
+                            style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
 
-            // ── List grouped by chapter ───────────────────────────────────
+            // ── Collapsible chapter list ──────────────────────────────────
             LazyColumn(
                 contentPadding      = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -98,24 +136,39 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                     item { EmptyState("📖", "暂无知识点") }
                 } else {
                     grouped.forEach { (chapter, points) ->
+                        val isExpanded = chapter in expandedChapters
+                        val customCount = points.count { it.isCustom }
+
+                        // ── Chapter header card ───────────────────────────
                         item(key = "h_$chapter") {
-                            Surface(
-                                shape    = RoundedCornerShape(8.dp),
-                                color    = FluentBlue.copy(alpha = 0.10f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(chapter,
-                                    style      = MaterialTheme.typography.labelMedium,
-                                    color      = FluentBlue,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier   = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-                            }
-                        }
-                        items(points, key = { it.id }) { kp ->
-                            KnowledgePointCard(
-                                kp      = kp,
-                                onClick = { viewing = kp }
+                            ChapterHeaderCard(
+                                chapter     = chapter,
+                                total       = points.size,
+                                customCount = customCount,
+                                isExpanded  = isExpanded,
+                                onClick     = {
+                                    expandedChapters = if (isExpanded)
+                                        expandedChapters - chapter
+                                    else
+                                        expandedChapters + chapter
+                                }
                             )
+                        }
+
+                        // ── Knowledge point items (animated) ──────────────
+                        if (isExpanded) {
+                            items(points, key = { "kp_${it.id}" }) { kp ->
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter   = expandVertically() + fadeIn(),
+                                    exit    = shrinkVertically() + fadeOut()
+                                ) {
+                                    KnowledgePointCard(
+                                        kp      = kp,
+                                        onClick = { viewing = kp }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -134,16 +187,16 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     }
     editing?.let { kp ->
         KnowledgePointFormDialog(
-            title   = "编辑知识点",
-            initial = kp,
+            title     = "编辑知识点",
+            initial   = kp,
             onDismiss = { editing = null },
             onSave    = { vm.updateKnowledgePoint(it); editing = null }
         )
     }
     if (showAdd) {
         KnowledgePointFormDialog(
-            title   = "添加知识点",
-            initial = null,
+            title     = "添加知识点",
+            initial   = null,
             onDismiss = { showAdd = false },
             onSave    = { kp ->
                 vm.addKnowledgePoint(kp.grade, kp.chapter, kp.section, kp.code, kp.content)
@@ -153,23 +206,104 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     }
 }
 
-// ── Card ──────────────────────────────────────────────────────────────────────
+// ── Chapter header card ───────────────────────────────────────────────────────
+
+@Composable
+private fun ChapterHeaderCard(
+    chapter: String,
+    total: Int,
+    customCount: Int,
+    isExpanded: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape    = RoundedCornerShape(10.dp),
+        color    = if (isExpanded) FluentBlue.copy(alpha = 0.12f)
+                   else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Chapter icon
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = if (isExpanded) FluentBlue else FluentMuted.copy(alpha = 0.2f)
+            ) {
+                Text(
+                    chapter.firstOrNull { it.isDigit() }?.toString() ?: "?",
+                    style      = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color      = if (isExpanded) androidx.compose.ui.graphics.Color.White
+                                 else FluentMuted,
+                    modifier   = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+            // Chapter title
+            Text(
+                chapter,
+                style      = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isExpanded) FontWeight.Bold else FontWeight.Normal,
+                color      = if (isExpanded) FluentBlue
+                             else MaterialTheme.colorScheme.onSurface,
+                modifier   = Modifier.weight(1f)
+            )
+            // Badges
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isExpanded) FluentBlue.copy(0.15f) else FluentMuted.copy(0.12f)
+                ) {
+                    Text("$total 个",
+                        style      = MaterialTheme.typography.labelSmall,
+                        color      = if (isExpanded) FluentBlue else FluentMuted,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier   = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                }
+                if (customCount > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = FluentAmber.copy(0.15f)
+                    ) {
+                        Text("自定义$customCount",
+                            style    = MaterialTheme.typography.labelSmall,
+                            color    = FluentAmber,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
+                    }
+                }
+            }
+            // Expand arrow
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint     = if (isExpanded) FluentBlue else FluentMuted,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+// ── Knowledge point card ──────────────────────────────────────────────────────
 
 @Composable
 private fun KnowledgePointCard(kp: KnowledgePoint, onClick: () -> Unit) {
-    FluentCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+    FluentCard(modifier = Modifier.fillMaxWidth().padding(start = 8.dp), onClick = onClick) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment     = Alignment.CenterVertically
             ) {
                 ColorChip(kp.code, FluentBlue)
-                ColorChip(kp.grade, FluentGreen)
                 ColorChip(kp.section.take(14), FluentTeal)
                 if (kp.isCustom) ColorChip("自定义", FluentAmber)
             }
             Text(kp.content,
-                style   = MaterialTheme.typography.bodyMedium,
+                style    = MaterialTheme.typography.bodyMedium,
                 maxLines = 3)
         }
     }
