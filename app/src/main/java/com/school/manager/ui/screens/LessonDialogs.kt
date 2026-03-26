@@ -351,7 +351,8 @@ internal fun LessonFormDialog(
     // ── Knowledge point picker sheet ───────────────────────────────────────
     if (showKpPicker) {
         KnowledgePointPickerSheet(
-            allPoints = vm.knowledgePoints.value ?: emptyList(),
+            allChapters = vm.allChapters.value ?: emptyList(),
+            allSections = vm.allSections.value ?: emptyList(),
             selected  = kpIds,
             onConfirm = { kpIds = it; showKpPicker = false },
             onAddNew  = { sectionId, no, content ->
