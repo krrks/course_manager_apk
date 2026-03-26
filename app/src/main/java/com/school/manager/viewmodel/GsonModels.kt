@@ -46,7 +46,9 @@ internal fun parseGsonState(json: String, gson: Gson, pathRemap: Map<String, Str
         val lessons  = raw.lessons?.map  { gl -> Lesson(gl.id ?: 0L, gl.classId ?: 0L, gl.date ?: "", gl.startTime ?: "", gl.endTime ?: "", gl.status ?: "pending", gl.topic ?: "", gl.notes ?: "", gl.attendees ?: emptyList(), gl.isModified ?: false, gl.code ?: "", gl.teacherIdOverride, gl.knowledgePointIds ?: emptyList()) } ?: emptyList()
         val kpChapters = raw.kpChapters?.map { KpChapter(it.id ?: 0L, it.grade ?: "", it.no ?: 0, it.name ?: "") } ?: emptyList()
         val kpSections = raw.kpSections?.map { KpSection(it.id ?: 0L, it.chapterId ?: 0L, it.no ?: 0, it.name ?: "") } ?: emptyList()
-        val knowledgePoints = raw.knowledgePoints?.map { gkp -> KnowledgePoint(gkp.id ?: 0L, gkp.sectionId ?: 0L, gkp.no ?: 0, gkp.content ?: "", gkp.isCustom ?: false) } ?: emptyList()
+        val knowledgePoints = raw.knowledgePoints?.map { gkp ->
+            KnowledgePoint(gkp.id ?: 0L, gkp.sectionId ?: 0L, gkp.no ?: 0, gkp.content ?: "", gkp.isCustom ?: false)
+        } ?: emptyList()
 
         AppState(subjects, teachers, classes, students, lessons, knowledgePoints, kpChapters, kpSections)
     } catch (_: Exception) { null }

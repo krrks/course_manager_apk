@@ -1,24 +1,22 @@
 #!build
-# 知识点三表重构：Chapter → Section → Point，编号自动生成
+# 移除旧版兼容代码 + 修复课次编辑页知识点选择器为空的问题
 
-## ⚠ 迁移说明
-- 数据库从 v3 升级到 v4
-- 旧的扁平 knowledge_points 表被替换为三张关联表（kp_chapters / kp_sections / knowledge_points）
-- 已有自定义知识点在此次迁移中丢失（一次性影响）；内置种子数据自动重新写入
+## 变更说明
 
-## 数据层变更
-- Models.kt：新增 KpChapter、KpSection、KpFull；KnowledgePoint 改为 sectionId + no；AppState 新增 kpChapters / kpSections
-- Entities.kt：新增 KpChapterEntity、KpSectionEntity；KnowledgePointEntity 重构
-- Daos.kt：新增 KpChapterDao、KpSectionDao
-- Mappers.kt：新增对应 mapper
-- AppDatabase.kt：v3→v4，MIGRATION_3_4 重建三张 KP 表
-- AppRepository.kt：8 路 Flow combine；新增章/节 CRUD；种子改读新 JSON 格式
-- AppViewModel.kt：新增 addKpChapter / addKpSection；knowledgePointFull() 联合查询；addKnowledgePoint 新签名
-- GsonModels.kt：新增 GsonKpChapter / GsonKpSection；GsonKnowledgePoint 重构
-- knowledge_points.json：改为 {chapters, sections, points} 三段式格式
+### 1. 移除旧版数据库兼容代码
+- AppDatabase.kt: 删除 MIGRATION_2_3 和 MIGRATION_3_4，数据库版本重置为 1（当前三表结构作为唯一基准版本）
+- 使用 fallbackToDestructiveMigration() 处理任何版本不匹配
 
-## UI 变更
-- KnowledgePointsScreen.kt：三级可折叠卡片（章 → 节 → 知识点）；SpeedDial 支持添加章/节/知识点；编号由 chapter.no.section.no.point.no 自动生成
-- KnowledgePointsDialogs.kt（新文件）：ChapterFormDialog / SectionFormDialog / PointFormDialog 及对应详情 dialog
-- LessonKnowledgePointPicker.kt：新增 allChapters / allSections 参数；章节筛选 chips 用真实 ID；行内添加表单改为选章→选节→填号+内容
-- LessonDialogs.kt（apply.sh 补丁）：vm.knowledgePointFull、KpFull 字段引用、onAddNew 签名更新
+### 2. 知识点 ID 稳定性说明
+知识点已通过 PRIMARY KEY Long ID 与课次绑定（存储在 lesson.knowledgePointIds 中）。
+只要知识点记录的 ID 不变，无论内容如何排序、重排，课次引用始终准确。
+JSON 种子文件中的 ID 为固定数值（1001–3005），保证稳定。
+
+### 3. 修复课次编辑页知识点选择器为空
+- LessonDialogs.kt: LessonFormDialog 中调用 KnowledgePointPickerSheet 时，
+  将原来错误的 emptyList() 替换为 state.kpChapters / state.kpSections / state.knowledgePoints，
+  使选择器能正确显示所有已存在的知识点。
+
+### 4. GsonModels.kt 清理
+- 移除对旧版扁平 KnowledgePoint 格式（grade/chapter/section/code 字段）的引用
+- 保持与当前三表格式（sectionId + no）完全一致
