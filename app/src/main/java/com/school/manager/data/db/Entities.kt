@@ -3,23 +3,10 @@ package com.school.manager.data.db
 import androidx.room.*
 
 @Entity(tableName = "subjects")
-data class SubjectEntity(
-    @PrimaryKey val id: Long,
-    val name: String,
-    val color: Long,
-    val teacherId: Long?,
-    val code: String
-)
+data class SubjectEntity(@PrimaryKey val id: Long, val name: String, val color: Long, val teacherId: Long?, val code: String)
 
 @Entity(tableName = "teachers")
-data class TeacherEntity(
-    @PrimaryKey val id: Long,
-    val name: String,
-    val gender: String,
-    val phone: String,
-    val avatarUri: String?,
-    val code: String
-)
+data class TeacherEntity(@PrimaryKey val id: Long, val name: String, val gender: String, val phone: String, val avatarUri: String?, val code: String)
 
 @Entity(
     tableName = "classes",
@@ -29,68 +16,61 @@ data class TeacherEntity(
     ],
     indices = [Index("subjectId"), Index("headTeacherId")]
 )
-data class ClassEntity(
-    @PrimaryKey val id: Long,
-    val name: String,
-    val grade: String,
-    val count: Int,
-    val headTeacherId: Long?,
-    val subjectId: Long?,
-    val code: String
-)
+data class ClassEntity(@PrimaryKey val id: Long, val name: String, val grade: String, val count: Int, val headTeacherId: Long?, val subjectId: Long?, val code: String)
 
 @Entity(tableName = "students")
-data class StudentEntity(
-    @PrimaryKey val id: Long,
-    val name: String,
-    val studentNo: String,
-    val gender: String,
-    val grade: String,
-    val classIdsJson: String,
-    val avatarUri: String?
-)
+data class StudentEntity(@PrimaryKey val id: Long, val name: String, val studentNo: String, val gender: String, val grade: String, val classIdsJson: String, val avatarUri: String?)
 
-/**
- * Lesson replaces both Schedule and Attendance.
- * classId → classes ON DELETE CASCADE.
- * teacherIdOverride: when non-null, overrides the class's headTeacherId for this lesson.
- * knowledgePointIdsJson: JSON array of selected knowledge point IDs.
- */
 @Entity(
     tableName = "lessons",
-    foreignKeys = [
-        ForeignKey(ClassEntity::class, ["id"], ["classId"], onDelete = ForeignKey.CASCADE)
-    ],
+    foreignKeys = [ForeignKey(ClassEntity::class, ["id"], ["classId"], onDelete = ForeignKey.CASCADE)],
     indices = [Index("classId"), Index("date")]
 )
 data class LessonEntity(
     @PrimaryKey val id: Long,
-    val classId: Long,
-    val date: String,           // YYYY-MM-DD
-    val startTime: String,
-    val endTime: String,
-    val status: String,         // pending/completed/absent/cancelled/postponed
-    val topic: String,
-    val notes: String,
-    val attendeesJson: String,
-    val isModified: Boolean,
-    val code: String,
+    val classId: Long, val date: String, val startTime: String, val endTime: String,
+    val status: String, val topic: String, val notes: String,
+    val attendeesJson: String, val isModified: Boolean, val code: String,
     val teacherIdOverride: Long? = null,
     val knowledgePointIdsJson: String = "[]"
 )
 
+/** Chapter grouping for knowledge points (e.g. "第1章 机械运动"). */
+@Entity(tableName = "kp_chapters")
+data class KpChapterEntity(
+    @PrimaryKey val id: Long,
+    val grade: String,   // 初中 / 高中
+    val no: Int,
+    val name: String     // title without number prefix
+)
+
+/** Section within a chapter (e.g. "第1节 长度和时间的测量"). */
+@Entity(
+    tableName = "kp_sections",
+    foreignKeys = [ForeignKey(KpChapterEntity::class, ["id"], ["chapterId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("chapterId")]
+)
+data class KpSectionEntity(
+    @PrimaryKey val id: Long,
+    val chapterId: Long,
+    val no: Int,
+    val name: String
+)
+
 /**
- * A knowledge point entry.
- * isCustom = false → seeded from assets/knowledge_points.json
- * isCustom = true  → user-created at runtime
+ * Individual knowledge point.
+ * code ("X.Y.Z") is derived at runtime from chapter.no, section.no, point.no — not stored.
+ * isCustom = false → seeded from assets; true → user-created.
  */
-@Entity(tableName = "knowledge_points")
+@Entity(
+    tableName = "knowledge_points",
+    foreignKeys = [ForeignKey(KpSectionEntity::class, ["id"], ["sectionId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("sectionId")]
+)
 data class KnowledgePointEntity(
     @PrimaryKey val id: Long,
-    val grade: String,
-    val chapter: String,
-    val section: String,
-    val code: String,
+    val sectionId: Long,
+    val no: Int,
     val content: String,
     val isCustom: Boolean
 )

@@ -29,7 +29,7 @@ internal fun LessonDetailDialog(
     val sub     = cls?.resolvedSubject(state.subjects)
     val teacher = state.teachers.find { it.id == l.effectiveTeacherId(state.classes) }
     val ats     = l.attendees.mapNotNull { vm.student(it) }
-    val kps     = l.knowledgePointIds.mapNotNull { vm.knowledgePoint(it) }
+    val kps     = l.knowledgePointIds.mapNotNull { vm.knowledgePointFull(it) }
     val (done, total) = progressMap[l.classId] ?: (0 to 0)
 
     var statusExpanded by remember { mutableStateOf(false) }
@@ -139,10 +139,10 @@ internal fun LessonDetailDialog(
                                 verticalAlignment     = Alignment.CenterVertically) {
                                 ColorChip(kp.code, FluentBlue)
                                 ColorChip(kp.grade, FluentGreen)
-                                if (kp.isCustom) ColorChip("自定义", FluentAmber)
+                                if (kp.point.isCustom) ColorChip("自定义", FluentAmber)
                             }
                             Spacer(Modifier.height(3.dp))
-                            Text(kp.content,
+                            Text(kp.point.content,
                                 style  = MaterialTheme.typography.bodySmall,
                                 color  = FluentBlueDark)
                         }
@@ -332,7 +332,7 @@ internal fun LessonFormDialog(
             ) { Text("选择", style = MaterialTheme.typography.labelMedium) }
         }
         if (kpIds.isNotEmpty()) {
-            val selectedKps  = state.knowledgePoints.filter { it.id in kpIds }
+            val selectedKps  = kpIds.mapNotNull { vm.knowledgePointFull(it) }
             val displayKps   = selectedKps.take(6)
             val overflow     = selectedKps.size - displayKps.size
             androidx.compose.foundation.layout.FlowRow(
@@ -340,7 +340,7 @@ internal fun LessonFormDialog(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement   = Arrangement.spacedBy(4.dp)
             ) {
-                displayKps.forEach { kp -> ColorChip("[${kp.code}] ${kp.content.take(12)}…", FluentBlue) }
+                displayKps.forEach { kp -> ColorChip("[${kp.code}] ${kp.point.content.take(12)}…", FluentBlue) }
                 if (overflow > 0) ColorChip("+$overflow 个", FluentMuted)
             }
         }
@@ -354,8 +354,8 @@ internal fun LessonFormDialog(
             allPoints = state.knowledgePoints,
             selected  = kpIds,
             onConfirm = { kpIds = it; showKpPicker = false },
-            onAddNew  = { grade, chapter, section, code, content ->
-                vm.addKnowledgePoint(grade, chapter, section, code, content)
+            onAddNew  = { sectionId, no, content ->
+                vm.addKnowledgePoint(sectionId, no, content)
             },
             onDismiss = { showKpPicker = false }
         )

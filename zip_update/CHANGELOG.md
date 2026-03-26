@@ -1,26 +1,24 @@
 #!build
-# 知识点功能改进：种子数据精简 + 选择器章节筛选 + 管理页可折叠章节
+# 知识点三表重构：Chapter → Section → Point，编号自动生成
 
-## 变更内容
+## ⚠ 迁移说明
+- 数据库从 v3 升级到 v4
+- 旧的扁平 knowledge_points 表被替换为三张关联表（kp_chapters / kp_sections / knowledge_points）
+- 已有自定义知识点在此次迁移中丢失（一次性影响）；内置种子数据自动重新写入
 
-### ① knowledge_points.json（种子数据）
-- 从 19 条精简为 20 条，覆盖 3 章 4 节
-  - 第1章·第1节（长度和时间的测量）：1.1.1–1.1.5
-  - 第1章·第3节（运动的快慢）：1.3.1–1.3.5
-  - 第2章·第1节（声音的产生与传播）：2.1.1–2.1.5
-  - 第3章·第1节（温度）：3.1.1–3.1.5
+## 数据层变更
+- Models.kt：新增 KpChapter、KpSection、KpFull；KnowledgePoint 改为 sectionId + no；AppState 新增 kpChapters / kpSections
+- Entities.kt：新增 KpChapterEntity、KpSectionEntity；KnowledgePointEntity 重构
+- Daos.kt：新增 KpChapterDao、KpSectionDao
+- Mappers.kt：新增对应 mapper
+- AppDatabase.kt：v3→v4，MIGRATION_3_4 重建三张 KP 表
+- AppRepository.kt：8 路 Flow combine；新增章/节 CRUD；种子改读新 JSON 格式
+- AppViewModel.kt：新增 addKpChapter / addKpSection；knowledgePointFull() 联合查询；addKnowledgePoint 新签名
+- GsonModels.kt：新增 GsonKpChapter / GsonKpSection；GsonKnowledgePoint 重构
+- knowledge_points.json：改为 {chapters, sections, points} 三段式格式
 
-### ② LessonKnowledgePointPicker.kt（课次编辑选择器）
-- 在学段 chips 和搜索框之间新增章节筛选 chips 行（横向滚动）
-- 切换学段自动重置章节筛选
-- 已选章节以 InputChip 摘要显示，可点击清除
-- 搜索框新增 Clear 按钮
-- 单章视图下隐藏章节 header，避免重复
-
-### ③ KnowledgePointsScreen.kt（知识点管理页）
-- 列表改为可折叠章节卡片结构
-- 章节卡头显示条目数量徽章及自定义条目数
-- 点击章节卡头展开/折叠，带展开动画
-- 搜索时自动展开所有匹配章节，清空后恢复折叠
-- 顶部摘要行显示「全部展开/全部折叠」快捷按钮
-- 知识点条目卡左侧缩进，视觉层次更清晰
+## UI 变更
+- KnowledgePointsScreen.kt：三级可折叠卡片（章 → 节 → 知识点）；SpeedDial 支持添加章/节/知识点；编号由 chapter.no.section.no.point.no 自动生成
+- KnowledgePointsDialogs.kt（新文件）：ChapterFormDialog / SectionFormDialog / PointFormDialog 及对应详情 dialog
+- LessonKnowledgePointPicker.kt：新增 allChapters / allSections 参数；章节筛选 chips 用真实 ID；行内添加表单改为选章→选节→填号+内容
+- LessonDialogs.kt（apply.sh 补丁）：vm.knowledgePointFull、KpFull 字段引用、onAddNew 签名更新
