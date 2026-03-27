@@ -1,135 +1,350 @@
 {
   "chapters": [
-    {"id": 1, "grade": "初中", "no": 1, "name": "机械运动"},
-    {"id": 2, "grade": "初中", "no": 2, "name": "声现象"},
-    {"id": 3, "grade": "初中", "no": 3, "name": "物态变化"}
+    {"id": 1,  "grade": "初中", "no": 1,  "name": "机械运动"},
+    {"id": 2,  "grade": "初中", "no": 2,  "name": "声现象"},
+    {"id": 3,  "grade": "初中", "no": 3,  "name": "物态变化"},
+    {"id": 4,  "grade": "初中", "no": 4,  "name": "光现象"},
+    {"id": 5,  "grade": "初中", "no": 5,  "name": "质量与密度"},
+    {"id": 6,  "grade": "初中", "no": 6,  "name": "力"},
+    {"id": 7,  "grade": "初中", "no": 7,  "name": "压强与流体力学"},
+    {"id": 8,  "grade": "初中", "no": 8,  "name": "功和机械能"},
+    {"id": 9,  "grade": "初中", "no": 9,  "name": "内能与热学"},
+    {"id": 10, "grade": "初中", "no": 10, "name": "电流与电路"},
+    {"id": 11, "grade": "初中", "no": 11, "name": "电与磁"},
+    {"id": 12, "grade": "初中", "no": 12, "name": "信息的传递与能源"}
   ],
   "sections": [
-    {"id": 101, "chapterId": 1, "no": 1, "name": "长度和时间的测量"},
-    {"id": 103, "chapterId": 1, "no": 3, "name": "运动的快慢"},
-    {"id": 201, "chapterId": 2, "no": 1, "name": "声音的产生与传播"},
-    {"id": 301, "chapterId": 3, "no": 1, "name": "温度"}
+    {"id": 101, "chapterId": 1,  "no": 1, "name": "长度和时间的测量"},
+    {"id": 102, "chapterId": 1,  "no": 2, "name": "运动的描述"},
+    {"id": 103, "chapterId": 1,  "no": 3, "name": "运动的快慢"},
+    {"id": 104, "chapterId": 1,  "no": 4, "name": "测量平均速度"},
+    {"id": 201, "chapterId": 2,  "no": 1, "name": "声音的产生与传播"},
+    {"id": 202, "chapterId": 2,  "no": 2, "name": "声音的特性"},
+    {"id": 203, "chapterId": 2,  "no": 3, "name": "声的利用"},
+    {"id": 204, "chapterId": 2,  "no": 4, "name": "噪声的危害和控制"},
+    {"id": 301, "chapterId": 3,  "no": 1, "name": "温度"},
+    {"id": 302, "chapterId": 3,  "no": 2, "name": "熔化和凝固"},
+    {"id": 303, "chapterId": 3,  "no": 3, "name": "汽化和液化"},
+    {"id": 304, "chapterId": 3,  "no": 4, "name": "升华和凝华"},
+    {"id": 401, "chapterId": 4,  "no": 1, "name": "光的直线传播"},
+    {"id": 402, "chapterId": 4,  "no": 2, "name": "光的反射"},
+    {"id": 403, "chapterId": 4,  "no": 3, "name": "光的折射"},
+    {"id": 404, "chapterId": 4,  "no": 4, "name": "光的色散与电磁波谱"},
+    {"id": 405, "chapterId": 4,  "no": 5, "name": "透镜及其应用"},
+    {"id": 501, "chapterId": 5,  "no": 1, "name": "质量"},
+    {"id": 502, "chapterId": 5,  "no": 2, "name": "密度"},
+    {"id": 601, "chapterId": 6,  "no": 1, "name": "力的基本概念"},
+    {"id": 602, "chapterId": 6,  "no": 2, "name": "牛顿第三定律与弹力"},
+    {"id": 603, "chapterId": 6,  "no": 3, "name": "重力与重心"},
+    {"id": 604, "chapterId": 6,  "no": 4, "name": "运动与力（牛顿第一定律）"},
+    {"id": 605, "chapterId": 6,  "no": 5, "name": "二力平衡与摩擦力"},
+    {"id": 606, "chapterId": 6,  "no": 6, "name": "共线力的合成"},
+    {"id": 701, "chapterId": 7,  "no": 1, "name": "压强"},
+    {"id": 702, "chapterId": 7,  "no": 2, "name": "液体的压强"},
+    {"id": 703, "chapterId": 7,  "no": 3, "name": "大气压强"},
+    {"id": 704, "chapterId": 7,  "no": 4, "name": "流体压强与流速的关系"},
+    {"id": 705, "chapterId": 7,  "no": 5, "name": "浮力与阿基米德原理"},
+    {"id": 801, "chapterId": 8,  "no": 1, "name": "功与功率"},
+    {"id": 802, "chapterId": 8,  "no": 2, "name": "动能与势能"},
+    {"id": 803, "chapterId": 8,  "no": 3, "name": "简单机械"},
+    {"id": 901, "chapterId": 9,  "no": 1, "name": "分子热运动与原子结构"},
+    {"id": 902, "chapterId": 9,  "no": 2, "name": "内能与热传递"},
+    {"id": 1001, "chapterId": 10, "no": 1, "name": "电荷与静电"},
+    {"id": 1002, "chapterId": 10, "no": 2, "name": "电流与电路基础"},
+    {"id": 1003, "chapterId": 10, "no": 3, "name": "串联与并联"},
+    {"id": 1004, "chapterId": 10, "no": 4, "name": "电压、电阻与欧姆定律"},
+    {"id": 1005, "chapterId": 10, "no": 5, "name": "电功率与电能"},
+    {"id": 1006, "chapterId": 10, "no": 6, "name": "生活用电与安全"},
+    {"id": 1101, "chapterId": 11, "no": 1, "name": "磁现象与磁场"},
+    {"id": 1102, "chapterId": 11, "no": 2, "name": "电生磁与安培定则"},
+    {"id": 1103, "chapterId": 11, "no": 3, "name": "电磁铁与继电器"},
+    {"id": 1104, "chapterId": 11, "no": 4, "name": "电动机与发电机"},
+    {"id": 1201, "chapterId": 12, "no": 1, "name": "信息的传递"},
+    {"id": 1202, "chapterId": 12, "no": 2, "name": "能源与可持续发展"}
   ],
   "points": [
-    {
-      "id": 1001, "sectionId": 101, "no": 1,
-      "title": "常用长度单位词头",
-      "content": "km(千米)=10³m，dm(分米)=10⁻¹m，cm(厘米)=10⁻²m，mm(毫米)=10⁻³m，μm(微米)=10⁻⁶m，nm(纳米)=10⁻⁹m",
-      "isCustom": false
-    },
-    {
-      "id": 1002, "sectionId": 101, "no": 2,
-      "title": "刻度尺三参数与使用前观察",
-      "content": "刻度尺的三个参数：量程、分度值、零刻度线。使用前应观察：量程是否合适、分度值大小、零刻度线是否磨损",
-      "isCustom": false
-    },
-    {
-      "id": 1003, "sectionId": 101, "no": 3,
-      "title": "刻度尺读数注意事项",
-      "content": "刻度尺紧贴被测物，视线垂直刻度面，估读到分度值的下一位（估读一位）",
-      "isCustom": false
-    },
-    {
-      "id": 1004, "sectionId": 101, "no": 4,
-      "title": "误差与错误的区别",
-      "content": "误差是测量值与真实值的差异，不可避免；错误是操作失误造成的，可以避免",
-      "isCustom": false
-    },
-    {
-      "id": 1005, "sectionId": 101, "no": 5,
-      "title": "减小测量误差的方法",
-      "content": "多次测量取平均值；使用精密仪器；改进测量方法",
-      "isCustom": false
-    },
-    {
-      "id": 1011, "sectionId": 103, "no": 1,
-      "title": "速度的定义与公式",
-      "content": "速度是描述物体运动快慢的物理量，等于路程与时间的比值：v = s/t",
-      "isCustom": false
-    },
-    {
-      "id": 1012, "sectionId": 103, "no": 2,
-      "title": "速度比较的两种方法",
-      "content": "相同时间比路程（时间相同，路程大的速度大）；相同路程比时间（路程相同，时间短的速度大）",
-      "isCustom": false
-    },
-    {
-      "id": 1013, "sectionId": 103, "no": 3,
-      "title": "速度单位换算",
-      "content": "1 m/s = 3.6 km/h；1 km/h = 1/3.6 m/s ≈ 0.28 m/s",
-      "isCustom": false
-    },
-    {
-      "id": 1014, "sectionId": 103, "no": 4,
-      "title": "人步行速度参考值",
-      "content": "人的步行速度约为 1.4 m/s，即每秒走约 1.4 米，或每小时约 5 km",
-      "isCustom": false
-    },
-    {
-      "id": 1015, "sectionId": 103, "no": 5,
-      "title": "匀速直线运动的定义与特点",
-      "content": "速度大小和方向都不变的运动。特点：任意相等时间内路程相等，s-t图像为过原点直线",
-      "isCustom": false
-    },
-    {
-      "id": 2001, "sectionId": 201, "no": 1,
-      "title": "声音产生的条件",
-      "content": "声音是由物体振动产生的，振动停止，发声停止。一切发声体都在振动",
-      "isCustom": false
-    },
-    {
-      "id": 2002, "sectionId": 201, "no": 2,
-      "title": "声音传播需要介质",
-      "content": "声音传播需要介质，真空不能传声。固体、液体、气体均可传声",
-      "isCustom": false
-    },
-    {
-      "id": 2003, "sectionId": 201, "no": 3,
-      "title": "声波的传播形式",
-      "content": "声音以声波的形式传播，是一种机械波（纵波），需要介质才能传播",
-      "isCustom": false
-    },
-    {
-      "id": 2004, "sectionId": 201, "no": 4,
-      "title": "不同介质中的声速大小关系",
-      "content": "声速大小关系：固体 > 液体 > 气体。相同介质中温度越高声速越快",
-      "isCustom": false
-    },
-    {
-      "id": 2005, "sectionId": 201, "no": 5,
-      "title": "15℃空气中声速",
-      "content": "在15℃空气中声速约为340 m/s。声音在水中约1500 m/s，在钢铁中约5000 m/s",
-      "isCustom": false
-    },
-    {
-      "id": 3001, "sectionId": 301, "no": 1,
-      "title": "温度的定义",
-      "content": "温度是表示物体冷热程度的物理量，从微观上看反映了分子热运动的剧烈程度",
-      "isCustom": false
-    },
-    {
-      "id": 3002, "sectionId": 301, "no": 2,
-      "title": "液体温度计工作原理",
-      "content": "液体温度计的工作原理：利用液体热胀冷缩的性质。常用液体为水银或酒精",
-      "isCustom": false
-    },
-    {
-      "id": 3003, "sectionId": 301, "no": 3,
-      "title": "摄氏温度两个标准",
-      "content": "标准大气压下冰水混合物定义为0℃，沸水定义为100℃，两者间等分为100份，每份为1℃",
-      "isCustom": false
-    },
-    {
-      "id": 3004, "sectionId": 301, "no": 4,
-      "title": "热力学温度与绝对零度",
-      "content": "热力学温度T与摄氏温度t的关系：T = t + 273。绝对零度为 -273℃，是自然界最低温度",
-      "isCustom": false
-    },
-    {
-      "id": 3005, "sectionId": 301, "no": 5,
-      "title": "使用温度计注意事项",
-      "content": "玻璃泡完全浸入液体，不能接触容器底和壁；待示数稳定后再读数；视线与液面相平",
-      "isCustom": false
-    }
+    {"id": 10101, "sectionId": 101, "no": 1, "title": "常用长度单位词头", "content": "km=10³m，dm=10⁻¹m，cm=10⁻²m，mm=10⁻³m，μm=10⁻⁶m，nm=10⁻⁹m", "isCustom": false},
+    {"id": 10102, "sectionId": 101, "no": 2, "title": "刻度尺三参数与使用前观察", "content": "三参数：量程、分度值、零刻度线。使用前观察：量程是否合适、分度值大小、零刻度线是否磨损", "isCustom": false},
+    {"id": 10103, "sectionId": 101, "no": 3, "title": "刻度尺读数要点", "content": "刻度尺紧贴被测物，视线垂直刻度面，估读到分度值的下一位（估读一位）", "isCustom": false},
+    {"id": 10104, "sectionId": 101, "no": 4, "title": "误差与错误的区别", "content": "误差是测量值与真实值的差异，不可避免；错误是操作失误造成的，可以避免", "isCustom": false},
+    {"id": 10105, "sectionId": 101, "no": 5, "title": "减小测量误差的方法", "content": "多次测量取平均值；使用精密仪器；改进测量方法", "isCustom": false},
+    {"id": 10106, "sectionId": 101, "no": 6, "title": "长度测量的特殊方法", "content": "化曲为直法（细线沿曲线测量）；累积法（测多求一，如纸张厚度）；辅助工具法（三角尺配合刻度尺）", "isCustom": false},
+
+    {"id": 10201, "sectionId": 102, "no": 1, "title": "机械运动的定义", "content": "一个物体相对于另一个物体位置的变化叫机械运动，是自然界最普遍的运动形式", "isCustom": false},
+    {"id": 10202, "sectionId": 102, "no": 2, "title": "描述位置变化的两要素", "content": "描述位置变化需要参照物和位移（方向与大小）两个要素", "isCustom": false},
+    {"id": 10203, "sectionId": 102, "no": 3, "title": "运动的相对性", "content": "运动和静止是相对的，判断物体运动状态必须指明参照物；选不同参照物结论可以不同", "isCustom": false},
+    {"id": 10204, "sectionId": 102, "no": 4, "title": "用参照物判断运动状态", "content": "若物体与参照物之间位置不变则静止，位置改变则运动。通常以地面为参照物", "isCustom": false},
+
+    {"id": 10301, "sectionId": 103, "no": 1, "title": "速度的定义与公式", "content": "速度是描述物体运动快慢的物理量，公式：v = s/t，单位 m/s 或 km/h", "isCustom": false},
+    {"id": 10302, "sectionId": 103, "no": 2, "title": "速度比较的两种方法", "content": "相同时间比路程（路程大速度大）；相同路程比时间（时间短速度大）", "isCustom": false},
+    {"id": 10303, "sectionId": 103, "no": 3, "title": "速度单位换算", "content": "1 m/s = 3.6 km/h；1 km/h = 1/3.6 m/s ≈ 0.28 m/s", "isCustom": false},
+    {"id": 10304, "sectionId": 103, "no": 4, "title": "人步行速度参考值", "content": "人的步行速度约为 1.4 m/s，即每秒走约 1.4 米，每小时约 5 km", "isCustom": false},
+    {"id": 10305, "sectionId": 103, "no": 5, "title": "匀速直线运动", "content": "速度大小和方向都不变的运动。任意相等时间内路程相等；s-t图为过原点直线，v-t图为平行于时间轴的直线", "isCustom": false},
+
+    {"id": 10401, "sectionId": 104, "no": 1, "title": "平均速度测量原理", "content": "平均速度 v = s/t，分别测出路程 s 和时间 t，即可求得平均速度", "isCustom": false},
+    {"id": 10402, "sectionId": 104, "no": 2, "title": "测平均速度所需器材", "content": "斜槽（斜面）、小车、刻度尺、停表（秒表），用于测路程和时间", "isCustom": false},
+    {"id": 10403, "sectionId": 104, "no": 3, "title": "测平均速度实验结论", "content": "小车在斜面上运动时，下半段平均速度 > 全程平均速度 > 上半段平均速度，说明小车做加速运动", "isCustom": false},
+    {"id": 10404, "sectionId": 104, "no": 4, "title": "测平均速度实验注意事项", "content": "小车从同一位置由静止释放；计时要准确，在小车经过起点时开始计时；重复测量减小误差", "isCustom": false},
+
+    {"id": 20101, "sectionId": 201, "no": 1, "title": "声音产生的条件", "content": "声音是由物体振动产生的，振动停止，发声停止。一切发声体都在振动", "isCustom": false},
+    {"id": 20102, "sectionId": 201, "no": 2, "title": "声音传播需要介质", "content": "声音传播需要介质，真空不能传声。固体、液体、气体均可传声", "isCustom": false},
+    {"id": 20103, "sectionId": 201, "no": 3, "title": "声音以声波形式传播", "content": "声音以声波（纵波）的形式向外传播，是一种机械波，不能在真空中传播", "isCustom": false},
+    {"id": 20104, "sectionId": 201, "no": 4, "title": "不同介质中的声速比较", "content": "声速大小：固体 > 液体 > 气体。相同介质温度越高，声速越快", "isCustom": false},
+    {"id": 20105, "sectionId": 201, "no": 5, "title": "15℃空气中的声速", "content": "15℃空气中声速约为 340 m/s；水中约 1500 m/s；钢铁中约 5000 m/s", "isCustom": false},
+
+    {"id": 20201, "sectionId": 202, "no": 1, "title": "声音三要素及决定因素", "content": "音调（由频率决定，频率越高音调越高）；响度（由振幅决定，振幅越大响度越大）；音色（由发声体材质和结构决定）", "isCustom": false},
+    {"id": 20202, "sectionId": 202, "no": 2, "title": "人的听觉频率范围", "content": "人耳能听到的频率范围为 20 Hz～20000 Hz。低于 20 Hz 为次声波，高于 20000 Hz 为超声波", "isCustom": false},
+    {"id": 20203, "sectionId": 202, "no": 3, "title": "频率的单位", "content": "频率的单位是赫兹，符号 Hz。1 Hz 表示每秒振动 1 次", "isCustom": false},
+    {"id": 20204, "sectionId": 202, "no": 4, "title": "响度的单位", "content": "响度（声音强弱）的单位是分贝，符号 dB。0 dB 是人刚能听到的最微弱声音", "isCustom": false},
+    {"id": 20205, "sectionId": 202, "no": 5, "title": "三要素在波形图上的表现", "content": "音调对应波的疏密（频率）；响度对应波峰高度（振幅）；音色对应波形形状", "isCustom": false},
+
+    {"id": 20301, "sectionId": 203, "no": 1, "title": "声音的两大作用", "content": "声传递信息（如回声定位、B超）；声传递能量（如超声波清洗、超声波碎石）", "isCustom": false},
+    {"id": 20302, "sectionId": 203, "no": 2, "title": "声传信息的例子", "content": "听诊器诊病、声呐探测海底、蝙蝠回声定位、B超检查、地震预报", "isCustom": false},
+    {"id": 20303, "sectionId": 203, "no": 3, "title": "声传能量的例子", "content": "超声波清洗精密仪器、超声波碎肾结石、声波引起玻璃共振破碎", "isCustom": false},
+
+    {"id": 20401, "sectionId": 204, "no": 1, "title": "噪声的两种定义", "content": "物理学上：频率和振幅无规则变化的声音；环境保护上：影响人们正常学习、工作和休息的声音", "isCustom": false},
+    {"id": 20402, "sectionId": 204, "no": 2, "title": "噪声控制的三条途径", "content": "在声源处减弱（消声）；在传播过程中减弱（隔声）；在人耳处减弱（吸声）", "isCustom": false},
+
+    {"id": 30101, "sectionId": 301, "no": 1, "title": "温度的定义", "content": "温度是表示物体冷热程度的物理量，微观上反映分子热运动的剧烈程度", "isCustom": false},
+    {"id": 30102, "sectionId": 301, "no": 2, "title": "液体温度计工作原理", "content": "利用液体热胀冷缩的性质制成。常用液体为水银（量程宽）或酒精（低温）", "isCustom": false},
+    {"id": 30103, "sectionId": 301, "no": 3, "title": "摄氏温度两个标准", "content": "标准大气压下：冰水混合物定为 0℃，沸水定为 100℃，两者间等分 100 份，每份 1℃", "isCustom": false},
+    {"id": 30104, "sectionId": 301, "no": 4, "title": "热力学温度与绝对零度", "content": "热力学温度 T 与摄氏温度 t 的关系：T = t + 273（K）。绝对零度为 -273℃，是自然界最低温度", "isCustom": false},
+    {"id": 30105, "sectionId": 301, "no": 5, "title": "使用温度计的注意事项", "content": "玻璃泡完全浸入液体，不触碰容器底和壁；等示数稳定后读数；视线与液柱顶端相平", "isCustom": false},
+    {"id": 30106, "sectionId": 301, "no": 6, "title": "体温计的特殊结构", "content": "体温计玻璃泡上方有缩口，液柱冷却不自动缩回，便于离体读数；使用前需甩几下使液柱复位", "isCustom": false},
+    {"id": 30107, "sectionId": 301, "no": 7, "title": "体温计测量范围", "content": "体温计量程为 35℃～42℃，分度值为 0.1℃，精度高于普通温度计", "isCustom": false},
+    {"id": 30108, "sectionId": 301, "no": 8, "title": "俯视仰视读数误差", "content": "对于液柱凸形（水银）：俯视读数偏大，仰视读数偏小；对于液柱凹形（酒精）则相反", "isCustom": false},
+
+    {"id": 30201, "sectionId": 302, "no": 1, "title": "三态六种相变", "content": "固↔液：熔化（吸热）/凝固（放热）；液↔气：汽化（吸热）/液化（放热）；固↔气：升华（吸热）/凝华（放热）", "isCustom": false},
+    {"id": 30202, "sectionId": 302, "no": 2, "title": "晶体与非晶体的熔化曲线", "content": "晶体熔化曲线有水平段（熔化过程温度不变，即熔点）；非晶体熔化曲线温度持续上升，无固定熔点", "isCustom": false},
+    {"id": 30203, "sectionId": 302, "no": 3, "title": "晶体与非晶体的区别", "content": "晶体有固定熔点（凝固点），熔化时温度不变；非晶体无固定熔点，随加热温度持续升高而逐渐软化", "isCustom": false},
+    {"id": 30204, "sectionId": 302, "no": 4, "title": "晶体与非晶体举例", "content": "晶体：冰、食盐、金属（铁、铜、铝）；非晶体：玻璃、沥青、石蜡、松香", "isCustom": false},
+
+    {"id": 30301, "sectionId": 303, "no": 1, "title": "液化的两种方式", "content": "降低温度（冷却）；压缩体积（加压）。两种方式都可使气体液化", "isCustom": false},
+    {"id": 30302, "sectionId": 303, "no": 2, "title": "汽化的两种方式", "content": "蒸发（任何温度下，只在液体表面发生，缓慢）；沸腾（达到沸点，表面和内部同时发生，剧烈）", "isCustom": false},
+    {"id": 30303, "sectionId": 303, "no": 3, "title": "蒸发与沸腾的区别", "content": "蒸发：任何温度，仅表面，缓慢；沸腾：需达沸点，表面和内部，剧烈，需持续吸热", "isCustom": false},
+    {"id": 30304, "sectionId": 303, "no": 4, "title": "沸腾曲线特点", "content": "沸腾前温度不断上升；沸腾时温度保持沸点不变（平台段）；停止加热后温度下降", "isCustom": false},
+    {"id": 30305, "sectionId": 303, "no": 5, "title": "沸点与气压的关系", "content": "气压越高，沸点越高；气压越低，沸点越低。高原气压低，水的沸点低于 100℃", "isCustom": false},
+    {"id": 30306, "sectionId": 303, "no": 6, "title": "影响蒸发速率的因素", "content": "温度越高，蒸发越快；液体表面积越大，蒸发越快；液体表面空气流速越大，蒸发越快", "isCustom": false},
+    {"id": 30307, "sectionId": 303, "no": 7, "title": "压缩液化的常见应用", "content": "液化石油气（丙烷、丁烷压缩储存）；打火机气体燃料；制冷剂（氟利昂）在压缩机中液化", "isCustom": false},
+
+    {"id": 30401, "sectionId": 304, "no": 1, "title": "升华和凝华的例子", "content": "升华：干冰变气、碘加热变紫色气体、冬天冰冻衣物变干、樟脑丸变小；凝华：霜、雾凇、冬天窗玻璃内侧冰花", "isCustom": false},
+
+    {"id": 40101, "sectionId": 401, "no": 1, "title": "光源的分类", "content": "自然光源：太阳、萤火虫、闪电；人造光源：电灯、蜡烛、激光器。月亮不是光源（反射光）", "isCustom": false},
+    {"id": 40102, "sectionId": 401, "no": 2, "title": "光沿直线传播的条件", "content": "光在同一均匀介质中沿直线传播。介质不均匀或跨介质传播时，光路会弯曲", "isCustom": false},
+    {"id": 40103, "sectionId": 401, "no": 3, "title": "直线传播的应用", "content": "小孔成像（倒立实像）；影子形成（光被遮挡）；日食月食（光被月球/地球遮挡形成）", "isCustom": false},
+    {"id": 40104, "sectionId": 401, "no": 4, "title": "光速与光年", "content": "真空中光速 c = 3×10⁸ m/s。光年是光在一年内走过的距离，是长度单位（约 9.46×10¹⁵ m）", "isCustom": false},
+
+    {"id": 40201, "sectionId": 402, "no": 1, "title": "光的反射定律", "content": "反射光线、入射光线和法线在同一平面内；反射光线和入射光线分居法线两侧；反射角等于入射角", "isCustom": false},
+    {"id": 40202, "sectionId": 402, "no": 2, "title": "镜面反射与漫反射", "content": "镜面反射：光射向光滑平面，反射光平行（如镜子）；漫反射：光射向粗糙表面，反射光散乱（如白纸），均遵守反射定律", "isCustom": false},
+    {"id": 40203, "sectionId": 402, "no": 3, "title": "反射光路图的画法", "content": "先画法线（垂直镜面），量出入射角，画出反射光线（反射角=入射角），标注角度与箭头方向", "isCustom": false},
+    {"id": 40204, "sectionId": 402, "no": 4, "title": "平面镜成像特点", "content": "像与物关于镜面对称；等大虚像；像到镜面距离等于物到镜面距离；像与物连线垂直镜面", "isCustom": false},
+    {"id": 40205, "sectionId": 402, "no": 5, "title": "凸面镜和凹面镜的作用", "content": "凸面镜：对光发散，扩大视野（汽车后视镜）；凹面镜：对光会聚，使平行光汇聚于焦点（太阳灶、探照灯）", "isCustom": false},
+    {"id": 40206, "sectionId": 402, "no": 6, "title": "镜面反射与漫反射的生活例子", "content": "镜面反射：镜子、平静水面、抛光金属；漫反射：白墙、书页、黑板（使各处均能看清）", "isCustom": false},
+
+    {"id": 40301, "sectionId": 403, "no": 1, "title": "折射规律与偏折方向", "content": "折射光线、入射光线和法线共面；分居法线两侧；光从空气斜射入水（密）时折射角＜入射角，向法线偏折", "isCustom": false},
+    {"id": 40302, "sectionId": 403, "no": 2, "title": "折射现象的应用", "content": "透镜（凸透镜/凹透镜）；海市蜃楼；筷子在水中弯折；放大镜；光导纤维", "isCustom": false},
+    {"id": 40303, "sectionId": 403, "no": 3, "title": "水中物体看起来偏浅的原因", "content": "水中物体发出的光从水（密）射向空气（疏）时，折射角大于入射角，折射光线远离法线，人眼逆折射光线看去，像的位置比实际位置浅", "isCustom": false},
+    {"id": 40304, "sectionId": 403, "no": 4, "title": "玻璃砖和三棱镜的折射光路", "content": "方形玻璃砖：出射光线平行于入射光线但侧移；三棱镜：光线两次折射后向底面偏折，出射方向与入射方向不平行", "isCustom": false},
+
+    {"id": 40401, "sectionId": 404, "no": 1, "title": "色散中偏折角大小", "content": "紫光偏折角最大，红光偏折角最小；按偏折从小到大：红橙黄绿蓝靛紫", "isCustom": false},
+    {"id": 40402, "sectionId": 404, "no": 2, "title": "色光三原色", "content": "色光三原色：红、绿、蓝（RGB）。三色等比混合为白光；颜料三原色为红、黄、蓝", "isCustom": false},
+    {"id": 40403, "sectionId": 404, "no": 3, "title": "红外线与紫外线的应用", "content": "红外线：无颜色，热效应强，用于遥控器、夜视仪、保温；紫外线：无颜色，可杀菌消毒、验钞、促进钙吸收", "isCustom": false},
+
+    {"id": 40501, "sectionId": 405, "no": 1, "title": "凸透镜与凹透镜的区别", "content": "凸透镜（中厚边薄）：对光会聚，有实焦点；凹透镜（中薄边厚）：对光发散，有虚焦点", "isCustom": false},
+    {"id": 40502, "sectionId": 405, "no": 2, "title": "透镜的主要光学结构", "content": "主光轴（过两球心的直线）；光心（中心，光过不偏折）；焦点（平行光汇聚点）；焦距 f（光心到焦点的距离）", "isCustom": false},
+    {"id": 40503, "sectionId": 405, "no": 3, "title": "凸透镜的三条特殊光路", "content": "①平行主光轴的光→过焦点；②过焦点的光→平行主光轴射出；③过光心的光→方向不变直线射出", "isCustom": false},
+    {"id": 40504, "sectionId": 405, "no": 4, "title": "凸透镜成像规律与应用", "content": "u>2f：倒立缩小实像（照相机）；u=2f：倒立等大实像；f<u<2f：倒立放大实像（投影仪）；u=f：不成像；u<f：正立放大虚像（放大镜）", "isCustom": false},
+    {"id": 40505, "sectionId": 405, "no": 5, "title": "凸透镜成像动态规律", "content": "物近（物距减小）→像远（像距增大）→像变大；物远（物距增大）→像近（像距减小）→像变小。即"物近像远像变大"", "isCustom": false},
+    {"id": 40506, "sectionId": 405, "no": 6, "title": "近视与远视的矫正", "content": "近视：像成在视网膜前，用凹透镜（发散）矫正；远视：像成在视网膜后，用凸透镜（会聚）矫正", "isCustom": false},
+    {"id": 40507, "sectionId": 405, "no": 7, "title": "实验测定凸透镜焦距", "content": "粗测法：正对阳光，接收最小最亮光斑的距离即为焦距；精测法：光具座上令u>2f，调节光屏得清晰像，测量像距和物距，用成像规律验算", "isCustom": false},
+
+    {"id": 50101, "sectionId": 501, "no": 1, "title": "质量的定义", "content": "质量是物体所含物质的多少，与物体的形状、状态、位置无关，单位为千克（kg）", "isCustom": false},
+    {"id": 50102, "sectionId": 501, "no": 2, "title": "天平的使用注意事项", "content": "放水平台上，调游码归零后调节平衡螺母至指针居中；左物右码；不能超量程；不能用手直接接触砝码", "isCustom": false},
+    {"id": 50103, "sectionId": 501, "no": 3, "title": "质量的基本性质", "content": "质量是物体本身的属性，不随位置（地球/月球）、形状、状态的改变而改变", "isCustom": false},
+    {"id": 50104, "sectionId": 501, "no": 4, "title": "质量与重量的区别", "content": "质量是物质的量（标量，不变）；重力是地球对物体的引力（矢量，随位置变化）。G = mg，月球上重力约为地球的 1/6", "isCustom": false},
+
+    {"id": 50201, "sectionId": 502, "no": 1, "title": "密度的定义与公式", "content": "密度是物质单位体积的质量，公式：ρ = m/V，单位 kg/m³（水的密度为 1×10³ kg/m³）", "isCustom": false},
+    {"id": 50202, "sectionId": 502, "no": 2, "title": "常见物质密度典型值", "content": "水：1.0×10³ kg/m³；冰：0.9×10³ kg/m³；铁：7.9×10³ kg/m³；铝：2.7×10³ kg/m³；空气：1.29 kg/m³", "isCustom": false},
+    {"id": 50203, "sectionId": 502, "no": 3, "title": "影响密度的因素", "content": "密度是物质本身的特性，取决于物质种类。温度和状态改变时密度会有微小变化（如冰变水密度增大）", "isCustom": false},
+    {"id": 50204, "sectionId": 502, "no": 4, "title": "常见体积测量方法", "content": "规则固体：用刻度尺量尺寸，用公式计算；不规则固体：排水法（量筒读取液面变化）；液体：量筒直接量取", "isCustom": false},
+    {"id": 50205, "sectionId": 502, "no": 5, "title": "减小密度测量误差", "content": "先测质量再测体积（避免固体沾水后质量变大）；多次测量取平均值；正确读取量筒刻度（视线与凹液面相平）", "isCustom": false},
+
+    {"id": 60101, "sectionId": 601, "no": 1, "title": "力的定义", "content": "力是物体对物体的作用。力不能脱离物体而单独存在，力的作用是相互的。例：推力、拉力、摩擦力", "isCustom": false},
+    {"id": 60102, "sectionId": 601, "no": 2, "title": "力的三要素", "content": "力的大小、方向、作用点称为力的三要素，三者共同决定力的作用效果，可用力的示意图表示", "isCustom": false},
+    {"id": 60103, "sectionId": 601, "no": 3, "title": "力的两种作用效果", "content": "改变物体的运动状态（速度大小或方向）；使物体发生形变（弹性或塑性形变）", "isCustom": false},
+    {"id": 60104, "sectionId": 601, "no": 4, "title": "1 N 的参考大小", "content": "1 N 大约等于拿起一个 100 g 苹果所需的力（G = mg = 0.1 kg × 10 N/kg = 1 N）", "isCustom": false},
+
+    {"id": 60201, "sectionId": 602, "no": 1, "title": "牛顿第三定律", "content": "两物体间的作用力与反作用力大小相等、方向相反、作用在同一直线上、作用在不同物体上。例：脚踢球时脚也痛", "isCustom": false},
+    {"id": 60202, "sectionId": 602, "no": 2, "title": "弹性形变与塑性形变", "content": "弹性形变：撤力后能恢复原状（弹簧）；塑性形变：撤力后不能恢复（橡皮泥）", "isCustom": false},
+    {"id": 60203, "sectionId": 602, "no": 3, "title": "常见弹力类型", "content": "弹簧弹力；支持力（桌面对物体的弹力）；拉力（绳对物体的弹力）；压力（物体对地面的弹力）", "isCustom": false},
+    {"id": 60204, "sectionId": 602, "no": 4, "title": "弹力的特点", "content": "弹力方向垂直于接触面，指向被压缩（拉伸）的物体；在弹性限度内，弹力大小与形变量成正比（胡克定律）", "isCustom": false},
+    {"id": 60205, "sectionId": 602, "no": 5, "title": "弹力的应用", "content": "弹簧测力计（利用弹力与形变成正比）；弓箭（弹性势能转为动能）；蹦床、跳板（弹性形变做功）", "isCustom": false},
+    {"id": 60206, "sectionId": 602, "no": 6, "title": "弹簧测力计使用注意事项", "content": "使用前调零；拉力不超量程；拉力方向与弹簧轴线一致；弹簧不碰内壁；正确读数（视线垂直刻度）", "isCustom": false},
+
+    {"id": 60301, "sectionId": 603, "no": 1, "title": "重力的产生与三要素", "content": "重力是地球对物体的吸引力。大小：G = mg（g≈9.8 N/kg）；方向：竖直向下；作用点：重心", "isCustom": false},
+    {"id": 60302, "sectionId": 603, "no": 2, "title": "重力方向的应用", "content": "重力方向竖直向下用于制作重锤线（检测墙是否竖直）；水平仪（利用液面水平检测面是否水平）", "isCustom": false},
+    {"id": 60303, "sectionId": 603, "no": 3, "title": "确定重心的方法", "content": "规则均匀物体：几何中心即重心；薄板：悬挂法（两次悬线的交点）；重心可在物体之外（如圆环）", "isCustom": false},
+
+    {"id": 60401, "sectionId": 604, "no": 1, "title": "运动状态的两个要素", "content": "运动状态由速度的大小和方向共同描述。两者之一改变，运动状态即改变", "isCustom": false},
+    {"id": 60402, "sectionId": 604, "no": 2, "title": "运动状态不变的两种情形", "content": "静止（速度为零）；匀速直线运动（速度大小和方向均不变）", "isCustom": false},
+    {"id": 60403, "sectionId": 604, "no": 3, "title": "牛顿第一定律", "content": "一切物体在没有受到力的作用时，总保持匀速直线运动状态或静止状态（惯性定律）", "isCustom": false},
+    {"id": 60404, "sectionId": 604, "no": 4, "title": "惯性与质量的关系", "content": "惯性是物体保持原来运动状态不变的性质。质量越大，惯性越大，改变运动状态越难", "isCustom": false},
+    {"id": 60405, "sectionId": 604, "no": 5, "title": "惯性的应用与防护", "content": "利用惯性：拍打衣服除尘、锤柄套紧（甩锤）；防止惯性危害：安全带、头枕防追尾伤害", "isCustom": false},
+    {"id": 60406, "sectionId": 604, "no": 6, "title": "伽利略斜面实验", "content": "被控变量：小球初速度（同一高度释放）。结论：摩擦力越小，小球运动越远，推断无摩擦时小球永远运动", "isCustom": false},
+
+    {"id": 60501, "sectionId": 605, "no": 1, "title": "二力平衡的条件", "content": "平衡状态：静止或匀速直线运动。二力平衡条件：大小相等、方向相反、作用在同一直线上、作用在同一物体上", "isCustom": false},
+    {"id": 60502, "sectionId": 605, "no": 2, "title": "探究二力平衡\"共线\"的方法", "content": "将卡片扭转后观察是否平衡——扭转后两力不共线，卡片转动，说明平衡要求两力共线", "isCustom": false},
+    {"id": 60503, "sectionId": 605, "no": 3, "title": "摩擦力的产生条件与分类", "content": "产生条件：两物体接触，有相对运动或运动趋势，接触面粗糙。分类：静摩擦力、滑动摩擦力、滚动摩擦力", "isCustom": false},
+    {"id": 60504, "sectionId": 605, "no": 4, "title": "滑动摩擦力的影响因素与测量", "content": "影响因素：压力大小（正压力越大摩擦力越大）；接触面粗糙程度。测量：匀速拉动，弹簧测力计示数等于摩擦力", "isCustom": false},
+    {"id": 60505, "sectionId": 605, "no": 5, "title": "测摩擦力实验注意事项", "content": "必须匀速拉动（平衡状态下弹力等于摩擦力）；弹簧测力计水平放置；多次测量取平均值", "isCustom": false},
+    {"id": 60506, "sectionId": 605, "no": 6, "title": "增大摩擦的例子", "content": "鞋底和轮胎加花纹（增大粗糙度）；拧瓶盖时用布包住（增大接触粗糙度）；刹车片压紧（增大压力）", "isCustom": false},
+    {"id": 60507, "sectionId": 605, "no": 7, "title": "减小摩擦的例子", "content": "机器轴承加润滑油；气垫船/气垫导轨（变滑动为气体摩擦）；冰壶比赛刷冰（减小接触粗糙度）", "isCustom": false},
+    {"id": 60508, "sectionId": 605, "no": 8, "title": "增大或减小摩擦的方法", "content": "增大：增大压力；增大接触面粗糙度。减小：减小压力；减小粗糙度；润滑；变滑动为滚动", "isCustom": false},
+    {"id": 60509, "sectionId": 605, "no": 9, "title": "验证摩擦力与压力关系的实验", "content": "保持接触面粗糙度不变，改变砝码数量（改变正压力），匀速拉动测弹力，记录数据作图，得出 f 与 N 成正比", "isCustom": false},
+
+    {"id": 60601, "sectionId": 606, "no": 1, "title": "合力与分力、共线力合成", "content": "合力与分力等效。同向共线力合力：F = F₁ + F₂；反向共线力合力：F = |F₁ - F₂|，方向与较大力相同", "isCustom": false},
+
+    {"id": 70101, "sectionId": 701, "no": 1, "title": "压强的定义与公式", "content": "压强是单位面积上受到的压力，公式：p = F/S，单位帕斯卡（Pa），1 Pa = 1 N/m²", "isCustom": false},
+    {"id": 70102, "sectionId": 701, "no": 2, "title": "压强的物理意义与1 Pa", "content": "压强表示压力的集中程度。1 Pa 表示 1 m² 面积上受到 1 N 的压力", "isCustom": false},
+    {"id": 70103, "sectionId": 701, "no": 3, "title": "影响压强的因素", "content": "压力大小和受力面积。压力越大压强越大；受力面积越小压强越大", "isCustom": false},
+    {"id": 70104, "sectionId": 701, "no": 4, "title": "探究压强实验步骤", "content": "用泡沫板承压，分别改变压力大小和受力面积，观察凹陷深浅，得出压强与压力和面积的关系", "isCustom": false},
+    {"id": 70105, "sectionId": 701, "no": 5, "title": "压强探究实验中的转换法", "content": "用泡沫的凹陷深度来反映压强的大小（凹陷越深压强越大），这是将不可直接测量的量转化为可观察的量", "isCustom": false},
+    {"id": 70106, "sectionId": 701, "no": 6, "title": "增大压强的例子", "content": "刀刃磨薄（减小受力面积）；钉子做成尖锥形；注射器针头做细；啄木鸟嘴细长", "isCustom": false},
+    {"id": 70107, "sectionId": 701, "no": 7, "title": "减小压强的例子", "content": "铁轨下铺枕木（增大受力面积）；坦克用履带；建筑打宽地基；滑雪板做宽", "isCustom": false},
+
+    {"id": 70201, "sectionId": 702, "no": 1, "title": "液体压强的特点", "content": "液体向各方向都有压强；同一深度各方向压强相等；深度越大压强越大；密度越大压强越大", "isCustom": false},
+    {"id": 70202, "sectionId": 702, "no": 2, "title": "液体压强公式", "content": "p = ρgh，其中 ρ 为液体密度，g 为重力加速度，h 为液体深度（从自由液面到该点）。适用于静止液体", "isCustom": false},
+    {"id": 70203, "sectionId": 702, "no": 3, "title": "液体压强实验中的转换法", "content": "用 U 形管压强计，液柱高度差反映压强大小（高度差越大，压强越大）", "isCustom": false},
+
+    {"id": 70301, "sectionId": 703, "no": 1, "title": "大气压强产生的原因", "content": "大气层受重力作用压在地球上，空气有重力，从而对各方向产生压强，这就是大气压", "isCustom": false},
+    {"id": 70302, "sectionId": 703, "no": 2, "title": "马德堡半球与托里拆利实验", "content": "马德堡半球：两半球抽气后难以分开，证明大气压存在且很大；托里拆利：水银柱高约 760 mm，证明标准大气压的值", "isCustom": false},
+    {"id": 70303, "sectionId": 703, "no": 3, "title": "标准大气压与其应用", "content": "标准大气压 p₀ = 1.013×10⁵ Pa ≈ 760 mmHg。应用：吸盘挂钩、注射器抽液、吸管喝水", "isCustom": false},
+    {"id": 70304, "sectionId": 703, "no": 4, "title": "气压随高度变化的规律", "content": "海拔越高，空气越稀薄，大气压越小。高原地区大气压低，水沸点低于 100℃，食物不易煮熟", "isCustom": false},
+
+    {"id": 70401, "sectionId": 704, "no": 1, "title": "流体压强与流速的关系", "content": "在流体（气体或液体）中，流速越大的地方压强越小；流速越小的地方压强越大（伯努利原理）", "isCustom": false},
+    {"id": 70402, "sectionId": 704, "no": 2, "title": "伯努利原理的应用", "content": "飞机机翼（上表面流速快压强小，下表面压强大产生升力）；喷雾器（气流快压强低，液体被压上来）；吹纸片上升", "isCustom": false},
+
+    {"id": 70501, "sectionId": 705, "no": 1, "title": "浮力产生的原因", "content": "浮力是液体（或气体）对浸入其中的物体上下表面的压力差。下表面受向上压力大于上表面受向下压力", "isCustom": false},
+    {"id": 70502, "sectionId": 705, "no": 2, "title": "浮力的测量方法", "content": "称重法：F浮 = G（空气中重力）- F（液中弹力计示数）", "isCustom": false},
+    {"id": 70503, "sectionId": 705, "no": 3, "title": "不受浮力的情形", "content": "物体与容器底部紧密接触（如吸盘吸底），下表面不受液体压力，故不受浮力", "isCustom": false},
+    {"id": 70504, "sectionId": 705, "no": 4, "title": "阿基米德原理", "content": "浸入液体（气体）中的物体受到向上的浮力，大小等于物体排开液体（气体）的重力：F浮 = ρ液gV排", "isCustom": false},
+    {"id": 70505, "sectionId": 705, "no": 5, "title": "沉浮条件与潜艇沉浮", "content": "F浮>G：上浮→漂浮；F浮=G：悬浮；F浮<G：下沉。潜艇：向水舱充水增重下沉，排水减重上浮", "isCustom": false},
+    {"id": 70506, "sectionId": 705, "no": 6, "title": "验证浮力等于排水重的实验", "content": "用弹簧测力计分别测空气中重力 G 和液中示数 F'，同时收集排开水称重 G排水，验证 G-F' = G排水", "isCustom": false},
+
+    {"id": 80101, "sectionId": 801, "no": 1, "title": "功的定义与公式", "content": "力对物体做功需满足：有力、有位移、力与位移方向一致。公式：W = Fs，单位焦耳（J）", "isCustom": false},
+    {"id": 80102, "sectionId": 801, "no": 2, "title": "不做功的三种情形", "content": "有力无位移（举着重物站立）；有位移无力（匀速直线滑行）；力与位移垂直（重力对水平运动不做功）", "isCustom": false},
+    {"id": 80103, "sectionId": 801, "no": 3, "title": "功的单位", "content": "功的单位是焦耳（J），1 J = 1 N·m = 1 kg·m²/s²。功是标量，没有方向", "isCustom": false},
+    {"id": 80104, "sectionId": 801, "no": 4, "title": "功率的定义与公式", "content": "功率是单位时间内做的功，表示做功快慢。P = W/t；也可写作 P = Fv（匀速时）", "isCustom": false},
+    {"id": 80105, "sectionId": 801, "no": 5, "title": "功率的单位", "content": "功率的单位是瓦特（W），1 W = 1 J/s；1 kW = 1000 W；1 MW = 10⁶ W", "isCustom": false},
+    {"id": 80106, "sectionId": 801, "no": 6, "title": "功率的物理意义", "content": "功率反映做功的快慢，功率越大做功越快。人的功率约 60～100 W；汽车发动机功率数十至百余千瓦", "isCustom": false},
+
+    {"id": 80201, "sectionId": 802, "no": 1, "title": "能量、动能与势能的定义", "content": "能量是做功的能力。动能：物体运动具有的能；势能：因位置（重力势能）或形变（弹性势能）具有的能", "isCustom": false},
+    {"id": 80202, "sectionId": 802, "no": 2, "title": "势能的种类", "content": "重力势能（与高度和质量有关）；弹性势能（弹性形变的物体，如弹簧、弓）", "isCustom": false},
+    {"id": 80203, "sectionId": 802, "no": 3, "title": "动能与重力势能的影响因素", "content": "动能 Ek = ½mv²，与质量和速度有关（速度影响更大）；重力势能 Ep = mgh，与质量和高度有关", "isCustom": false},
+    {"id": 80204, "sectionId": 802, "no": 4, "title": "机械能守恒条件", "content": "机械能 = 动能 + 势能。只有重力做功（无摩擦、无其他力做功）时机械能守恒。如单摆、自由落体", "isCustom": false},
+    {"id": 80205, "sectionId": 802, "no": 5, "title": "机械能增大的例子", "content": "汽车加速（发动机做功，机械能增大）；火箭上升加速；电动机带动物体加速上升", "isCustom": false},
+    {"id": 80206, "sectionId": 802, "no": 6, "title": "机械能减小的例子", "content": "自行车刹车减速（摩擦力做功机械能减小）；物体在空气中减速下落；飞机减速降落", "isCustom": false},
+    {"id": 80207, "sectionId": 802, "no": 7, "title": "机械能守恒/转化的例子", "content": "单摆：动能↔重力势能（无摩擦时总量不变）；蹦床：动能↔弹性势能；过山车：重力势能↔动能", "isCustom": false},
+
+    {"id": 80301, "sectionId": 803, "no": 1, "title": "简单机械与功的原理", "content": "简单机械：杠杆、滑轮、斜面、轮轴。功的原理：使用任何机械不省功，省力必费距离，省距离必费力", "isCustom": false},
+    {"id": 80302, "sectionId": 803, "no": 2, "title": "杠杆的五要素", "content": "支点（O）；动力（F₁）；阻力（F₂）；动力臂（l₁，支点到动力作用线的垂直距离）；阻力臂（l₂）", "isCustom": false},
+    {"id": 80303, "sectionId": 803, "no": 3, "title": "杠杆作图的类型", "content": "①已知力画力臂（从支点向力的作用线作垂线）；②已知力臂画最小力（力臂最长时力最小，力垂直杠杆）；③画合力示意图", "isCustom": false},
+    {"id": 80304, "sectionId": 803, "no": 4, "title": "杠杆平衡条件", "content": "F₁l₁ = F₂l₂（动力×动力臂 = 阻力×阻力臂）", "isCustom": false},
+    {"id": 80305, "sectionId": 803, "no": 5, "title": "杠杆的分类", "content": "省力杠杆：l₁>l₂（费距离）如撬棒；费力杠杆：l₁<l₂（省距离）如镊子；等臂杠杆：l₁=l₂如天平", "isCustom": false},
+    {"id": 80306, "sectionId": 803, "no": 6, "title": "定滑轮与动滑轮的特点", "content": "定滑轮：不省力，改变力的方向；动滑轮：省一半力，但移动距离加倍。滑轮组效率 η = W有用/W总", "isCustom": false},
+    {"id": 80307, "sectionId": 803, "no": 7, "title": "滑轮组的主要计算公式", "content": "绳子段数 n；拉力 F = (G物+G动)/n；绳端移动距离 s = nh；有用功 W有用 = G物h；总功 W总 = Fs；效率 η = W有用/W总", "isCustom": false},
+    {"id": 80308, "sectionId": 803, "no": 8, "title": "滑轮组效率的两种情形", "content": "竖直提物：η = G物h/Fs = G物/(G物+G动)（忽略摩擦）；水平拉物：η = f物s/Fs（f物为物体受到的摩擦力）", "isCustom": false},
+    {"id": 80309, "sectionId": 803, "no": 9, "title": "斜面、杠杆和滑轮组的效率分析", "content": "斜面：η = Gh/FL = sinθ（无摩擦时）；实际因摩擦 η<1；杠杆、滑轮组同理，额外功克服摩擦和自身重力", "isCustom": false},
+
+    {"id": 90101, "sectionId": 901, "no": 1, "title": "原子的基本结构", "content": "原子由原子核（质子+中子）和核外电子组成。原子核带正电，电子带负电，正常状态下原子呈电中性", "isCustom": false},
+    {"id": 90102, "sectionId": 901, "no": 2, "title": "扩散实验", "content": "气体扩散：两瓶气体（如二氧化氮和空气）对口放置，气体自动混合；液体：墨水在水中扩散；固体（慢）：铅和金压在一起数年后互相渗入", "isCustom": false},
+    {"id": 90103, "sectionId": 901, "no": 3, "title": "分子热运动与分子间作用力", "content": "分子在永不停息地做无规则运动（布朗运动体现）；温度越高运动越剧烈。分子间同时存在引力和斥力", "isCustom": false},
+    {"id": 90104, "sectionId": 901, "no": 4, "title": "分子间引力的实验证明", "content": "两铅块紧压后难以拉开（引力）；固体和液体难以压缩（斥力）；破铅块掰断后不能自然粘合（距离太大引力消失）", "isCustom": false},
+    {"id": 90105, "sectionId": 901, "no": 5, "title": "分子间作用力的特点", "content": "引力和斥力同时存在，随距离增大而减小；r=r₀时合力为零；r<r₀时以斥力为主；r>r₀时以引力为主；距离很远时力消失", "isCustom": false},
+    {"id": 90106, "sectionId": 901, "no": 6, "title": "物态与分子间作用力的关系", "content": "固体：分子间距小，引力强，有固定形状和体积；液体：间距稍大，有流动性，无固定形状；气体：间距很大，力极弱，能自由扩散", "isCustom": false},
+
+    {"id": 90201, "sectionId": 902, "no": 1, "title": "内能的定义与组成", "content": "内能是物体内所有分子热运动动能和分子势能的总和。温度越高，内能越大（对同一物体）", "isCustom": false},
+    {"id": 90202, "sectionId": 902, "no": 2, "title": "改变内能的两个实验", "content": "棉花压燃：压缩气体做功，内能增大，温度升高点燃棉花（做功改变内能）；气体膨胀：推开活塞，内能减小，温度降低（做功改变内能）", "isCustom": false},
+    {"id": 90203, "sectionId": 902, "no": 3, "title": "改变内能的两种方式", "content": "做功（外力对物体做功→内能增大，如摩擦生热）；热传递（高温→低温，如晒太阳变热）。两者等效", "isCustom": false},
+    {"id": 90204, "sectionId": 902, "no": 4, "title": "热传递的条件", "content": "热传递的条件是存在温度差。热量从高温物体传向低温物体，直到温度相同（热平衡）为止", "isCustom": false},
+    {"id": 90205, "sectionId": 902, "no": 5, "title": "比热容与吸放热公式", "content": "比热容 c：使 1 kg 物质温度升高 1℃所需热量，单位 J/(kg·℃)。吸热：Q = cmΔt（水的比热容 4.2×10³ J/(kg·℃)，最大）", "isCustom": false},
+    {"id": 90206, "sectionId": 902, "no": 6, "title": "比热容探究实验的两种思路", "content": "①相同质量相同热源加热，比较升温时间（时间越短比热容越小）；②加热相同时间，比较温度变化（升温越快比热容越小）", "isCustom": false},
+    {"id": 90207, "sectionId": 902, "no": 7, "title": "热机的定义与类型", "content": "热机是利用燃料燃烧将内能转化为机械能的机器。主要类型：蒸汽机、内燃机（汽油机、柴油机）、燃气轮机、喷气发动机", "isCustom": false},
+    {"id": 90208, "sectionId": 902, "no": 8, "title": "内燃机的主要类型", "content": "内燃机分为汽油机（点火式）和柴油机（压燃式），燃料在气缸内直接燃烧", "isCustom": false},
+    {"id": 90209, "sectionId": 902, "no": 9, "title": "汽油机的四个冲程", "content": "①吸气冲程（进气）；②压缩冲程（压气，温度升高）；③做功冲程（点火爆炸，推动活塞，内能转机械能）；④排气冲程（排废气）", "isCustom": false},
+    {"id": 90210, "sectionId": 902, "no": 10, "title": "汽油机的旋转比", "content": "一个完整工作循环包含 4 个冲程，活塞往复 2 次，曲轴转 2 圈，做功 1 次", "isCustom": false},
+    {"id": 90211, "sectionId": 902, "no": 11, "title": "汽油机做功冲程特征", "content": "做功冲程：火花塞点火→混合气体爆炸→气体膨胀推动活塞→曲轴旋转。是唯一对外做功、将内能转为机械能的冲程", "isCustom": false},
+    {"id": 90212, "sectionId": 902, "no": 12, "title": "柴油机与汽油机的区别", "content": "柴油机：压缩比更高（压燃），用于货车/船；汽油机：用火花塞点火，用于轿车；柴油机效率更高但噪声大", "isCustom": false},
+    {"id": 90213, "sectionId": 902, "no": 13, "title": "热值与燃烧热公式", "content": "热值 q：1 kg（或 1 m³）燃料完全燃烧放出的热量，单位 J/kg。Q = mq（固液）或 Q = Vq（气体）", "isCustom": false},
+    {"id": 90214, "sectionId": 902, "no": 14, "title": "热机能量损失的主要途径", "content": "废气带走热量（最大）；冷却水带走热量；各部件摩擦发热。热机效率一般为 20%～40%", "isCustom": false},
+
+    {"id": 100101, "sectionId": 1001, "no": 1, "title": "电荷的类型与来源", "content": "两种电荷：正电荷（丝绸摩擦过的玻璃棒）和负电荷（毛皮摩擦过的橡胶棒）。同种电荷排斥，异种电荷吸引", "isCustom": false},
+    {"id": 100102, "sectionId": 1001, "no": 2, "title": "摩擦起电的实质", "content": "摩擦起电的实质是电子的转移，不是创造了电荷。得到电子→负电，失去电子→正电", "isCustom": false},
+    {"id": 100103, "sectionId": 1001, "no": 3, "title": "电荷量的单位", "content": "电荷量的单位是库仑（C）。一个电子带电量约为 1.6×10⁻¹⁹ C", "isCustom": false},
+    {"id": 100104, "sectionId": 1001, "no": 4, "title": "导体与绝缘体", "content": "导体：自由电子多，容易导电（金属、石墨、人体、大地）；绝缘体：自由电子极少（橡胶、玻璃、塑料、干木头）", "isCustom": false},
+
+    {"id": 100201, "sectionId": 1002, "no": 1, "title": "电流的概念与方向", "content": "电流是电荷的定向移动。规定正电荷定向移动的方向为电流方向（与电子移动方向相反），单位安培（A）", "isCustom": false},
+    {"id": 100202, "sectionId": 1002, "no": 2, "title": "电路中电流方向的判断", "content": "电路中电流从电源正极出发，经外电路流向负极；在电源内部从负极流向正极", "isCustom": false},
+    {"id": 100203, "sectionId": 1002, "no": 3, "title": "二极管的特点", "content": "二极管具有单向导电性：正向导通（正极接高电位），反向截止。可用于整流电路", "isCustom": false},
+    {"id": 100204, "sectionId": 1002, "no": 4, "title": "电流形成条件与电路组成", "content": "电流形成条件：有电位差（电压）；有导体连接成通路。电路由电源、用电器、导线、开关四部分组成", "isCustom": false},
+    {"id": 100205, "sectionId": 1002, "no": 5, "title": "电路的三种状态", "content": "通路（电路闭合，有电流）；断路（开关断开或断线，无电流）；短路（电源两端直接相连，电流过大，危险）", "isCustom": false},
+
+    {"id": 100301, "sectionId": 1003, "no": 1, "title": "串联与并联电路的特点", "content": "串联：电流相等 I₁=I₂，电压分配 U=U₁+U₂，一断全断；并联：电压相等 U₁=U₂，电流分配 I=I₁+I₂，独立工作", "isCustom": false},
+    {"id": 100302, "sectionId": 1003, "no": 2, "title": "电路图的化简方法", "content": "电压表内阻极大，视为断路（去掉）；电流表内阻极小，视为导线（短路）。化简后分析电路结构", "isCustom": false},
+    {"id": 100303, "sectionId": 1003, "no": 3, "title": "短路与断路的症状", "content": "短路：电流过大，保险丝熔断，其他元件失效；断路：该支路无电流，电流表示数为零，电压表有示数（量该段电压）", "isCustom": false},
+    {"id": 100304, "sectionId": 1003, "no": 4, "title": "串并联电路计算顺序", "content": "先利用等量关系（串联电流相等，并联电压相等）确定已知量，再用欧姆定律 I=U/R 逐步求解", "isCustom": false},
+
+    {"id": 100401, "sectionId": 1004, "no": 1, "title": "常见电压值与电表量程选择", "content": "干电池 1.5 V；家庭电路 220 V；对人安全电压 ≤36 V。选量程：先用大量程试接，示数超过小量程再换小量程", "isCustom": false},
+    {"id": 100402, "sectionId": 1004, "no": 2, "title": "电阻的影响因素与决定式", "content": "电阻与材料（ρ）、长度（L）、横截面积（S）、温度有关。R = ρL/S（ρ为电阻率，取决于材料）", "isCustom": false},
+    {"id": 100403, "sectionId": 1004, "no": 3, "title": "串联与并联电阻的等效", "content": "串联：R总 = R₁+R₂+…（总阻增大）；并联：1/R总 = 1/R₁+1/R₂+…（总阻减小，小于最小分阻）", "isCustom": false},
+    {"id": 100404, "sectionId": 1004, "no": 4, "title": "材料按导电性的分类", "content": "导体（金属、石墨）；绝缘体（橡胶、塑料）；半导体（硅、锗，导电性介于两者之间）；超导体（极低温下电阻为零）", "isCustom": false},
+    {"id": 100405, "sectionId": 1004, "no": 5, "title": "欧姆定律", "content": "在温度不变时，导体中的电流与两端电压成正比，与电阻成反比：I = U/R（U 单位 V，R 单位 Ω，I 单位 A）", "isCustom": false},
+    {"id": 100406, "sectionId": 1004, "no": 6, "title": "欧姆定律探究实验设计", "content": "目的：验证 I 与 U、R 的关系。保持 R 不变改变 U（自变量 U，因变量 I，控制 R）；保持 U 不变改变 R（控制 U）。滑动变阻器：控制电压或限流保护", "isCustom": false},
+    {"id": 100407, "sectionId": 1004, "no": 7, "title": "电阻测量原理与名称", "content": "利用欧姆定律：R = U/I，用电压表测两端电压，用电流表测电流，计算电阻。该方法称为"伏安法"", "isCustom": false},
+    {"id": 100408, "sectionId": 1004, "no": 8, "title": "变阻器的连接注意事项", "content": "滑动变阻器需接"一上一下"两个接线柱（接相邻两柱无效）；移动滑片改变接入电阻；使用前调至最大阻值保护电路", "isCustom": false},
+
+    {"id": 100501, "sectionId": 1005, "no": 1, "title": "电能的单位换算与公式", "content": "电能单位：焦耳（J）或千瓦时（kW·h），1 kW·h = 3.6×10⁶ J。W = Pt = UIt = I²Rt = U²t/R", "isCustom": false},
+    {"id": 100502, "sectionId": 1005, "no": 2, "title": "电能表的读数与标注", "content": "电能表示数单位为 kW·h（度），读两次示数之差即为用电量。标注如"220V 10A 50Hz 2000r/kW·h"", "isCustom": false},
+    {"id": 100503, "sectionId": 1005, "no": 3, "title": "电功率的公式形式与额定值", "content": "P = UI = I²R = U²/R。额定功率/电压/电流：铭牌标注的正常工作值；实际值：实际工作时的值，随实际电压变化", "isCustom": false},
+    {"id": 100504, "sectionId": 1005, "no": 4, "title": "额定值与实际值计算时的不变量", "content": "计算实际功率时，一般认为用电器的电阻 R 保持不变（灯丝温度不变时），用 P实 = U实²/R 计算", "isCustom": false},
+    {"id": 100505, "sectionId": 1005, "no": 5, "title": "小灯泡U-I曲线的特点", "content": "小灯泡的 U-I 曲线不是直线（弯曲）。原因：温度升高→钨丝电阻增大→I 增幅小于 U 增幅", "isCustom": false},
+    {"id": 100506, "sectionId": 1005, "no": 6, "title": "焦耳定律与探究实验", "content": "焦耳定律：Q = I²Rt，电流越大、电阻越大、时间越长，产生热量越多。探究思路：①相同电流比较不同电阻产热；②相同电阻比较不同电流产热", "isCustom": false},
+
+    {"id": 100601, "sectionId": 1006, "no": 1, "title": "家庭电路的一般结构", "content": "进户线→电能表→总开关→保险丝→各分路→插座/灯具。零线和火线并排入户，各用电器并联", "isCustom": false},
+    {"id": 100602, "sectionId": 1006, "no": 2, "title": "区分零线火线与试电笔", "content": "试电笔：氖管发光接触的是火线；不发光为零线。结构：笔尖→金属体→氖管→高阻→笔尾（手持端）", "isCustom": false},
+    {"id": 100603, "sectionId": 1006, "no": 3, "title": "三线插头的接线规则", "content": "上孔接地线（黄绿花线）；左孔接零线（蓝线）；右孔接火线（红线）。记忆：左零右火上接地", "isCustom": false},
+    {"id": 100604, "sectionId": 1006, "no": 4, "title": "三线插座与白炽灯电路图", "content": "三线插座：L接火线、N接零线、E接地线，三线并联于电路；白炽灯：开关串联在火线侧，灯接在火线和零线之间", "isCustom": false},
+    {"id": 100605, "sectionId": 1006, "no": 5, "title": "电路保护装置与过载原因", "content": "保护装置：保险丝（电流过大时熔断）；空气开关（自动跳闸）；漏电保护器。过载原因：同时使用大功率电器过多", "isCustom": false},
+    {"id": 100606, "sectionId": 1006, "no": 6, "title": "家庭电路总功率过大的危害", "content": "总功率过大→电流过大→导线过热→绝缘层老化→短路/火灾。保险丝熔断起保护作用", "isCustom": false},
+    {"id": 100607, "sectionId": 1006, "no": 7, "title": "低压与高压触电的防护", "content": "低压触电（220V）：单线触电（一手触火线，电流经人体到地）；双线触电（两手分别触火线零线）。高压：感应触电，防护：绝缘、保持安全距离", "isCustom": false},
+    {"id": 100608, "sectionId": 1006, "no": 8, "title": "漏电保护器的工作原理", "content": "正常时火线和零线电流相等；漏电时电流不平衡→检测元件动作→自动断开电路保护人身安全", "isCustom": false},
+
+    {"id": 110101, "sectionId": 1101, "no": 1, "title": "磁极间的相互作用", "content": "同名磁极相互排斥，异名磁极相互吸引。磁铁有 N 极和 S 极，磁极不能单独存在", "isCustom": false},
+    {"id": 110102, "sectionId": 1101, "no": 2, "title": "磁化与磁性元素", "content": "磁化：使原来没有磁性的物体获得磁性。铁、钴、镍（Fe、Co、Ni）是常见磁性元素，容易被磁化", "isCustom": false},
+    {"id": 110103, "sectionId": 1101, "no": 3, "title": "地磁场的特点", "content": "地球是一个大磁体，地磁北极在地理南极附近，地磁南极在地理北极附近。指南针 N 极指地理南方", "isCustom": false},
+    {"id": 110104, "sectionId": 1101, "no": 4, "title": "四种磁感线分布图", "content": "条形磁铁：两端密中间疏，从 N 到 S；蹄形磁铁：两极间近似匀强；通电直导线：同心圆；通电螺线管：类似条形磁铁", "isCustom": false},
+
+    {"id": 110201, "sectionId": 1102, "no": 1, "title": "电流磁效应的发现", "content": "奥斯特实验：通电导线附近磁针偏转，发现电流能产生磁场，该效应称为电流的磁效应（1820年，奥斯特发现）", "isCustom": false},
+    {"id": 110202, "sectionId": 1102, "no": 2, "title": "安培定则（右手定则）的使用", "content": "直导线：右手握导线，拇指指向电流方向，四指弯曲方向为磁场方向；螺线管：右手握管，四指弯曲方向为电流方向，拇指所指为 N 极", "isCustom": false},
+    {"id": 110203, "sectionId": 1102, "no": 3, "title": "电流磁效应的实际应用", "content": "电磁铁；电磁继电器；电动机；扬声器；电报机", "isCustom": false},
+
+    {"id": 110301, "sectionId": 1103, "no": 1, "title": "影响电磁铁磁性强弱的因素", "content": "电流越大，磁性越强；线圈匝数越多，磁性越强；有铁芯比无铁芯磁性强", "isCustom": false},
+    {"id": 110302, "sectionId": 1103, "no": 2, "title": "继电器的结构与连接方法", "content": "继电器由电磁铁（控制电路）和被控开关（工作电路）组成。控制电路电流小，工作电路电流可大，实现低压控制高压", "isCustom": false},
+    {"id": 110303, "sectionId": 1103, "no": 3, "title": "常见继电器电路类型", "content": "温控继电器（温度升高电阻变小→电流增大→磁性增强→吸合）；光控；声控；电磁继电器控制电动机", "isCustom": false},
+
+    {"id": 110401, "sectionId": 1104, "no": 1, "title": "电动机的工作原理与受力因素", "content": "通电导体在磁场中受安培力，利用此力转动（电能→机械能）。受力大小与：电流大小、导线长度、磁场强弱有关", "isCustom": false},
+    {"id": 110402, "sectionId": 1104, "no": 2, "title": "磁场对通电导线的应用", "content": "电动机；扬声器（线圈受力振动发声）；电流计（指针偏转）", "isCustom": false},
+    {"id": 110403, "sectionId": 1104, "no": 3, "title": "直流电机与交流电机的区别", "content": "直流电机：用换向器换向，电流方向随转动而切换，使转矩方向不变；交流电机：靠交变电流自动换向，无换向器，结构简单", "isCustom": false},
+    {"id": 110404, "sectionId": 1104, "no": 4, "title": "发电机的原理与感应电流条件", "content": "电磁感应：导体在磁场中切割磁感线→产生感应电流（机械能→电能）。条件：闭合回路；导体切割磁感线（磁通量变化）", "isCustom": false},
+    {"id": 110405, "sectionId": 1104, "no": 5, "title": "发电机的能量转换", "content": "发电机将机械能转化为电能。线圈在磁场中旋转，切割磁感线，产生交变电流（交流发电机）", "isCustom": false},
+    {"id": 110406, "sectionId": 1104, "no": 6, "title": "三个电磁学基本原理", "content": "①奥斯特（1820）：电流产生磁场→电磁铁、电动机；②安培：通电导线在磁场中受力→电动机；③法拉第（1831）：电磁感应→发电机、变压器", "isCustom": false},
+
+    {"id": 120101, "sectionId": 1201, "no": 1, "title": "现代通信的主要方式", "content": "有线通信（电话、光纤）；无线通信（广播、电视、移动通信、卫星通信）；光通信（光纤传输）", "isCustom": false},
+    {"id": 120102, "sectionId": 1201, "no": 2, "title": "波长、波速与频率的关系", "content": "波速 v = λf，其中 λ 为波长（m），f 为频率（Hz），v 为波速（m/s）。电磁波在真空中 v = 3×10⁸ m/s", "isCustom": false},
+
+    {"id": 120201, "sectionId": 1202, "no": 1, "title": "三大化石能源与二次能源", "content": "化石能源：煤、石油、天然气（不可再生）。二次能源（由一次能源转化）：电能、汽油、焦炭、煤气", "isCustom": false},
+    {"id": 120202, "sectionId": 1202, "no": 2, "title": "核裂变与核聚变的应用", "content": "核裂变：重核（铀-235）分裂释放能量→核电站、原子弹；核聚变：轻核（氢的同位素）融合→氢弹、未来核聚变电站", "isCustom": false},
+    {"id": 120203, "sectionId": 1202, "no": 3, "title": "太阳能的来源", "content": "太阳能来源于核聚变反应（氢核聚变为氦核），不是裂变。太阳是地球大多数能量的源泉", "isCustom": false},
+    {"id": 120204, "sectionId": 1202, "no": 4, "title": "三种大气污染效应", "content": "温室效应：CO₂增多导致气温升高；酸雨：SO₂、NO₂溶于水形成酸性降雨；臭氧层破坏：氟利昂（CFCs）分解臭氧，紫外线增强", "isCustom": false}
   ]
 }
