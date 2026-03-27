@@ -1,22 +1,27 @@
 #!build
-# 移除旧版兼容代码 + 修复课次编辑页知识点选择器为空的问题
+# 知识点选择器：章节折叠树 + 批量选择
 
 ## 变更说明
 
-### 1. 移除旧版数据库兼容代码
-- AppDatabase.kt: 删除 MIGRATION_2_3 和 MIGRATION_3_4，数据库版本重置为 1（当前三表结构作为唯一基准版本）
-- 使用 fallbackToDestructiveMigration() 处理任何版本不匹配
+### LessonKnowledgePointPicker.kt 重写
 
-### 2. 知识点 ID 稳定性说明
-知识点已通过 PRIMARY KEY Long ID 与课次绑定（存储在 lesson.knowledgePointIds 中）。
-只要知识点记录的 ID 不变，无论内容如何排序、重排，课次引用始终准确。
-JSON 种子文件中的 ID 为固定数值（1001–3005），保证稳定。
+**交互设计**
+- 列表改为三级可折叠树：章 → 节 → 知识点
+- 点击章/节标题行展开/折叠，不影响复选框操作
+- 搜索时自动展开所有匹配的章和节，清空搜索后恢复折叠
+- 切换学段筛选时自动全部折叠
+- 顶部显示"全部展开 / 全部折叠"切换按钮
 
-### 3. 修复课次编辑页知识点选择器为空
-- LessonDialogs.kt: LessonFormDialog 中调用 KnowledgePointPickerSheet 时，
-  将原来错误的 emptyList() 替换为 state.kpChapters / state.kpSections / state.knowledgePoints，
-  使选择器能正确显示所有已存在的知识点。
+**批量选择**
+- 章行和节行各带一个三态复选框（TriStateCheckbox）
+  - Off = 该组内无选中
+  - Indeterminate = 部分选中（显示横线）
+  - On = 全部选中
+- 点击章/节复选框可一键选中或取消该组所有知识点
+- 确认按钮实时显示已选数量
 
-### 4. GsonModels.kt 清理
-- 移除对旧版扁平 KnowledgePoint 格式（grade/chapter/section/code 字段）的引用
-- 保持与当前三表格式（sectionId + no）完全一致
+**视觉**
+- 章行：蓝色背景 + "第N章" badge，与 KnowledgePointsScreen 风格一致
+- 节行：青色（Teal）背景 + 缩进 12dp
+- 知识点行：缩进 24dp，显示编号 chip
+- 内联添加表单保持不变
