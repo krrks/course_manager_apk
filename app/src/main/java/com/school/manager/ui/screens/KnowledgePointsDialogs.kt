@@ -163,13 +163,13 @@ internal fun PointFormDialog(
         Text("编号将自动生成为 $chNo.$secNo.${no.ifBlank { "?" }}", style = MaterialTheme.typography.labelSmall, color = FluentBlue, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 4.dp))
 
         // Title field (short label)
-        FormTextField("简短标题", kpTitle, { kpTitle = it }, "如：摄氏温度两个标准（用于上课记录中显示）")
+        FormTextField("标题", kpTitle, { kpTitle = it }, "如：摄氏温度温标")
 
         // Content field (full explanation)
         OutlinedTextField(
             value         = content,
             onValueChange = { content = it },
-            label         = { Text("完整内容") },
+            label         = { Text("内容") },
             placeholder   = { Text("详细解释，在知识点页面中展开显示", color = FluentMuted) },
             shape         = RoundedCornerShape(12.dp),
             modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -193,9 +193,9 @@ internal fun PointDetailDialog(kpFull: KpFull, vm: AppViewModel, onDismiss: () -
         DetailRow("章", "第${kpFull.chapter.no}章 ${kpFull.chapter.name}")
         DetailRow("节", "第${kpFull.section.no}节 ${kpFull.section.name}")
         if (kpFull.title.isNotBlank()) {
-            DetailRow("简短标题", kpFull.title)
+            DetailRow("标题", kpFull.title)
         }
-        SectionHeader("完整内容")
+        SectionHeader("内容")
         Text(kpFull.content, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         if (kpFull.isCustom) {
             Surface(shape = RoundedCornerShape(6.dp), color = FluentAmber.copy(.12f), modifier = Modifier.padding(horizontal = 16.dp)) {

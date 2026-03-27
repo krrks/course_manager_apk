@@ -527,12 +527,12 @@ private fun AddKpInlineForm(
                     color = FluentBlue, fontWeight = FontWeight.SemiBold)
             }
             // Short title (shown in lesson records)
-            FormTextField("简短标题", kpTitle, { kpTitle = it }, "如：摄氏温度两个标准")
+            FormTextField("标题", kpTitle, { kpTitle = it }, "如：摄氏温度温标")
             // Full content
             OutlinedTextField(
                 value         = content,
                 onValueChange = { content = it },
-                label         = { Text("完整内容") },
+                label         = { Text("内容") },
                 shape         = RoundedCornerShape(12.dp),
                 modifier      = Modifier.fillMaxWidth(),
                 minLines      = 2, maxLines = 4,
