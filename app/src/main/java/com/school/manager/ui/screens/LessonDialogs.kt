@@ -121,7 +121,7 @@ internal fun LessonDetailDialog(
             ) { ats.forEach { s -> ColorChip(s.name, FluentGreen) } }
         }
 
-        // ── Knowledge points ───────────────────────────────────────────────
+        // ── Knowledge points — compact chip + title only ────────────────────
         if (kps.isNotEmpty()) {
             SectionHeader("涉及知识点 (${kps.size}个)")
             Column(
@@ -134,17 +134,20 @@ internal fun LessonDetailDialog(
                         color    = FluentBlueLight,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment     = Alignment.CenterVertically) {
-                                ColorChip(kp.code, FluentBlue)
-                                ColorChip(kp.grade, FluentGreen)
-                                if (kp.point.isCustom) ColorChip("自定义", FluentAmber)
-                            }
-                            Spacer(Modifier.height(3.dp))
-                            Text(kp.point.content,
-                                style  = MaterialTheme.typography.bodySmall,
-                                color  = FluentBlueDark)
+                        Row(
+                            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ColorChip(kp.code, FluentBlue)
+                            Text(
+                                text       = kp.displayTitle,
+                                style      = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color      = FluentBlueDark,
+                                modifier   = Modifier.weight(1f)
+                            )
+                            if (kp.point.isCustom) ColorChip("自定义", FluentAmber)
                         }
                     }
                 }
@@ -311,7 +314,7 @@ internal fun LessonFormDialog(
             }
         }
 
-        // ── Knowledge points ───────────────────────────────────────────────
+        // ── Knowledge points — show displayTitle chips ─────────────────────
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -332,15 +335,16 @@ internal fun LessonFormDialog(
             ) { Text("选择", style = MaterialTheme.typography.labelMedium) }
         }
         if (kpIds.isNotEmpty()) {
-            val selectedKps  = kpIds.mapNotNull { vm.knowledgePointFull(it) }
-            val displayKps   = selectedKps.take(6)
-            val overflow     = selectedKps.size - displayKps.size
+            val selectedKps = kpIds.mapNotNull { vm.knowledgePointFull(it) }
+            val displayKps  = selectedKps.take(6)
+            val overflow    = selectedKps.size - displayKps.size
             androidx.compose.foundation.layout.FlowRow(
                 modifier              = Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement   = Arrangement.spacedBy(4.dp)
             ) {
-                displayKps.forEach { kp -> ColorChip("[${kp.code}] ${kp.point.content.take(12)}…", FluentBlue) }
+                // Show "[code] displayTitle" — concise, no full content
+                displayKps.forEach { kp -> ColorChip("[${kp.code}] ${kp.displayTitle}", FluentBlue) }
                 if (overflow > 0) ColorChip("+$overflow 个", FluentMuted)
             }
         }
@@ -356,8 +360,8 @@ internal fun LessonFormDialog(
             allPoints   = state.knowledgePoints,
             selected    = kpIds,
             onConfirm   = { kpIds = it; showKpPicker = false },
-            onAddNew    = { sectionId, no, content ->
-                vm.addKnowledgePoint(sectionId, no, content)
+            onAddNew    = { sectionId, no, kpTitle, content ->
+                vm.addKnowledgePoint(sectionId, no, kpTitle, content)
             },
             onDismiss   = { showKpPicker = false }
         )

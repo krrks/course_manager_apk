@@ -115,7 +115,14 @@ internal fun SectionDetailDialog(section: KpSection, allChapters: List<KpChapter
 // ── Point dialogs ─────────────────────────────────────────────────────────────
 
 @Composable
-internal fun PointFormDialog(title: String, initial: KnowledgePoint?, allChapters: List<KpChapter>, allSections: List<KpSection>, onDismiss: () -> Unit, onSave: (KnowledgePoint) -> Unit) {
+internal fun PointFormDialog(
+    title: String,
+    initial: KnowledgePoint?,
+    allChapters: List<KpChapter>,
+    allSections: List<KpSection>,
+    onDismiss: () -> Unit,
+    onSave: (KnowledgePoint) -> Unit
+) {
     val sortedChapters = remember(allChapters) { allChapters.sortedBy { it.no } }
     var selectedChapter by remember { mutableStateOf(
         sortedChapters.firstOrNull { ch -> allSections.any { it.id == initial?.sectionId && it.chapterId == ch.id } } ?: sortedChapters.firstOrNull()
@@ -127,12 +134,20 @@ internal fun PointFormDialog(title: String, initial: KnowledgePoint?, allChapter
         sectionsForChapter.firstOrNull { it.id == initial?.sectionId } ?: sectionsForChapter.firstOrNull()
     ) }
     var no      by remember { mutableStateOf(initial?.no?.toString() ?: "") }
+    var kpTitle by remember { mutableStateOf(initial?.title ?: "") }
     var content by remember { mutableStateOf(initial?.content ?: "") }
 
     FluentDialog(title = title, onDismiss = onDismiss, onConfirm = {
         val secId = selectedSection?.id ?: return@FluentDialog
         val n     = no.toIntOrNull()    ?: return@FluentDialog
-        if (content.isNotBlank()) onSave(KnowledgePoint(initial?.id ?: System.currentTimeMillis(), secId, n, content.trim(), isCustom = true))
+        if (content.isNotBlank()) onSave(KnowledgePoint(
+            id        = initial?.id ?: System.currentTimeMillis(),
+            sectionId = secId,
+            no        = n,
+            title     = kpTitle.trim(),
+            content   = content.trim(),
+            isCustom  = true
+        ))
     }) {
         if (sortedChapters.isEmpty()) { Text("请先添加章", style = MaterialTheme.typography.bodyMedium, color = FluentAmber, modifier = Modifier.padding(horizontal = 4.dp)); return@FluentDialog }
         FormDropdown("所属章", selectedChapter?.let { "第${it.no}章 ${it.name}" } ?: "", sortedChapters.map { "第${it.no}章 ${it.name}" }) { sel ->
@@ -146,7 +161,28 @@ internal fun PointFormDialog(title: String, initial: KnowledgePoint?, allChapter
         FormTextField("条目号", no, { no = it }, "如 1")
         val chNo  = selectedChapter?.no ?: "?"; val secNo = selectedSection?.no ?: "?"
         Text("编号将自动生成为 $chNo.$secNo.${no.ifBlank { "?" }}", style = MaterialTheme.typography.labelSmall, color = FluentBlue, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 4.dp))
-        OutlinedTextField(value = content, onValueChange = { content = it }, label = { Text("知识点内容") }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), minLines = 3, maxLines = 6, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
+
+        // Title field (short label)
+        FormTextField("简短标题", kpTitle, { kpTitle = it }, "如：摄氏温度两个标准（用于上课记录中显示）")
+
+        // Content field (full explanation)
+        OutlinedTextField(
+            value         = content,
+            onValueChange = { content = it },
+            label         = { Text("完整内容") },
+            placeholder   = { Text("详细解释，在知识点页面中展开显示", color = FluentMuted) },
+            shape         = RoundedCornerShape(12.dp),
+            modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            minLines      = 3,
+            maxLines      = 6,
+            colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
+        )
+
+        if (kpTitle.isBlank()) {
+            Text("⚠️ 简短标题为空时，上课记录中显示完整内容的前20字",
+                style = MaterialTheme.typography.labelSmall, color = FluentAmber,
+                modifier = Modifier.padding(horizontal = 4.dp))
+        }
     }
 }
 
@@ -156,7 +192,10 @@ internal fun PointDetailDialog(kpFull: KpFull, vm: AppViewModel, onDismiss: () -
         DetailRowPair("学段", kpFull.grade, "编号", kpFull.code)
         DetailRow("章", "第${kpFull.chapter.no}章 ${kpFull.chapter.name}")
         DetailRow("节", "第${kpFull.section.no}节 ${kpFull.section.name}")
-        SectionHeader("内容")
+        if (kpFull.title.isNotBlank()) {
+            DetailRow("简短标题", kpFull.title)
+        }
+        SectionHeader("完整内容")
         Text(kpFull.content, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         if (kpFull.isCustom) {
             Surface(shape = RoundedCornerShape(6.dp), color = FluentAmber.copy(.12f), modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -173,5 +212,11 @@ internal fun PointDetailDialog(kpFull: KpFull, vm: AppViewModel, onDismiss: () -
 
 // KnowledgePointFormDialog kept for backward-compat with LessonKnowledgePointPicker inline add
 @Composable
-internal fun KnowledgePointFormDialog(title: String, initial: KnowledgePoint?, allChapters: List<KpChapter>, allSections: List<KpSection>, onDismiss: () -> Unit, onSave: (KnowledgePoint) -> Unit) =
-    PointFormDialog(title, initial, allChapters, allSections, onDismiss, onSave)
+internal fun KnowledgePointFormDialog(
+    title: String,
+    initial: KnowledgePoint?,
+    allChapters: List<KpChapter>,
+    allSections: List<KpSection>,
+    onDismiss: () -> Unit,
+    onSave: (KnowledgePoint) -> Unit
+) = PointFormDialog(title, initial, allChapters, allSections, onDismiss, onSave)

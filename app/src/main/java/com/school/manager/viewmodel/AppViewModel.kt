@@ -127,8 +127,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteKpSection(id: Long)      { viewModelScope.launch { repo.deleteKpSection(id) } }
 
     // ─── Knowledge Points ─────────────────────────────────────────────────────
-    fun addKnowledgePoint(sectionId: Long, no: Int, content: String) {
-        viewModelScope.launch { repo.addKnowledgePoint(KnowledgePoint(System.currentTimeMillis(), sectionId, no, content, isCustom = true)) }
+    fun addKnowledgePoint(sectionId: Long, no: Int, title: String, content: String) {
+        viewModelScope.launch { repo.addKnowledgePoint(KnowledgePoint(System.currentTimeMillis(), sectionId, no, title, content, isCustom = true)) }
     }
     fun updateKnowledgePoint(kp: KnowledgePoint) { viewModelScope.launch { repo.updateKnowledgePoint(kp) } }
     fun deleteKnowledgePoint(id: Long)            { viewModelScope.launch { repo.deleteKnowledgePoint(id) } }

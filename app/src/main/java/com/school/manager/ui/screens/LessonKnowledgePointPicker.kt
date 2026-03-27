@@ -44,7 +44,7 @@ internal fun KnowledgePointPickerSheet(
     allPoints: List<KnowledgePoint>,
     selected: Set<Long>,
     onConfirm: (Set<Long>) -> Unit,
-    onAddNew: (sectionId: Long, no: Int, content: String) -> Unit,
+    onAddNew: (sectionId: Long, no: Int, title: String, content: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var draft       by remember { mutableStateOf(selected) }
@@ -67,6 +67,7 @@ internal fun KnowledgePointPickerSheet(
         val filtered = allKpFull.filter { kp ->
             (fGrade.isBlank() || kp.grade == fGrade) &&
             (query.isBlank()  || kp.content.contains(query, ignoreCase = true)
+                              || kp.title.contains(query, ignoreCase = true)
                               || kp.code.contains(query, ignoreCase = true)
                               || kp.chapter.name.contains(query, ignoreCase = true)
                               || kp.section.name.contains(query, ignoreCase = true))
@@ -242,13 +243,12 @@ internal fun KnowledgePointPickerSheet(
                         val chAllSel    = chapterIds.isNotEmpty() && chapterIds.all { it in draft }
                         val chSomeSel   = chapterIds.any { it in draft }
 
-                        // Chapter row
                         item(key = "ch_${cg.chapter.id}") {
                             ChapterRow(
-                                chapter    = cg.chapter,
-                                pointCount = cg.allPoints.size,
-                                isExpanded = chExpanded,
-                                allSelected = chAllSel,
+                                chapter      = cg.chapter,
+                                pointCount   = cg.allPoints.size,
+                                isExpanded   = chExpanded,
+                                allSelected  = chAllSel,
                                 someSelected = chSomeSel,
                                 onToggleExpand = {
                                     expandedChapters = if (chExpanded)
@@ -257,15 +257,11 @@ internal fun KnowledgePointPickerSheet(
                                         expandedChapters + cg.chapter.id
                                 },
                                 onToggleAll = {
-                                    draft = if (chAllSel)
-                                        draft - chapterIds
-                                    else
-                                        draft + chapterIds
+                                    draft = if (chAllSel) draft - chapterIds else draft + chapterIds
                                 }
                             )
                         }
 
-                        // Section rows (animated)
                         if (chExpanded) {
                             cg.sections.forEach { sg ->
                                 val secExpanded = sg.section.id in expandedSections
@@ -287,15 +283,11 @@ internal fun KnowledgePointPickerSheet(
                                                 expandedSections + sg.section.id
                                         },
                                         onToggleAll = {
-                                            draft = if (secAllSel)
-                                                draft - sectionIds
-                                            else
-                                                draft + sectionIds
+                                            draft = if (secAllSel) draft - sectionIds else draft + sectionIds
                                         }
                                     )
                                 }
 
-                                // Point rows
                                 if (secExpanded) {
                                     items(sg.points, key = { "kp_${it.point.id}" }) { kpFull ->
                                         val checked = kpFull.point.id in draft
@@ -315,7 +307,6 @@ internal fun KnowledgePointPickerSheet(
                         }
                     }
                 }
-
                 item { Spacer(Modifier.height(4.dp)) }
             }
 
@@ -336,8 +327,8 @@ internal fun KnowledgePointPickerSheet(
                 AddKpInlineForm(
                     allChapters = allChapters,
                     allSections = allSections,
-                    onSave      = { secId, no, content ->
-                        onAddNew(secId, no, content)
+                    onSave      = { secId, no, kpTitle, content ->
+                        onAddNew(secId, no, kpTitle, content)
                         showAddForm = false
                     },
                     onCancel    = { showAddForm = false }
@@ -360,9 +351,8 @@ private fun ChapterRow(
     onToggleAll: () -> Unit
 ) {
     Surface(
-        shape  = RoundedCornerShape(10.dp),
-        color  = if (isExpanded) FluentBlue.copy(.10f)
-                 else MaterialTheme.colorScheme.surfaceVariant,
+        shape    = RoundedCornerShape(10.dp),
+        color    = if (isExpanded) FluentBlue.copy(.10f) else MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -372,9 +362,8 @@ private fun ChapterRow(
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Tri-state checkbox
             TriStateCheckbox(
-                state    = when {
+                state = when {
                     allSelected  -> ToggleableState.On
                     someSelected -> ToggleableState.Indeterminate
                     else         -> ToggleableState.Off
@@ -382,45 +371,21 @@ private fun ChapterRow(
                 onClick  = onToggleAll,
                 modifier = Modifier.size(20.dp)
             )
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = if (isExpanded) FluentBlue else FluentMuted.copy(.2f)
-            ) {
-                Text(
-                    "第${chapter.no}章",
-                    style      = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color      = if (isExpanded) androidx.compose.ui.graphics.Color.White
-                                 else FluentMuted,
-                    modifier   = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
+            Surface(shape = RoundedCornerShape(4.dp), color = if (isExpanded) FluentBlue else FluentMuted.copy(.2f)) {
+                Text("第${chapter.no}章", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
+                    color = if (isExpanded) androidx.compose.ui.graphics.Color.White else FluentMuted,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
             }
-            Text(
-                chapter.name,
-                style      = MaterialTheme.typography.bodyMedium,
+            Text(chapter.name, style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (isExpanded) FontWeight.Bold else FontWeight.Normal,
-                color      = if (isExpanded) FluentBlue
-                             else MaterialTheme.colorScheme.onSurface,
-                modifier   = Modifier.weight(1f)
-            )
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = FluentMuted.copy(.12f)
-            ) {
-                Text(
-                    "$pointCount 个",
-                    style    = MaterialTheme.typography.labelSmall,
-                    color    = FluentMuted,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
+                color = if (isExpanded) FluentBlue else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f))
+            Surface(shape = RoundedCornerShape(20.dp), color = FluentMuted.copy(.12f)) {
+                Text("$pointCount 个", style = MaterialTheme.typography.labelSmall, color = FluentMuted,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
             }
-            Icon(
-                imageVector = if (isExpanded) Icons.Default.ExpandLess
-                              else Icons.Default.ExpandMore,
-                contentDescription = null,
-                tint     = if (isExpanded) FluentBlue else FluentMuted,
-                modifier = Modifier.size(18.dp)
-            )
+            Icon(if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null,
+                tint = if (isExpanded) FluentBlue else FluentMuted, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -439,21 +404,16 @@ private fun SectionRow(
 ) {
     Surface(
         shape    = RoundedCornerShape(8.dp),
-        color    = if (isExpanded) FluentTeal.copy(.08f)
-                   else MaterialTheme.colorScheme.surface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp)
+        color    = if (isExpanded) FluentTeal.copy(.08f) else MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp)
     ) {
         Row(
-            Modifier
-                .clickable(onClick = onToggleExpand)
-                .padding(horizontal = 8.dp, vertical = 5.dp),
+            Modifier.clickable(onClick = onToggleExpand).padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             TriStateCheckbox(
-                state    = when {
+                state = when {
                     allSelected  -> ToggleableState.On
                     someSelected -> ToggleableState.Indeterminate
                     else         -> ToggleableState.Off
@@ -461,49 +421,25 @@ private fun SectionRow(
                 onClick  = onToggleAll,
                 modifier = Modifier.size(18.dp)
             )
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = if (isExpanded) FluentTeal else FluentMuted.copy(.15f)
-            ) {
-                Text(
-                    "第${section.no}节",
-                    style      = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color      = if (isExpanded) androidx.compose.ui.graphics.Color.White
-                                 else FluentMuted,
-                    modifier   = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                )
+            Surface(shape = RoundedCornerShape(4.dp), color = if (isExpanded) FluentTeal else FluentMuted.copy(.15f)) {
+                Text("第${section.no}节", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
+                    color = if (isExpanded) androidx.compose.ui.graphics.Color.White else FluentMuted,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
             }
-            Text(
-                section.name,
-                style    = MaterialTheme.typography.bodySmall,
-                color    = if (isExpanded) FluentTeal
-                           else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = FluentMuted.copy(.08f)
-            ) {
-                Text(
-                    "$pointCount 条",
-                    style    = MaterialTheme.typography.labelSmall,
-                    color    = FluentMuted,
-                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                )
+            Text(section.name, style = MaterialTheme.typography.bodySmall,
+                color = if (isExpanded) FluentTeal else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f))
+            Surface(shape = RoundedCornerShape(20.dp), color = FluentMuted.copy(.08f)) {
+                Text("$pointCount 条", style = MaterialTheme.typography.labelSmall, color = FluentMuted,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
             }
-            Icon(
-                imageVector = if (isExpanded) Icons.Default.ExpandLess
-                              else Icons.Default.ExpandMore,
-                contentDescription = null,
-                tint     = if (isExpanded) FluentTeal else FluentMuted,
-                modifier = Modifier.size(16.dp)
-            )
+            Icon(if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null,
+                tint = if (isExpanded) FluentTeal else FluentMuted, modifier = Modifier.size(16.dp))
         }
     }
 }
 
-// ─── Point row ────────────────────────────────────────────────────────────────
+// ─── Point row — shows displayTitle ──────────────────────────────────────────
 
 @Composable
 private fun PointRow(
@@ -526,33 +462,29 @@ private fun PointRow(
             modifier        = Modifier.size(20.dp).padding(top = 1.dp)
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 ColorChip(kpFull.code, FluentBlue)
                 if (kpFull.isCustom) ColorChip("自定义", FluentAmber)
             }
-            Text(
-                kpFull.content,
-                style   = MaterialTheme.typography.bodySmall,
-                maxLines = 3
-            )
+            // Show displayTitle bold (short label), content below in muted style
+            Text(kpFull.displayTitle, style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold, maxLines = 2)
+            if (kpFull.title.isNotBlank()) {
+                Text(kpFull.content, style = MaterialTheme.typography.labelSmall,
+                    color = FluentMuted, maxLines = 2)
+            }
         }
     }
-    HorizontalDivider(
-        color    = FluentBorder.copy(alpha = 0.4f),
-        modifier = Modifier.padding(start = 24.dp)
-    )
+    HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f), modifier = Modifier.padding(start = 24.dp))
 }
 
-// ─── Inline add form (unchanged) ─────────────────────────────────────────────
+// ─── Inline add form — now with title field ───────────────────────────────────
 
 @Composable
 private fun AddKpInlineForm(
     allChapters: List<KpChapter>,
     allSections: List<KpSection>,
-    onSave: (sectionId: Long, no: Int, content: String) -> Unit,
+    onSave: (sectionId: Long, no: Int, title: String, content: String) -> Unit,
     onCancel: () -> Unit
 ) {
     val sortedChapters  = remember(allChapters) { allChapters.sortedBy { it.no } }
@@ -562,6 +494,7 @@ private fun AddKpInlineForm(
     }
     var selectedSection by remember(selectedChapter) { mutableStateOf(sectionsForCh.firstOrNull()) }
     var no      by remember { mutableStateOf("") }
+    var kpTitle by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
 
     Surface(shape = RoundedCornerShape(12.dp), color = FluentBlueLight) {
@@ -569,75 +502,54 @@ private fun AddKpInlineForm(
             Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                "添加知识点",
-                style      = MaterialTheme.typography.labelMedium,
-                color      = FluentBlue,
-                fontWeight = FontWeight.Bold
-            )
+            Text("添加知识点", style = MaterialTheme.typography.labelMedium,
+                color = FluentBlue, fontWeight = FontWeight.Bold)
             if (sortedChapters.isEmpty()) {
-                Text(
-                    "请先在知识点管理页添加章节",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = FluentAmber
-                )
+                Text("请先在知识点管理页添加章节",
+                    style = MaterialTheme.typography.bodySmall, color = FluentAmber)
             } else {
-                FormDropdown(
-                    "章",
-                    selectedChapter?.let { "第${it.no}章 ${it.name}" } ?: "",
-                    sortedChapters.map { "第${it.no}章 ${it.name}" }
-                ) { sel ->
+                FormDropdown("章", selectedChapter?.let { "第${it.no}章 ${it.name}" } ?: "",
+                    sortedChapters.map { "第${it.no}章 ${it.name}" }) { sel ->
                     selectedChapter = sortedChapters.firstOrNull { "第${it.no}章 ${it.name}" == sel }
                     selectedSection = sectionsForCh.firstOrNull()
                 }
                 if (sectionsForCh.isEmpty()) {
                     Text("此章暂无节", style = MaterialTheme.typography.bodySmall, color = FluentAmber)
                 } else {
-                    FormDropdown(
-                        "节",
-                        selectedSection?.let { "第${it.no}节 ${it.name}" } ?: "",
-                        sectionsForCh.map { "第${it.no}节 ${it.name}" }
-                    ) { sel ->
+                    FormDropdown("节", selectedSection?.let { "第${it.no}节 ${it.name}" } ?: "",
+                        sectionsForCh.map { "第${it.no}节 ${it.name}" }) { sel ->
                         selectedSection = sectionsForCh.firstOrNull { "第${it.no}节 ${it.name}" == sel }
                     }
                 }
                 FormTextField("条目号", no, { no = it }, "如 1")
                 val preview = "${selectedChapter?.no ?: "?"}.${selectedSection?.no ?: "?"}.${no.ifBlank { "?" }}"
-                Text(
-                    "编号：$preview",
-                    style      = MaterialTheme.typography.labelSmall,
-                    color      = FluentBlue,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("编号：$preview", style = MaterialTheme.typography.labelSmall,
+                    color = FluentBlue, fontWeight = FontWeight.SemiBold)
             }
+            // Short title (shown in lesson records)
+            FormTextField("简短标题", kpTitle, { kpTitle = it }, "如：摄氏温度两个标准")
+            // Full content
             OutlinedTextField(
                 value         = content,
                 onValueChange = { content = it },
-                label         = { Text("知识点内容") },
+                label         = { Text("完整内容") },
                 shape         = RoundedCornerShape(12.dp),
                 modifier      = Modifier.fillMaxWidth(),
-                minLines      = 2,
-                maxLines      = 4,
+                minLines      = 2, maxLines = 4,
                 colors        = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = FluentBlue,
-                    unfocusedBorderColor = FluentBorder
-                )
+                    focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick  = onCancel,
-                    modifier = Modifier.weight(1f),
-                    shape    = RoundedCornerShape(10.dp)
-                ) { Text("取消") }
+                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)) { Text("取消") }
                 Button(
-                    onClick  = {
+                    onClick = {
                         val secId = selectedSection?.id ?: return@Button
                         val n     = no.toIntOrNull()    ?: return@Button
-                        if (content.isNotBlank()) onSave(secId, n, content.trim())
+                        if (content.isNotBlank()) onSave(secId, n, kpTitle.trim(), content.trim())
                     },
-                    modifier = Modifier.weight(1f),
-                    shape    = RoundedCornerShape(10.dp),
-                    colors   = ButtonDefaults.buttonColors(containerColor = FluentBlue)
+                    modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = FluentBlue)
                 ) { Text("保存") }
             }
         }

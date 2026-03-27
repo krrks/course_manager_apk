@@ -52,6 +52,7 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
         if (query.isNotBlank()) {
             val matchIds = allKpFull.filter {
                 it.content.contains(query, ignoreCase = true) ||
+                it.title.contains(query, ignoreCase = true) ||
                 it.code.contains(query, ignoreCase = true) ||
                 it.chapter.name.contains(query, ignoreCase = true) ||
                 it.section.name.contains(query, ignoreCase = true)
@@ -121,7 +122,11 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                             sections.forEach { section ->
                                 val secExpanded = section.id in expandedSections
                                 val points = allKpFull.filter { it.section.id == section.id }
-                                    .let { list -> if (query.isBlank()) list else list.filter { it.content.contains(query, ignoreCase = true) || it.code.contains(query, ignoreCase = true) } }
+                                    .let { list -> if (query.isBlank()) list else list.filter {
+                                        it.content.contains(query, ignoreCase = true) ||
+                                        it.title.contains(query, ignoreCase = true) ||
+                                        it.code.contains(query, ignoreCase = true)
+                                    }}
                                     .sortedBy { it.point.no }
 
                                 item(key = "sec_${section.id}") {
@@ -158,7 +163,7 @@ fun KnowledgePointsScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     editingPoint?.let { kp -> PointFormDialog("编辑知识点", kp.point, state.kpChapters, state.kpSections, onDismiss = { editingPoint = null }, onSave = { vm.updateKnowledgePoint(it); editingPoint = null }) }
     if (showAddChapter) ChapterFormDialog("添加章", null, onDismiss = { showAddChapter = false }, onSave = { vm.addKpChapter(it.grade, it.no, it.name); showAddChapter = false })
     if (showAddSection) SectionFormDialog("添加节", null, state.kpChapters, onDismiss = { showAddSection = false }, onSave = { vm.addKpSection(it.chapterId, it.no, it.name); showAddSection = false })
-    if (showAddPoint)   PointFormDialog("添加知识点", null, state.kpChapters, state.kpSections, onDismiss = { showAddPoint = false }, onSave = { vm.addKnowledgePoint(it.sectionId, it.no, it.content); showAddPoint = false })
+    if (showAddPoint)   PointFormDialog("添加知识点", null, state.kpChapters, state.kpSections, onDismiss = { showAddPoint = false }, onSave = { vm.addKnowledgePoint(it.sectionId, it.no, it.title, it.content); showAddPoint = false })
 }
 
 // ── Chapter card ──────────────────────────────────────────────────────────────
@@ -196,7 +201,7 @@ internal fun KpSectionCard(section: KpSection, pointCount: Int, isExpanded: Bool
     }
 }
 
-// ── Point card ────────────────────────────────────────────────────────────────
+// ── Point card — shows title bold + content below ────────────────────────────
 
 @Composable
 internal fun KpPointCard(kpFull: KpFull, onClick: () -> Unit) {
@@ -206,7 +211,22 @@ internal fun KpPointCard(kpFull: KpFull, onClick: () -> Unit) {
                 ColorChip(kpFull.code, FluentBlue)
                 if (kpFull.isCustom) ColorChip("自定义", FluentAmber)
             }
-            Text(kpFull.content, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
+            // Title line (bold short label)
+            Text(
+                text       = kpFull.displayTitle,
+                style      = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color      = MaterialTheme.colorScheme.onSurface
+            )
+            // Content below (muted, smaller)
+            if (kpFull.title.isNotBlank()) {
+                Text(
+                    text     = kpFull.content,
+                    style    = MaterialTheme.typography.bodySmall,
+                    color    = FluentMuted,
+                    maxLines = 3
+                )
+            }
         }
     }
 }

@@ -36,16 +36,27 @@ data class KpSection(
 )
 
 /**
- * A single knowledge point.
+ * A single knowledge point with a short title and full content.
+ *
+ * title   — concise label shown in compact contexts (lesson records, chips).
+ *           e.g. "摄氏温度两个标准"
+ *           Falls back to a truncated content if blank.
+ * content — full explanation shown in the knowledge points screen.
+ *           e.g. "标准大气压下冰水混合物为0℃，沸水为100℃，两者间等分100份"
+ *
  * isCustom = false → seeded from assets; true → user-created.
  */
 data class KnowledgePoint(
     val id: Long,
     val sectionId: Long,
-    val no: Int,           // point number within section
-    val content: String,
+    val no: Int,
+    val title: String,          // short label (new field)
+    val content: String,        // full explanation
     val isCustom: Boolean = false
-)
+) {
+    /** Display label: title if set, else first 20 chars of content. */
+    val displayTitle: String get() = title.ifBlank { content.take(20).let { if (content.length > 20) "$it…" else it } }
+}
 
 /**
  * Fully resolved knowledge point with chapter + section context.
@@ -59,7 +70,9 @@ data class KpFull(
     val code: String get() = "${chapter.no}.${section.no}.${point.no}"
     val grade: String get() = chapter.grade
     val isCustom: Boolean get() = point.isCustom
+    val title: String get() = point.title
     val content: String get() = point.content
+    val displayTitle: String get() = point.displayTitle
 }
 
 // ─── App State ────────────────────────────────────────────────────────────────

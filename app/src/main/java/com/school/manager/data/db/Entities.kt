@@ -58,8 +58,9 @@ data class KpSectionEntity(
 )
 
 /**
- * Individual knowledge point.
- * code ("X.Y.Z") is derived at runtime from chapter.no, section.no, point.no — not stored.
+ * Individual knowledge point with a short title and full content.
+ * title  — short label shown in lesson records (e.g. "摄氏温度两个标准")
+ * content — full explanation shown in the knowledge points screen
  * isCustom = false → seeded from assets; true → user-created.
  */
 @Entity(
@@ -71,6 +72,7 @@ data class KnowledgePointEntity(
     @PrimaryKey val id: Long,
     val sectionId: Long,
     val no: Int,
-    val content: String,
+    val title: String,       // short label (new field)
+    val content: String,     // full explanation
     val isCustom: Boolean
 )

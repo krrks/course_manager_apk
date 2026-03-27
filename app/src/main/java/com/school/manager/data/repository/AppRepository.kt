@@ -34,8 +34,9 @@ class AppRepository(context: Context) {
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
 
     // ── Knowledge point seeding ───────────────────────────────────────────────
-    // Reads assets/knowledge_points.json which now has {chapters, sections, points}.
-    // Runs only when kp_chapters is empty (ensures re-seed after MIGRATION_3_4).
+    // Reads assets/knowledge_points.json which has {chapters, sections, points}.
+    // Each point now has optional "title" field alongside "content".
+    // Runs only when kp_chapters is empty.
 
     suspend fun seedKnowledgePoints(context: Context) {
         if (db.kpChapterDao().count() > 0) return
@@ -58,8 +59,12 @@ class AppRepository(context: Context) {
             for (i in 0 until points.length()) {
                 val o = points.getJSONObject(i)
                 db.knowledgePointDao().insert(KnowledgePointEntity(
-                    o.getLong("id"), o.getLong("sectionId"), o.getInt("no"),
-                    o.getString("content"), o.optBoolean("isCustom", false)
+                    id        = o.getLong("id"),
+                    sectionId = o.getLong("sectionId"),
+                    no        = o.getInt("no"),
+                    title     = o.optString("title", ""),
+                    content   = o.getString("content"),
+                    isCustom  = o.optBoolean("isCustom", false)
                 ))
             }
         } catch (_: Exception) { /* asset missing or malformed — silently skip */ }
@@ -117,9 +122,6 @@ class AppRepository(context: Context) {
     suspend fun importAll(state: AppState) { clearAll(); mergeAll(state) }
 
     suspend fun mergeAll(incoming: AppState) {
-        fun <T> upsert(insert: suspend (T) -> Long, update: suspend (T) -> Unit, item: T) {
-            // inline below for clarity — actual calls are direct
-        }
         incoming.subjects.forEach        { e -> val en = e.toEntity(); if (db.subjectDao().insert(en)        == -1L) db.subjectDao().update(en) }
         incoming.teachers.forEach        { e -> val en = e.toEntity(); if (db.teacherDao().insert(en)        == -1L) db.teacherDao().update(en) }
         incoming.classes.forEach         { e -> val en = e.toEntity(); if (db.classDao().insert(en)          == -1L) db.classDao().update(en)   }

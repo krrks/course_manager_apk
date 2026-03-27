@@ -18,6 +18,7 @@ internal data class GsonKpSection(
 )
 internal data class GsonKnowledgePoint(
     val id: Long? = null, val sectionId: Long? = null, val no: Int? = null,
+    val title: String? = null,    // short label (may be absent in old backups)
     val content: String? = null, val isCustom: Boolean? = null
 )
 
@@ -47,7 +48,14 @@ internal fun parseGsonState(json: String, gson: Gson, pathRemap: Map<String, Str
         val kpChapters = raw.kpChapters?.map { KpChapter(it.id ?: 0L, it.grade ?: "", it.no ?: 0, it.name ?: "") } ?: emptyList()
         val kpSections = raw.kpSections?.map { KpSection(it.id ?: 0L, it.chapterId ?: 0L, it.no ?: 0, it.name ?: "") } ?: emptyList()
         val knowledgePoints = raw.knowledgePoints?.map { gkp ->
-            KnowledgePoint(gkp.id ?: 0L, gkp.sectionId ?: 0L, gkp.no ?: 0, gkp.content ?: "", gkp.isCustom ?: false)
+            KnowledgePoint(
+                id        = gkp.id ?: 0L,
+                sectionId = gkp.sectionId ?: 0L,
+                no        = gkp.no ?: 0,
+                title     = gkp.title ?: "",   // old backups without title → empty string → displayTitle falls back
+                content   = gkp.content ?: "",
+                isCustom  = gkp.isCustom ?: false
+            )
         } ?: emptyList()
 
         AppState(subjects, teachers, classes, students, lessons, knowledgePoints, kpChapters, kpSections)

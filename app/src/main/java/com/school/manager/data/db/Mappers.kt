@@ -38,5 +38,5 @@ fun KpChapter.toEntity(): KpChapterEntity  = KpChapterEntity(id, grade, no, name
 fun KpSectionEntity.toDomain(): KpSection = KpSection(id, chapterId, no, name)
 fun KpSection.toEntity(): KpSectionEntity  = KpSectionEntity(id, chapterId, no, name)
 
-fun KnowledgePointEntity.toDomain(): KnowledgePoint = KnowledgePoint(id, sectionId, no, content, isCustom)
-fun KnowledgePoint.toEntity(): KnowledgePointEntity  = KnowledgePointEntity(id, sectionId, no, content, isCustom)
+fun KnowledgePointEntity.toDomain(): KnowledgePoint = KnowledgePoint(id, sectionId, no, title, content, isCustom)
+fun KnowledgePoint.toEntity(): KnowledgePointEntity  = KnowledgePointEntity(id, sectionId, no, title, content, isCustom)
