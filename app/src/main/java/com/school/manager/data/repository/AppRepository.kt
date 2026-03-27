@@ -4,7 +4,6 @@ import android.content.Context
 import com.school.manager.data.*
 import com.school.manager.data.db.*
 import kotlinx.coroutines.flow.*
-import org.json.JSONArray
 import org.json.JSONObject
 
 class AppRepository(context: Context) {
@@ -35,8 +34,7 @@ class AppRepository(context: Context) {
 
     // ── Knowledge point seeding ───────────────────────────────────────────────
     // Reads assets/knowledge_points.json which has {chapters, sections, points}.
-    // Each point now has optional "title" field alongside "content".
-    // Runs only when kp_chapters is empty.
+    // Runs only when kp_chapters is empty (fresh install or after DB reset).
 
     suspend fun seedKnowledgePoints(context: Context) {
         if (db.kpChapterDao().count() > 0) return
@@ -48,12 +46,14 @@ class AppRepository(context: Context) {
             val chapters = root.getJSONArray("chapters")
             for (i in 0 until chapters.length()) {
                 val o = chapters.getJSONObject(i)
-                db.kpChapterDao().insert(KpChapterEntity(o.getLong("id"), o.getString("grade"), o.getInt("no"), o.getString("name")))
+                db.kpChapterDao().insert(KpChapterEntity(
+                    o.getLong("id"), o.getString("grade"), o.getInt("no"), o.getString("name")))
             }
             val sections = root.getJSONArray("sections")
             for (i in 0 until sections.length()) {
                 val o = sections.getJSONObject(i)
-                db.kpSectionDao().insert(KpSectionEntity(o.getLong("id"), o.getLong("chapterId"), o.getInt("no"), o.getString("name")))
+                db.kpSectionDao().insert(KpSectionEntity(
+                    o.getLong("id"), o.getLong("chapterId"), o.getInt("no"), o.getString("name")))
             }
             val points = root.getJSONArray("points")
             for (i in 0 until points.length()) {

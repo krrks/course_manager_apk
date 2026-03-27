@@ -1,5 +1,7 @@
 #!build
-# 补全内置知识点：全12章完整标题+内容
+# 修复知识点初始化：删除旧版兼容，数据库重置为版本1
 
-将 knowledge_points.json 从仅3章16条扩充至全12章完整覆盖，共约150条知识点。
-每条均补充了简短 title 字段。章节结构与 物理知识点_初中.md 完全对齐。
+- AppDatabase: 版本从2降至1，删除MIGRATION_1_2（title字段已是基础schema的一部分）
+- AppRepository: 删除所有旧版SharedPreferences兼容代码
+- 新安装时knowledge_points.json内容将正确显示在知识点管理页面
+- fallbackToDestructiveMigration确保升级用户自动重建数据库

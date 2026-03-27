@@ -2,15 +2,6 @@ package com.school.manager.data.db
 
 import android.content.Context
 import androidx.room.*
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
-
-private val MIGRATION_1_2 = object : Migration(1, 2) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        // Add title column with empty default; existing rows will show content as fallback in UI
-        db.execSQL("ALTER TABLE knowledge_points ADD COLUMN title TEXT NOT NULL DEFAULT ''")
-    }
-}
 
 @Database(
     entities = [
@@ -18,7 +9,7 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
         StudentEntity::class, LessonEntity::class,
         KpChapterEntity::class, KpSectionEntity::class, KnowledgePointEntity::class
     ],
-    version      = 2,
+    version      = 1,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -39,7 +30,6 @@ abstract class AppDatabase : RoomDatabase() {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext, AppDatabase::class.java, "school_manager.db"
                 )
-                .addMigrations(MIGRATION_1_2)
                 .fallbackToDestructiveMigration()
                 .build()
                 .also { INSTANCE = it }
