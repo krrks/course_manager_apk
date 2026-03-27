@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.school.manager.data.*
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
+import androidx.compose.ui.state.ToggleableState
 
 // ─── Data structures ──────────────────────────────────────────────────────────
 
