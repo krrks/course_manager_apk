@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-28T07:02:03Z`
-> Commit:  `6d1ee04bc0ef835945a24aeec811e521fece6ad4`
+> Updated: `2026-03-28T15:52:49Z`
+> Commit:  `7e933d2218fa678613ffff14ee69cc6aef58abbb`
 
 ```
 ./.github/workflows/build.yml
@@ -16,6 +16,7 @@
 ./app/src/main/java/com/school/manager/MainActivity.kt
 ./app/src/main/java/com/school/manager/Navigation.kt
 ./app/src/main/java/com/school/manager/data/BackupModels.kt
+./app/src/main/java/com/school/manager/data/KnowledgePointsData.kt
 ./app/src/main/java/com/school/manager/data/Models.kt
 ./app/src/main/java/com/school/manager/data/db/AppDatabase.kt
 ./app/src/main/java/com/school/manager/data/db/Daos.kt
