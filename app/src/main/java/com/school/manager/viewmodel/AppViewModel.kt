@@ -8,6 +8,7 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.school.manager.data.*
 import com.school.manager.data.repository.AppRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -21,7 +22,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppState())
 
     init {
-        viewModelScope.launch {
+        // Run on Dispatchers.IO: both DB queries and asset file reads require the IO thread.
+        // Using the default Main dispatcher caused seedKnowledgePoints to silently fail
+        // when reading knowledge_points.json from assets on some devices.
+        viewModelScope.launch(Dispatchers.IO) {
             if (repo.isEmpty()) repo.importAll(sampleAppState())
             repo.seedKnowledgePoints(app)
         }

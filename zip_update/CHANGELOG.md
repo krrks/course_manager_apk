@@ -1,7 +1,14 @@
 #!build
-# 修复知识点初始化：删除旧版兼容，数据库重置为版本1
+# 修复知识点页面安装后空白的问题
 
-- AppDatabase: 版本从2降至1，删除MIGRATION_1_2（title字段已是基础schema的一部分）
-- AppRepository: 删除所有旧版SharedPreferences兼容代码
-- 新安装时knowledge_points.json内容将正确显示在知识点管理页面
-- fallbackToDestructiveMigration确保升级用户自动重建数据库
+根本原因：viewModelScope.launch {} 默认使用 Dispatchers.Main，导致
+seedKnowledgePoints 在主线程读取 assets 文件时在部分设备上静默失败。
+
+修改内容：
+- AppViewModel.init：改为 viewModelScope.launch(Dispatchers.IO)，确保初始化
+  协程从一开始就在 IO 线程运行，避免主线程阻塞或静默异常
+- AppRepository.seedKnowledgePoints：整体用 withContext(Dispatchers.IO) 包裹，
+  文件读取改用 bufferedReader(Charsets.UTF_8) 显式指定编码，确保 JSON 解析
+  不受设备默认字符集影响
+- 以上两处改动协同保证 knowledge_points.json 中的所有初中物理知识点在首次
+  安装后正确写入数据库并显示在知识点管理页面

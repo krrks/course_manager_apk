@@ -3,7 +3,9 @@ package com.school.manager.data.repository
 import android.content.Context
 import com.school.manager.data.*
 import com.school.manager.data.db.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 class AppRepository(context: Context) {
@@ -33,14 +35,14 @@ class AppRepository(context: Context) {
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
 
     // ── Knowledge point seeding ───────────────────────────────────────────────
-    // Reads assets/knowledge_points.json which has {chapters, sections, points}.
-    // Runs only when kp_chapters is empty (fresh install or after DB reset).
+    // Reads assets/knowledge_points.json on first install (empty kp_chapters table).
+    // Must run on Dispatchers.IO — asset reads and DB inserts both require IO thread.
 
-    suspend fun seedKnowledgePoints(context: Context) {
-        if (db.kpChapterDao().count() > 0) return
+    suspend fun seedKnowledgePoints(context: Context) = withContext(Dispatchers.IO) {
+        if (db.kpChapterDao().count() > 0) return@withContext
         try {
             val json = context.assets.open("knowledge_points.json")
-                .bufferedReader().use { it.readText() }
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
             val root = JSONObject(json)
 
             val chapters = root.getJSONArray("chapters")
