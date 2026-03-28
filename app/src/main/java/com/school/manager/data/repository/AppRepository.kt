@@ -3,10 +3,7 @@ package com.school.manager.data.repository
 import android.content.Context
 import com.school.manager.data.*
 import com.school.manager.data.db.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
 
 class AppRepository(context: Context) {
 
@@ -35,41 +32,34 @@ class AppRepository(context: Context) {
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
 
     // ── Knowledge point seeding ───────────────────────────────────────────────
-    // Reads assets/knowledge_points.json on first install (empty kp_chapters table).
-    // Must run on Dispatchers.IO — asset reads and DB inserts both require IO thread.
+    // Uses hardcoded KnowledgePointsData — no asset file dependency.
+    // Runs only when kp_chapters table is empty (fresh install or after DB wipe).
 
-    suspend fun seedKnowledgePoints(context: Context) = withContext(Dispatchers.IO) {
-        if (db.kpChapterDao().count() > 0) return@withContext
-        try {
-            val json = context.assets.open("knowledge_points.json")
-                .bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val root = JSONObject(json)
+    suspend fun seedKnowledgePoints() {
+        if (db.kpChapterDao().count() > 0) return
 
-            val chapters = root.getJSONArray("chapters")
-            for (i in 0 until chapters.length()) {
-                val o = chapters.getJSONObject(i)
-                db.kpChapterDao().insert(KpChapterEntity(
-                    o.getLong("id"), o.getString("grade"), o.getInt("no"), o.getString("name")))
-            }
-            val sections = root.getJSONArray("sections")
-            for (i in 0 until sections.length()) {
-                val o = sections.getJSONObject(i)
-                db.kpSectionDao().insert(KpSectionEntity(
-                    o.getLong("id"), o.getLong("chapterId"), o.getInt("no"), o.getString("name")))
-            }
-            val points = root.getJSONArray("points")
-            for (i in 0 until points.length()) {
-                val o = points.getJSONObject(i)
-                db.knowledgePointDao().insert(KnowledgePointEntity(
-                    id        = o.getLong("id"),
-                    sectionId = o.getLong("sectionId"),
-                    no        = o.getInt("no"),
-                    title     = o.optString("title", ""),
-                    content   = o.getString("content"),
-                    isCustom  = o.optBoolean("isCustom", false)
-                ))
-            }
-        } catch (_: Exception) { /* asset missing or malformed — silently skip */ }
+        KnowledgePointsData.chapters.forEach { raw ->
+            db.kpChapterDao().insert(
+                KpChapterEntity(raw.id, raw.grade, raw.no, raw.name)
+            )
+        }
+        KnowledgePointsData.sections.forEach { raw ->
+            db.kpSectionDao().insert(
+                KpSectionEntity(raw.id, raw.chapterId, raw.no, raw.name)
+            )
+        }
+        KnowledgePointsData.points.forEach { raw ->
+            db.knowledgePointDao().insert(
+                KnowledgePointEntity(
+                    id        = raw.id,
+                    sectionId = raw.sectionId,
+                    no        = raw.no,
+                    title     = raw.title,
+                    content   = raw.content,
+                    isCustom  = false
+                )
+            )
+        }
     }
 
     // ── Subjects ──────────────────────────────────────────────────────────────
@@ -118,7 +108,7 @@ class AppRepository(context: Context) {
     suspend fun clearAll() {
         db.lessonDao().deleteAll(); db.classDao().deleteAll()
         db.studentDao().deleteAll(); db.subjectDao().deleteAll(); db.teacherDao().deleteAll()
-        // kp_chapters / kp_sections / knowledge_points: NOT cleared — user keeps custom points
+        // kp tables: NOT cleared — user keeps custom points and built-in points stay
     }
 
     suspend fun importAll(state: AppState) { clearAll(); mergeAll(state) }

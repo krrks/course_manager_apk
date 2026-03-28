@@ -22,12 +22,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppState())
 
     init {
-        // Run on Dispatchers.IO: both DB queries and asset file reads require the IO thread.
-        // Using the default Main dispatcher caused seedKnowledgePoints to silently fail
-        // when reading knowledge_points.json from assets on some devices.
         viewModelScope.launch(Dispatchers.IO) {
             if (repo.isEmpty()) repo.importAll(sampleAppState())
-            repo.seedKnowledgePoints(app)
+            // Seed built-in knowledge points from hardcoded data (no asset file needed)
+            repo.seedKnowledgePoints()
         }
     }
 

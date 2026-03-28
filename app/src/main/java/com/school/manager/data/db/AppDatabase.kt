@@ -9,7 +9,7 @@ import androidx.room.*
         StudentEntity::class, LessonEntity::class,
         KpChapterEntity::class, KpSectionEntity::class, KnowledgePointEntity::class
     ],
-    version      = 1,
+    version      = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
