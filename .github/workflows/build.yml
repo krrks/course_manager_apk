@@ -338,11 +338,11 @@ jobs:
           rm -f zip_update/patches/apply.sh
           echo "Removed patch zip and apply.sh from zip_update/patches/ (directory preserved)"
 
-          # ── Record applied patch (keep newest 20) ────────────────────────
+          # ── Record applied patch (keep newest 50) ────────────────────────
           PATCH_NAME=$(basename "$PATCH_PATH" .zip)
           APPLIED_FILE="zip_update/applied_patches.txt"
           echo "$PATCH_NAME" >> "$APPLIED_FILE"
-          tail -n 20 "$APPLIED_FILE" > /tmp/_ap.txt
+          tail -n 50 "$APPLIED_FILE" > /tmp/_ap.txt
           mv /tmp/_ap.txt "$APPLIED_FILE"
           echo "✅ Recorded $PATCH_NAME in $APPLIED_FILE"
 
