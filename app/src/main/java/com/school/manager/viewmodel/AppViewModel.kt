@@ -24,8 +24,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch(Dispatchers.IO) {
             if (repo.isEmpty()) repo.importAll(sampleAppState())
-            // Seed built-in knowledge points from hardcoded data (no asset file needed)
-            repo.seedKnowledgePoints()
+            else repo.seedKnowledgePoints()   // idempotent — skips if already seeded
         }
     }
 
@@ -38,7 +37,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun kpChapter(id: Long?)      = state.value.kpChapters.find      { it.id == id }
     fun kpSection(id: Long?)      = state.value.kpSections.find      { it.id == id }
 
-    /** Fully resolved KpFull (chapter + section + point), or null if any ref is missing. */
     fun knowledgePointFull(id: Long?): KpFull? {
         val kp = knowledgePoint(id) ?: return null
         return state.value.kpFull(kp)
@@ -75,8 +73,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteStudent(id: Long)   { viewModelScope.launch { repo.deleteStudent(id) } }
 
     // ─── Lessons — single ─────────────────────────────────────────────────────
-    fun addLesson(classId: Long, date: String, startTime: String, endTime: String, status: String = "pending", topic: String = "", notes: String = "", attendees: List<Long> = emptyList(), code: String = "", teacherIdOverride: Long? = null, knowledgePointIds: List<Long> = emptyList()) {
-        viewModelScope.launch { repo.addLesson(Lesson(System.currentTimeMillis(), classId, date, startTime, endTime, status, topic, notes, attendees, false, code.ifBlank { genCode("L") }, teacherIdOverride, knowledgePointIds)) }
+    fun addLesson(classId: Long, date: String, startTime: String, endTime: String,
+                  status: String = "pending", topic: String = "", notes: String = "",
+                  attendees: List<Long> = emptyList(), code: String = "",
+                  teacherIdOverride: Long? = null, knowledgePointIds: List<Long> = emptyList()) {
+        viewModelScope.launch {
+            repo.addLesson(Lesson(System.currentTimeMillis(), classId, date, startTime, endTime,
+                                  status, topic, notes, attendees, false,
+                                  code.ifBlank { genCode("L") }, teacherIdOverride, knowledgePointIds))
+        }
     }
     fun updateLesson(l: Lesson, markModified: Boolean = true) {
         viewModelScope.launch { repo.updateLesson(if (markModified) l.copy(isModified = true) else l) }
@@ -86,7 +91,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ─── Lessons — batch ──────────────────────────────────────────────────────
     enum class RecurrenceType { WEEKLY, DAILY, ONCE }
 
-    fun batchGenerateLessons(classId: Long, recurrenceType: RecurrenceType, startDate: LocalDate, endDate: LocalDate, dayOfWeek: Int = 1, startTime: String, endTime: String, excludeDates: Set<String> = emptySet(), teacherIdOverride: Long? = null) {
+    fun batchGenerateLessons(
+        classId: Long, recurrenceType: RecurrenceType,
+        startDate: LocalDate, endDate: LocalDate, dayOfWeek: Int = 1,
+        startTime: String, endTime: String, excludeDates: Set<String> = emptySet(),
+        teacherIdOverride: Long? = null
+    ) {
         viewModelScope.launch {
             val dates: List<LocalDate> = when (recurrenceType) {
                 RecurrenceType.WEEKLY -> buildList { var d = startDate; while (!d.isAfter(endDate)) { if (d.dayOfWeek.value == dayOfWeek) add(d); d = d.plusDays(1) } }
@@ -98,19 +108,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             dates.forEachIndexed { i, d ->
                 val ds = d.toString()
                 if (ds !in excludeDates && ds !in existing)
-                    repo.addLesson(Lesson(baseTime + i, classId, ds, startTime, endTime, "pending", code = genCode("L"), teacherIdOverride = teacherIdOverride))
+                    repo.addLesson(Lesson(baseTime + i, classId, ds, startTime, endTime, "pending",
+                                          code = genCode("L"), teacherIdOverride = teacherIdOverride))
             }
         }
     }
 
-    fun batchModifyLessons(classId: Long, fromDate: String, toDate: String, newStartTime: String? = null, newEndTime: String? = null, skipModified: Boolean = true, includeNonPending: Boolean = false) {
+    fun batchModifyLessons(classId: Long, fromDate: String, toDate: String,
+                           newStartTime: String? = null, newEndTime: String? = null,
+                           skipModified: Boolean = true, includeNonPending: Boolean = false) {
         viewModelScope.launch {
-            state.value.lessons.filter { l -> l.classId == classId && l.date in fromDate..toDate && (includeNonPending || l.status == "pending") && (!skipModified || !l.isModified) }
-                .forEach { l -> repo.updateLesson(l.copy(startTime = newStartTime ?: l.startTime, endTime = newEndTime ?: l.endTime)) }
+            state.value.lessons
+                .filter { l -> l.classId == classId && l.date in fromDate..toDate
+                            && (includeNonPending || l.status == "pending")
+                            && (!skipModified || !l.isModified) }
+                .forEach { l -> repo.updateLesson(l.copy(startTime = newStartTime ?: l.startTime,
+                                                          endTime   = newEndTime   ?: l.endTime)) }
         }
     }
 
-    fun batchDeleteLessons(classId: Long, fromDate: String, toDate: String, includeNonPending: Boolean = false, includeModified: Boolean = false) {
+    fun batchDeleteLessons(classId: Long, fromDate: String, toDate: String,
+                           includeNonPending: Boolean = false, includeModified: Boolean = false) {
         viewModelScope.launch { repo.deleteLessonBatch(classId, fromDate, toDate, includeNonPending, includeModified) }
     }
 
@@ -135,20 +153,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun updateKnowledgePoint(kp: KnowledgePoint) { viewModelScope.launch { repo.updateKnowledgePoint(kp) } }
     fun deleteKnowledgePoint(id: Long)            { viewModelScope.launch { repo.deleteKnowledgePoint(id) } }
 
-    // ─── Backup ───────────────────────────────────────────────────────────────
+    // ─── Backup / Import / Reset ──────────────────────────────────────────────
     fun exportFullZip(context: Context): ByteArray? = backupManager(context).buildFullZip(state.value)
-    fun exportFilteredZip(context: Context, teacherId: Long?, classId: Long?, fromDate: String?, toDate: String?): ByteArray? {
+
+    fun exportFilteredZip(context: Context, teacherId: Long?, classId: Long?,
+                          fromDate: String?, toDate: String?): ByteArray? {
         val filtered = state.value.filterForExport(teacherId, classId, fromDate, toDate)
-        val filter = FilterDescription(teacherName = teacherId?.let { id -> state.value.teachers.find { it.id == id }?.name }, className = classId?.let { id -> state.value.classes.find { it.id == id }?.name }, fromDate = fromDate, toDate = toDate)
+        val filter   = FilterDescription(
+            teacherName = teacherId?.let { id -> state.value.teachers.find { it.id == id }?.name },
+            className   = classId?.let   { id -> state.value.classes.find  { it.id == id }?.name },
+            fromDate    = fromDate,
+            toDate      = toDate
+        )
         return backupManager(context).buildFilteredZip(filtered, filter)
     }
-    fun peekImportZip(bytes: ByteArray, context: Context): ImportResult = backupManager(context).peekZip(bytes)
+
+    fun peekImportZip(bytes: ByteArray, context: Context): ImportResult =
+        backupManager(context).peekZip(bytes)
+
     fun commitImportZip(bytes: ByteArray, context: Context): Boolean {
         val appState = backupManager(context).extractState(bytes) ?: return false
         viewModelScope.launch { repo.mergeAll(appState) }
         return true
     }
-    fun resetToSampleData() { viewModelScope.launch { repo.importAll(sampleAppState()) } }
 
-    private fun backupManager(context: Context) = BackupManager(context, gson, runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "" }.getOrDefault(""))
+    /** Reset all data to built-in sample + built-in KP. */
+    fun resetToSampleData() {
+        viewModelScope.launch { repo.importAll(sampleAppState()) }
+    }
+
+    private fun backupManager(context: Context) = BackupManager(
+        context, gson,
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "" }.getOrDefault("")
+    )
 }

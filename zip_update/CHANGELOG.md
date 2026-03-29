@@ -1,26 +1,39 @@
 #!build
-# 彻底修复知识点不显示问题：移除 asset 文件依赖，改为代码内硬编码
+# 设置页重构：知识点导入导出支持 + 旧版兼容代码清理
 
-根本原因分析：
-asset 文件读取在 Room 初始化完成前可能失败，且 JSON 解析链路涉及多个
-可能出错的环节（文件读取、字符集、JSON 解析），任意一处失败都导致整个
-seed 静默跳过。
+## 主要改动
 
-修改方案：
-1. 新增 KnowledgePointsData.kt — 将全部 12 章 47 节 200+ 个知识点
-   直接硬编码为 Kotlin 数据，完全消除 asset 文件读取和 JSON 解析环节。
+### 1. 知识点完整纳入备份体系（BackupModels / BackupManager）
+- BackupCounts 新增 kpChapters / kpSections / knowledgePoints 三个字段
+- BackupMeta schemaVersion 升至 3（标识此格式含 KP 数据）
+- BackupManager.buildFullZip：完整备份现在包含全部知识点数据（包括自定义）
+- 筛选备份依然不含知识点（知识点是课程级数据，不属于某次课次筛选）
 
-2. AppRepository.kt — seedKnowledgePoints() 不再接受 Context 参数，
-   不再读取 assets/knowledge_points.json，直接遍历 KnowledgePointsData
-   中的列表插入数据库。逻辑极简，无任何可失败的 IO 操作。
+### 2. 导入预览对话框（ExportImportDialog）
+- 若备份中含知识点，在预览中额外显示「章 / 节 / 知识点」三行数据量
+- 不含知识点的备份（筛选导出）不显示该区块
 
-3. AppViewModel.kt — init 块中调用 repo.seedKnowledgePoints()（去掉 app
-   参数），其余不变，仍在 Dispatchers.IO 上运行。
+### 3. 设置页面 UI 重构（ExportScreen）
+- 顶部新增三个统计 badge：课次数 / 知识点数 / 自定义知识点数
+- 导出/导入卡片样式统一，移除内联 IoCard 私有组件，改用通用 SectionCard
+- 筛选备份从独立卡片改为折叠面板（条件选择 + 导出按钮在同一 Surface 内）
+- 危险操作「重置」改为 AlertDialog 二次确认，取代原来的两步按钮方案
+- 移除筛选导出中多余的日期筛选提示文字
+- 移除 IoCard 私有组件（逻辑合并到 SectionCard）
 
-4. AppDatabase.kt — version 从 1 升到 2，触发 fallbackToDestructiveMigration
-   在已安装设备上重建数据库，确保所有用户都能收到完整知识点数据。
+### 4. 数据库版本 2 → 3（AppDatabase）
+- 配合此次 KP 数据完整化，版本号升至 3
+- 继续使用 fallbackToDestructiveMigration（第一版，无需保留旧数据）
 
-效果：
-- 新安装：直接获得全部初中物理知识点
-- 升级安装：数据库重建后自动重新写入知识点（用户自定义知识点需重新添加）
-- 不再依赖 assets/knowledge_points.json（文件保留但不再使用）
+### 5. GsonModels 清理
+- 移除 parseGsonState 中针对旧版备份的向后兼容处理（title 字段缺失时的降级逻辑）
+- 使用 runCatching 统一包裹整个解析过程，更简洁
+
+### 6. AppRepository 清理
+- clearAll 重命名为 resetAll，并同时清除 KP 表
+- importAll：reset 后若无 KP 数据则自动重新 seed 内置知识点
+- 移除旧版 SharedPreferences 迁移相关注释和空函数
+
+### 7. AppViewModel init 逻辑改进
+- 首次启动（isEmpty）：importAll(sampleData) → 内部自动 seed KP
+- 升级启动（非空）：单独调用 seedKnowledgePoints()（幂等，已有数据则跳过）

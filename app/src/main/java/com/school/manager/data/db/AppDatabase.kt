@@ -9,7 +9,7 @@ import androidx.room.*
         StudentEntity::class, LessonEntity::class,
         KpChapterEntity::class, KpSectionEntity::class, KnowledgePointEntity::class
     ],
-    version      = 2,
+    version      = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,9 +28,11 @@ abstract class AppDatabase : RoomDatabase() {
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
-                    context.applicationContext, AppDatabase::class.java, "school_manager.db"
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "school_manager.db"
                 )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration()   // version 1→2→3: destructive rebuild
                 .build()
                 .also { INSTANCE = it }
             }

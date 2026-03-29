@@ -6,24 +6,38 @@ import java.io.File
 
 // ── Gson transfer models ──────────────────────────────────────────────────────
 
-internal data class GsonTeacher(val id: Long? = null, val name: String? = null, val gender: String? = null, val phone: String? = null, val avatarUri: String? = null, val code: String? = null)
-internal data class GsonClass(val id: Long? = null, val name: String? = null, val grade: String? = null, val count: Int? = null, val headTeacherId: Long? = null, val subjectId: Long? = null, val code: String? = null)
-internal data class GsonLesson(val id: Long? = null, val classId: Long? = null, val date: String? = null, val startTime: String? = null, val endTime: String? = null, val status: String? = null, val topic: String? = null, val notes: String? = null, val attendees: List<Long>? = null, val isModified: Boolean? = null, val code: String? = null, val teacherIdOverride: Long? = null, val knowledgePointIds: List<Long>? = null)
-
+internal data class GsonTeacher(
+    val id: Long? = null, val name: String? = null, val gender: String? = null,
+    val phone: String? = null, val avatarUri: String? = null, val code: String? = null
+)
+internal data class GsonClass(
+    val id: Long? = null, val name: String? = null, val grade: String? = null,
+    val count: Int? = null, val headTeacherId: Long? = null,
+    val subjectId: Long? = null, val code: String? = null
+)
+internal data class GsonLesson(
+    val id: Long? = null, val classId: Long? = null, val date: String? = null,
+    val startTime: String? = null, val endTime: String? = null,
+    val status: String? = null, val topic: String? = null, val notes: String? = null,
+    val attendees: List<Long>? = null, val isModified: Boolean? = null,
+    val code: String? = null, val teacherIdOverride: Long? = null,
+    val knowledgePointIds: List<Long>? = null
+)
 internal data class GsonKpChapter(
-    val id: Long? = null, val grade: String? = null, val no: Int? = null, val name: String? = null
+    val id: Long? = null, val grade: String? = null,
+    val no: Int? = null, val name: String? = null
 )
 internal data class GsonKpSection(
-    val id: Long? = null, val chapterId: Long? = null, val no: Int? = null, val name: String? = null
+    val id: Long? = null, val chapterId: Long? = null,
+    val no: Int? = null, val name: String? = null
 )
 internal data class GsonKnowledgePoint(
     val id: Long? = null, val sectionId: Long? = null, val no: Int? = null,
-    val title: String? = null,    // short label (may be absent in old backups)
-    val content: String? = null, val isCustom: Boolean? = null
+    val title: String? = null, val content: String? = null, val isCustom: Boolean? = null
 )
 
 internal data class GsonState(
-    val subjects:        List<Subject>?             = null,
+    val subjects:        List<Subject>?              = null,
     val teachers:        List<GsonTeacher>?          = null,
     val classes:         List<GsonClass>?            = null,
     val students:        List<Student>?              = null,
@@ -35,29 +49,42 @@ internal data class GsonState(
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
-internal fun parseGsonState(json: String, gson: Gson, pathRemap: Map<String, String> = emptyMap()): AppState? {
-    return try {
-        val raw = gson.fromJson(json, GsonState::class.java) ?: return null
-        fun remap(old: String?) = old?.let { pathRemap[File(it).name] ?: it }
+internal fun parseGsonState(
+    json: String,
+    gson: Gson,
+    pathRemap: Map<String, String> = emptyMap()
+): AppState? = runCatching {
+    val raw = gson.fromJson(json, GsonState::class.java) ?: return null
+    fun remap(old: String?) = old?.let { pathRemap[File(it).name] ?: it }
 
-        val subjects = raw.subjects ?: emptyList()
-        val teachers = raw.teachers?.map { Teacher(it.id ?: 0L, it.name ?: "", it.gender ?: "男", it.phone ?: "", remap(it.avatarUri), it.code ?: "") } ?: emptyList()
-        val classes  = raw.classes?.map  { SchoolClass(it.id ?: 0L, it.name ?: "", it.grade ?: "", it.count ?: 0, it.headTeacherId, it.subjectId, it.code ?: "") } ?: emptyList()
-        val students = raw.students?.map { it.copy(avatarUri = remap(it.avatarUri)) } ?: emptyList()
-        val lessons  = raw.lessons?.map  { gl -> Lesson(gl.id ?: 0L, gl.classId ?: 0L, gl.date ?: "", gl.startTime ?: "", gl.endTime ?: "", gl.status ?: "pending", gl.topic ?: "", gl.notes ?: "", gl.attendees ?: emptyList(), gl.isModified ?: false, gl.code ?: "", gl.teacherIdOverride, gl.knowledgePointIds ?: emptyList()) } ?: emptyList()
-        val kpChapters = raw.kpChapters?.map { KpChapter(it.id ?: 0L, it.grade ?: "", it.no ?: 0, it.name ?: "") } ?: emptyList()
-        val kpSections = raw.kpSections?.map { KpSection(it.id ?: 0L, it.chapterId ?: 0L, it.no ?: 0, it.name ?: "") } ?: emptyList()
-        val knowledgePoints = raw.knowledgePoints?.map { gkp ->
-            KnowledgePoint(
-                id        = gkp.id ?: 0L,
-                sectionId = gkp.sectionId ?: 0L,
-                no        = gkp.no ?: 0,
-                title     = gkp.title ?: "",   // old backups without title → empty string → displayTitle falls back
-                content   = gkp.content ?: "",
-                isCustom  = gkp.isCustom ?: false
-            )
+    AppState(
+        subjects = raw.subjects ?: emptyList(),
+        teachers = raw.teachers?.map {
+            Teacher(it.id ?: 0L, it.name ?: "", it.gender ?: "男",
+                    it.phone ?: "", remap(it.avatarUri), it.code ?: "")
+        } ?: emptyList(),
+        classes = raw.classes?.map {
+            SchoolClass(it.id ?: 0L, it.name ?: "", it.grade ?: "",
+                        it.count ?: 0, it.headTeacherId, it.subjectId, it.code ?: "")
+        } ?: emptyList(),
+        students = raw.students?.map { it.copy(avatarUri = remap(it.avatarUri)) } ?: emptyList(),
+        lessons = raw.lessons?.map { gl ->
+            Lesson(gl.id ?: 0L, gl.classId ?: 0L, gl.date ?: "",
+                   gl.startTime ?: "", gl.endTime ?: "",
+                   gl.status ?: "pending", gl.topic ?: "", gl.notes ?: "",
+                   gl.attendees ?: emptyList(), gl.isModified ?: false,
+                   gl.code ?: "", gl.teacherIdOverride,
+                   gl.knowledgePointIds ?: emptyList())
+        } ?: emptyList(),
+        kpChapters = raw.kpChapters?.map {
+            KpChapter(it.id ?: 0L, it.grade ?: "", it.no ?: 0, it.name ?: "")
+        } ?: emptyList(),
+        kpSections = raw.kpSections?.map {
+            KpSection(it.id ?: 0L, it.chapterId ?: 0L, it.no ?: 0, it.name ?: "")
+        } ?: emptyList(),
+        knowledgePoints = raw.knowledgePoints?.map { gkp ->
+            KnowledgePoint(gkp.id ?: 0L, gkp.sectionId ?: 0L, gkp.no ?: 0,
+                           gkp.title ?: "", gkp.content ?: "", gkp.isCustom ?: false)
         } ?: emptyList()
-
-        AppState(subjects, teachers, classes, students, lessons, knowledgePoints, kpChapters, kpSections)
-    } catch (_: Exception) { null }
-}
+    )
+}.getOrNull()

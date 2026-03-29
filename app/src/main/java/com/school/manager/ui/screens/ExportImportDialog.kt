@@ -11,10 +11,6 @@ import com.school.manager.data.*
 import com.school.manager.ui.components.*
 import com.school.manager.ui.theme.*
 
-/**
- * Shown after the user picks a ZIP file, before any data is written.
- * Displays meta.json contents so the user can confirm what they are importing.
- */
 @Composable
 internal fun ImportPreviewDialog(
     result: ImportResult,
@@ -41,11 +37,13 @@ internal fun ImportPreviewDialog(
             title            = { Text("导入预览", fontWeight = FontWeight.Bold) },
             text             = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Filter badge — only shown for filtered exports
+                    // Filtered export badge
                     result.filter?.let { f ->
-                        Surface(shape = RoundedCornerShape(8.dp),
+                        Surface(
+                            shape    = RoundedCornerShape(8.dp),
                             color    = FluentAmber.copy(alpha = 0.12f),
-                            modifier = Modifier.fillMaxWidth()) {
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Text("筛选备份：${f.describe()}",
                                 style    = MaterialTheme.typography.bodySmall,
                                 color    = FluentAmber,
@@ -55,20 +53,34 @@ internal fun ImportPreviewDialog(
 
                     DetailRow("导出时间", result.exportedAt.take(10))
                     DetailRow("格式版本", "schema v${result.schemaVersion}")
+
                     HorizontalDivider(color = FluentBorder, thickness = 0.5.dp,
                         modifier = Modifier.padding(horizontal = 16.dp))
 
                     SectionHeader("包含数据")
-                    DetailRow("科目", "${result.counts.subjects} 项")
-                    DetailRow("教师", "${result.counts.teachers} 名")
-                    DetailRow("班级", "${result.counts.classes} 个")
-                    DetailRow("学生", "${result.counts.students} 名")
-                    DetailRow("课次", "${result.counts.lessons} 节")
+                    DetailRow("科目",  "${result.counts.subjects} 项")
+                    DetailRow("教师",  "${result.counts.teachers} 名")
+                    DetailRow("班级",  "${result.counts.classes} 个")
+                    DetailRow("学生",  "${result.counts.students} 名")
+                    DetailRow("课次",  "${result.counts.lessons} 节")
 
-                    Surface(shape = RoundedCornerShape(8.dp),
+                    // KP rows — only shown if backup contains KP data (full export)
+                    if (result.counts.kpChapters > 0 || result.counts.knowledgePoints > 0) {
+                        HorizontalDivider(color = FluentBorder, thickness = 0.5.dp,
+                            modifier = Modifier.padding(horizontal = 16.dp))
+                        SectionHeader("知识点数据")
+                        DetailRow("章",    "${result.counts.kpChapters} 章")
+                        DetailRow("节",    "${result.counts.kpSections} 节")
+                        DetailRow("知识点","${result.counts.knowledgePoints} 条")
+                    }
+
+                    Surface(
+                        shape    = RoundedCornerShape(8.dp),
                         color    = FluentBlueLight,
-                        modifier = Modifier.fillMaxWidth()) {
-                        Text("按 ID 合并：ID 相同的记录将被覆盖，其余追加。",
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "按 ID 合并：ID 相同的记录将被覆盖，新 ID 的记录将追加。",
                             style    = MaterialTheme.typography.bodySmall,
                             color    = FluentBlueDark,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))

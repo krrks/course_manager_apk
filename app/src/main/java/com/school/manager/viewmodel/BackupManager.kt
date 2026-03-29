@@ -8,15 +8,14 @@ import java.time.Instant
 import java.util.zip.*
 
 /**
- * All ZIP backup/restore logic lives here, away from the ViewModel.
+ * ZIP backup/restore logic.
  *
  * ZIP layout:
- *   meta.json    – BackupMeta (schema version, counts, filter description)
- *   state.json   – AppState (full or filtered subset, same Gson format)
+ *   meta.json    – BackupMeta (schema v3: includes KP counts)
+ *   state.json   – full AppState via Gson (includes KP chapters/sections/points)
  *   avatars/     – avatar image files (full export only)
  *
- * state.json is intentionally the plain AppState shape so that
- * parseGsonState() handles both new and legacy ZIPs without changes.
+ * Filtered exports omit KP data (they are curriculum-wide, not lesson-scoped).
  */
 class BackupManager(
     private val context: Context,
@@ -24,27 +23,33 @@ class BackupManager(
     private val appVersion: String
 ) {
 
-    // ── Export ────────────────────────────────────────────────────────────
+    // ── Export ────────────────────────────────────────────────────────────────
 
     fun buildFullZip(state: AppState): ByteArray? = runCatching {
-        val meta = BackupMeta(
-            exportedAt = Instant.now().toString(),
-            appVersion = appVersion,
-            counts     = state.toBackupCounts(),
-            filter     = null
+        writeZip(
+            meta = BackupMeta(
+                exportedAt = Instant.now().toString(),
+                appVersion = appVersion,
+                counts     = state.toBackupCounts(),
+                filter     = null
+            ),
+            state          = state,
+            includeAvatars = true
         )
-        writeZip(meta, state, includeAvatars = true)
     }.getOrNull()
 
     fun buildFilteredZip(filteredState: AppState, filter: FilterDescription): ByteArray? =
         runCatching {
-            val meta = BackupMeta(
-                exportedAt = Instant.now().toString(),
-                appVersion = appVersion,
-                counts     = filteredState.toBackupCounts(),
-                filter     = filter
+            writeZip(
+                meta = BackupMeta(
+                    exportedAt = Instant.now().toString(),
+                    appVersion = appVersion,
+                    counts     = filteredState.toBackupCounts(),
+                    filter     = filter
+                ),
+                state          = filteredState,
+                includeAvatars = false
             )
-            writeZip(meta, filteredState, includeAvatars = false)
         }.getOrNull()
 
     private fun writeZip(meta: BackupMeta, state: AppState, includeAvatars: Boolean): ByteArray {
@@ -54,9 +59,8 @@ class BackupManager(
             zip.entry("state.json", gson.toJson(state).toByteArray())
             if (includeAvatars) {
                 File(context.filesDir, "avatars").takeIf { it.exists() }
-                    ?.listFiles()?.forEach { f ->
-                        zip.entry("avatars/${f.name}", f.readBytes())
-                    }
+                    ?.listFiles()
+                    ?.forEach { f -> zip.entry("avatars/${f.name}", f.readBytes()) }
             }
         }
         return baos.toByteArray()
@@ -66,16 +70,11 @@ class BackupManager(
         putNextEntry(ZipEntry(name)); write(data); closeEntry()
     }
 
-    // ── Peek (preview before import) ──────────────────────────────────────
+    // ── Peek ──────────────────────────────────────────────────────────────────
 
-    /**
-     * Reads only meta.json from the ZIP bytes.
-     * Call this first to populate the import preview dialog.
-     * Does NOT write anything to the database.
-     */
     fun peekZip(bytes: ByteArray): ImportResult = runCatching {
         val metaJson = readEntry(bytes, "meta.json")
-            ?: return ImportResult.Failure("ZIP 中未找到 meta.json，可能是旧版备份")
+            ?: return ImportResult.Failure("ZIP 中未找到 meta.json")
         val meta = gson.fromJson(metaJson, BackupMeta::class.java)
             ?: return ImportResult.Failure("meta.json 解析失败")
         ImportResult.Success(
@@ -86,13 +85,8 @@ class BackupManager(
         )
     }.getOrElse { ImportResult.Failure("读取失败：${it.message}") }
 
-    // ── Commit import ─────────────────────────────────────────────────────
+    // ── Commit import ─────────────────────────────────────────────────────────
 
-    /**
-     * Parses state.json and restores avatars.
-     * Returns the AppState ready to be merged into the database,
-     * or null on failure.
-     */
     fun extractState(bytes: ByteArray): AppState? = runCatching {
         val stateJson = readEntry(bytes, "state.json") ?: return null
         val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
@@ -106,7 +100,7 @@ class BackupManager(
                     val dest = File(avatarDir, name).also { it.writeBytes(zip.readBytes()) }
                     pathRemap[name] = dest.absolutePath
                 } else {
-                    zip.readBytes()   // consume and discard non-avatar entries
+                    zip.readBytes()
                 }
                 entry = zip.nextEntry
             }
@@ -114,7 +108,7 @@ class BackupManager(
         parseGsonState(stateJson, gson, pathRemap)
     }.getOrNull()
 
-    // ── Private helper ────────────────────────────────────────────────────
+    // ── Private ───────────────────────────────────────────────────────────────
 
     private fun readEntry(bytes: ByteArray, name: String): String? {
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->

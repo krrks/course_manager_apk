@@ -1,29 +1,29 @@
 package com.school.manager.data
 
-const val BACKUP_SCHEMA_VERSION = 2
+const val BACKUP_SCHEMA_VERSION = 3   // v3: knowledge points included in full backup
 
 data class BackupMeta(
     val schemaVersion: Int         = BACKUP_SCHEMA_VERSION,
     val exportedAt: String         = "",
     val appVersion: String         = "",
     val counts: BackupCounts       = BackupCounts(),
-    val filter: FilterDescription? = null   // null = full export
+    val filter: FilterDescription? = null
 )
 
 data class BackupCounts(
-    val subjects: Int = 0,
-    val teachers: Int = 0,
-    val classes: Int  = 0,
-    val students: Int = 0,
-    val lessons: Int  = 0
+    val subjects: Int        = 0,
+    val teachers: Int        = 0,
+    val classes: Int         = 0,
+    val students: Int        = 0,
+    val lessons: Int         = 0,
+    val kpChapters: Int      = 0,
+    val kpSections: Int      = 0,
+    val knowledgePoints: Int = 0
 ) {
-    val total get() = subjects + teachers + classes + students + lessons
+    val total get() = subjects + teachers + classes + students + lessons +
+                      kpChapters + kpSections + knowledgePoints
 }
 
-/**
- * Human-readable record of what was filtered at export time.
- * Stored in meta.json so the import preview can show it to the user.
- */
 data class FilterDescription(
     val teacherName: String? = null,
     val className: String?   = null,
@@ -49,18 +49,17 @@ sealed class ImportResult {
 }
 
 fun AppState.toBackupCounts() = BackupCounts(
-    subjects = subjects.size,
-    teachers = teachers.size,
-    classes  = classes.size,
-    students = students.size,
-    lessons  = lessons.size
+    subjects        = subjects.size,
+    teachers        = teachers.size,
+    classes         = classes.size,
+    students        = students.size,
+    lessons         = lessons.size,
+    kpChapters      = kpChapters.size,
+    kpSections      = kpSections.size,
+    knowledgePoints = knowledgePoints.size
 )
 
-/**
- * Returns a subset AppState containing only the filtered lessons
- * plus every entity they reference (classes, teachers, students, subjects).
- * Used for filtered ZIP exports.
- */
+/** Returns a filtered subset for lesson-scoped exports. KP data not included. */
 fun AppState.filterForExport(
     teacherId: Long?,
     classId: Long?,
@@ -85,5 +84,6 @@ fun AppState.filterForExport(
         classes  = usedClasses,
         students = usedStudents,
         lessons  = filteredLessons
+        // kpChapters / kpSections / knowledgePoints intentionally omitted — full export only
     )
 }

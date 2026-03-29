@@ -11,13 +11,13 @@ class AppRepository(context: Context) {
 
     val appState: Flow<AppState> = combine(
         combine(
-            db.subjectDao().allFlow().map  { it.map(SubjectEntity::toDomain)       },
-            db.teacherDao().allFlow().map  { it.map(TeacherEntity::toDomain)       },
-            db.classDao().allFlow().map    { it.map(ClassEntity::toDomain)         }
+            db.subjectDao().allFlow().map  { it.map(SubjectEntity::toDomain) },
+            db.teacherDao().allFlow().map  { it.map(TeacherEntity::toDomain) },
+            db.classDao().allFlow().map    { it.map(ClassEntity::toDomain)   }
         ) { subjects, teachers, classes -> Triple(subjects, teachers, classes) },
         combine(
-            db.studentDao().allFlow().map  { it.map(StudentEntity::toDomain)       },
-            db.lessonDao().allFlow().map   { it.map(LessonEntity::toDomain)        },
+            db.studentDao().allFlow().map  { it.map(StudentEntity::toDomain)          },
+            db.lessonDao().allFlow().map   { it.map(LessonEntity::toDomain)           },
             db.knowledgePointDao().allFlow().map { it.map(KnowledgePointEntity::toDomain) }
         ) { students, lessons, kps -> Triple(students, lessons, kps) },
         combine(
@@ -31,33 +31,20 @@ class AppRepository(context: Context) {
     suspend fun isEmpty(): Boolean =
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
 
-    // ── Knowledge point seeding ───────────────────────────────────────────────
-    // Uses hardcoded KnowledgePointsData — no asset file dependency.
-    // Runs only when kp_chapters table is empty (fresh install or after DB wipe).
+    // ── KP seeding ────────────────────────────────────────────────────────────
+    // Runs only when kp_chapters is empty. Uses hardcoded data — no IO.
 
     suspend fun seedKnowledgePoints() {
         if (db.kpChapterDao().count() > 0) return
-
         KnowledgePointsData.chapters.forEach { raw ->
-            db.kpChapterDao().insert(
-                KpChapterEntity(raw.id, raw.grade, raw.no, raw.name)
-            )
+            db.kpChapterDao().insert(KpChapterEntity(raw.id, raw.grade, raw.no, raw.name))
         }
         KnowledgePointsData.sections.forEach { raw ->
-            db.kpSectionDao().insert(
-                KpSectionEntity(raw.id, raw.chapterId, raw.no, raw.name)
-            )
+            db.kpSectionDao().insert(KpSectionEntity(raw.id, raw.chapterId, raw.no, raw.name))
         }
         KnowledgePointsData.points.forEach { raw ->
             db.knowledgePointDao().insert(
-                KnowledgePointEntity(
-                    id        = raw.id,
-                    sectionId = raw.sectionId,
-                    no        = raw.no,
-                    title     = raw.title,
-                    content   = raw.content,
-                    isCustom  = false
-                )
+                KnowledgePointEntity(raw.id, raw.sectionId, raw.no, raw.title, raw.content, false)
             )
         }
     }
@@ -86,8 +73,10 @@ class AppRepository(context: Context) {
     suspend fun addLesson(l: Lesson)    = db.lessonDao().insert(l.toEntity())
     suspend fun updateLesson(l: Lesson) = db.lessonDao().update(l.toEntity())
     suspend fun deleteLesson(id: Long)  = db.lessonDao().deleteById(id)
-    suspend fun deleteLessonBatch(classId: Long, fromDate: String, toDate: String, includeNonPending: Boolean, includeModified: Boolean) =
-        db.lessonDao().deleteBatch(classId, fromDate, toDate, includeNonPending, includeModified)
+    suspend fun deleteLessonBatch(
+        classId: Long, fromDate: String, toDate: String,
+        includeNonPending: Boolean, includeModified: Boolean
+    ) = db.lessonDao().deleteBatch(classId, fromDate, toDate, includeNonPending, includeModified)
 
     // ── KP Chapters ───────────────────────────────────────────────────────────
     suspend fun addKpChapter(c: KpChapter)    = db.kpChapterDao().insert(c.toEntity())
@@ -105,14 +94,40 @@ class AppRepository(context: Context) {
     suspend fun deleteKnowledgePoint(id: Long)            = db.knowledgePointDao().deleteById(id)
 
     // ── Reset / Import ────────────────────────────────────────────────────────
-    suspend fun clearAll() {
-        db.lessonDao().deleteAll(); db.classDao().deleteAll()
-        db.studentDao().deleteAll(); db.subjectDao().deleteAll(); db.teacherDao().deleteAll()
-        // kp tables: NOT cleared — user keeps custom points and built-in points stay
+
+    /** Clear all tables including KP data. */
+    private suspend fun resetAll() {
+        db.lessonDao().deleteAll()
+        db.classDao().deleteAll()
+        db.studentDao().deleteAll()
+        db.subjectDao().deleteAll()
+        db.teacherDao().deleteAll()
+        db.knowledgePointDao().deleteAll()
+        db.kpSectionDao().deleteAll()
+        db.kpChapterDao().deleteAll()
     }
 
-    suspend fun importAll(state: AppState) { clearAll(); mergeAll(state) }
+    /**
+     * Full reset-and-replace. Used by:
+     *  - initial sample data load
+     *  - "重置为示例数据" (resets to sample, then re-seeds KP)
+     *
+     * After clearing, if the incoming state has no KP data (e.g. sample data),
+     * built-in KP points are seeded automatically.
+     */
+    suspend fun importAll(state: AppState) {
+        resetAll()
+        mergeAll(state)
+        if (db.kpChapterDao().count() == 0) seedKnowledgePoints()
+    }
 
+    /**
+     * Merge-by-ID import: same ID → overwrite; new ID → insert.
+     * Does not clear existing data.
+     * Used by ZIP import ("按 ID 合并").
+     * If the backup contains KP data it is merged too.
+     * If not (e.g. filtered export), existing KP is untouched.
+     */
     suspend fun mergeAll(incoming: AppState) {
         incoming.subjects.forEach        { e -> val en = e.toEntity(); if (db.subjectDao().insert(en)        == -1L) db.subjectDao().update(en) }
         incoming.teachers.forEach        { e -> val en = e.toEntity(); if (db.teacherDao().insert(en)        == -1L) db.teacherDao().update(en) }
