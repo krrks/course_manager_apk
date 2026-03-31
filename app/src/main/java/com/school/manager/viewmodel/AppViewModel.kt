@@ -182,6 +182,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { repo.importAll(sampleAppState()) }
     }
 
+    /**
+     * Full replace used by GitHub sync pull.
+     * Deletes all existing data then imports incoming state completely,
+     * so deletions on the remote are correctly reflected locally.
+     * If the incoming state has no KP data, re-seeds built-in KP.
+     */
+    fun syncImport(incoming: AppState) {
+        viewModelScope.launch(Dispatchers.IO) { repo.importAll(incoming) }
+    }
+
     private fun backupManager(context: Context) = BackupManager(
         context, gson,
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "" }.getOrDefault("")

@@ -1,39 +1,32 @@
 #!build
-# 设置页重构：知识点导入导出支持 + 旧版兼容代码清理
+# 新增功能：GitHub 数据同步
 
-## 主要改动
+## 功能概述
+在设置页面新增「GitHub 数据同步」入口，支持将全部应用数据推送到用户私有 GitHub 仓库，
+或从仓库拉取数据到本地，实现多设备共享与云端备份。
 
-### 1. 知识点完整纳入备份体系（BackupModels / BackupManager）
-- BackupCounts 新增 kpChapters / kpSections / knowledgePoints 三个字段
-- BackupMeta schemaVersion 升至 3（标识此格式含 KP 数据）
-- BackupManager.buildFullZip：完整备份现在包含全部知识点数据（包括自定义）
-- 筛选备份依然不含知识点（知识点是课程级数据，不属于某次课次筛选）
+## 数据存储位置
+数据写入目标仓库的 `userdata_sync/` 目录：
+- `userdata_sync/meta.json`    — 同步元信息（时间、版本、数据 hash）
+- `userdata_sync/state.json`   — 全量 AppState（复用现有 Gson 序列化）
+- `userdata_sync/avatars/`     — 头像图片文件
 
-### 2. 导入预览对话框（ExportImportDialog）
-- 若备份中含知识点，在预览中额外显示「章 / 节 / 知识点」三行数据量
-- 不含知识点的备份（筛选导出）不显示该区块
+## 新增文件
+- `GitHubSyncService.kt`    — GitHub Contents API 封装（HttpURLConnection，无新依赖）
+- `GitHubSyncViewModel.kt`  — 推送/拉取编排、冲突检测、PAT 加密存储
+- `GitHubSyncScreen.kt`     — 设置子页面 UI（连接、推送、拉取、冲突处理）
 
-### 3. 设置页面 UI 重构（ExportScreen）
-- 顶部新增三个统计 badge：课次数 / 知识点数 / 自定义知识点数
-- 导出/导入卡片样式统一，移除内联 IoCard 私有组件，改用通用 SectionCard
-- 筛选备份从独立卡片改为折叠面板（条件选择 + 导出按钮在同一 Surface 内）
-- 危险操作「重置」改为 AlertDialog 二次确认，取代原来的两步按钮方案
-- 移除筛选导出中多余的日期筛选提示文字
-- 移除 IoCard 私有组件（逻辑合并到 SectionCard）
+## 修改文件
+- `AppViewModel.kt`     — 新增 `syncImport()` 方法（全量替换，正确处理删除操作）
+- `ExportScreen.kt`     — 设置页顶部新增「GitHub 同步设置」入口卡片
+- `Navigation.kt`       — 新增 `GitHubSync` 路由（不出现在侧边栏）
+- `MainActivity.kt`     — 注册 `github_sync` NavHost 路由
+- `app/build.gradle.kts`      — 新增 `androidx.security:security-crypto` 依赖
+- `gradle/libs.versions.toml` — 新增 securityCrypto 版本定义
 
-### 4. 数据库版本 2 → 3（AppDatabase）
-- 配合此次 KP 数据完整化，版本号升至 3
-- 继续使用 fallbackToDestructiveMigration（第一版，无需保留旧数据）
-
-### 5. GsonModels 清理
-- 移除 parseGsonState 中针对旧版备份的向后兼容处理（title 字段缺失时的降级逻辑）
-- 使用 runCatching 统一包裹整个解析过程，更简洁
-
-### 6. AppRepository 清理
-- clearAll 重命名为 resetAll，并同时清除 KP 表
-- importAll：reset 后若无 KP 数据则自动重新 seed 内置知识点
-- 移除旧版 SharedPreferences 迁移相关注释和空函数
-
-### 7. AppViewModel init 逻辑改进
-- 首次启动（isEmpty）：importAll(sampleData) → 内部自动 seed KP
-- 升级启动（非空）：单独调用 seedKnowledgePoints()（幂等，已有数据则跳过）
+## 技术要点
+- PAT 使用 EncryptedSharedPreferences（Android Keystore AES256）加密存储
+- 冲突检测：基于 state.json 的 SHA-256 hash 比对，双端都有修改时弹出冲突对话框
+- 推送时检测到冲突可选「覆盖远端」或「拉取远端」
+- 拉取 = 全量替换（repo.importAll），保证删除操作正确同步
+- 无新网络库依赖，复用项目已有的 Gson

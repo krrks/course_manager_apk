@@ -88,7 +88,11 @@ private fun SectionCard(
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 @Composable
-fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
+fun ExportScreen(
+    vm: AppViewModel,
+    onOpenDrawer: () -> Unit = {},
+    onNavigateToGitHubSync: () -> Unit = {}
+) {
     val context = LocalContext.current
     val state   by vm.state.collectAsState()
     var toast   by remember { mutableStateOf<String?>(null) }
@@ -147,8 +151,8 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
     }
 
     // ── Stats badges ──────────────────────────────────────────────────────────
-    val lessonCount = state.lessons.size
-    val kpCount     = state.knowledgePoints.size
+    val lessonCount   = state.lessons.size
+    val kpCount       = state.knowledgePoints.size
     val customKpCount = state.knowledgePoints.count { it.isCustom }
 
     // ── Reset confirm state ───────────────────────────────────────────────────
@@ -173,10 +177,28 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                StatBadge("📚", "$lessonCount 节课",  FluentBlue,   Modifier.weight(1f))
-                StatBadge("💡", "$kpCount 知识点",    FluentPurple, Modifier.weight(1f))
-                StatBadge("✏️", "$customKpCount 自定义", FluentAmber, Modifier.weight(1f))
+                StatBadge("📚", "$lessonCount 节课",     FluentBlue,   Modifier.weight(1f))
+                StatBadge("💡", "$kpCount 知识点",       FluentPurple, Modifier.weight(1f))
+                StatBadge("✏️", "$customKpCount 自定义", FluentAmber,  Modifier.weight(1f))
             }
+
+            HorizontalDivider(color = FluentBorder)
+
+            // ── GitHub 同步 ───────────────────────────────────────────────────
+            SectionLabel("☁️ GitHub 数据同步")
+            Text(
+                "将全部数据同步到你的私有 GitHub 仓库，支持多设备共享与灾难恢复",
+                style    = MaterialTheme.typography.bodySmall,
+                color    = FluentMuted,
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
+            SectionCard(
+                icon        = Icons.Default.Cloud,
+                iconColor   = Color(0xFF24292F),   // GitHub black
+                title       = "GitHub 同步设置",
+                subtitle    = "推送 / 拉取 · 冲突检测 · 含头像",
+                actionLabel = "前往"
+            ) { onNavigateToGitHubSync() }
 
             HorizontalDivider(color = FluentBorder)
 
@@ -230,10 +252,10 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                             fFromDate.isNotBlank() || fToDate.isNotBlank()
 
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surface,
+                shape           = RoundedCornerShape(12.dp),
+                color           = MaterialTheme.colorScheme.surface,
                 shadowElevation = 1.dp,
-                modifier = Modifier.fillMaxWidth()
+                modifier        = Modifier.fillMaxWidth()
             ) {
                 Column(
                     Modifier.padding(12.dp),
@@ -350,8 +372,8 @@ fun ExportScreen(vm: AppViewModel, onOpenDrawer: () -> Unit = {}) {
                     shadowElevation = 4.dp
                 ) {
                     Text(msg, modifier = Modifier.padding(12.dp),
-                        color = if (msg.startsWith("✅")) FluentGreen
-                                else MaterialTheme.colorScheme.onErrorContainer,
+                        color      = if (msg.startsWith("✅")) FluentGreen
+                                     else MaterialTheme.colorScheme.onErrorContainer,
                         fontWeight = FontWeight.Medium)
                 }
             }

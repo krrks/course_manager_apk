@@ -92,6 +92,9 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.coil.compose)
 
+    // ── Security (EncryptedSharedPreferences for GitHub PAT) ─────────────────
+    implementation(libs.androidx.security.crypto)
+
     // ── Room ─────────────────────────────────────────────────────────────────
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

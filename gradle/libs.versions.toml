@@ -9,7 +9,8 @@ navigationCompose = "2.8.3"
 lifecycleViewmodelCompose = "2.8.6"
 gson = "2.10.1"
 coil = "2.7.0"
-room = "2.6.1"                     # ← added
+room = "2.6.1"
+securityCrypto = "1.1.0-alpha06"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -25,11 +26,12 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }   # ← added
-room-ktx     = { group = "androidx.room", name = "room-ktx",     version.ref = "room" }   # ← added
-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" } # ← added (kapt)
+room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+room-ktx     = { group = "androidx.room", name = "room-ktx",     version.ref = "room" }
+room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
