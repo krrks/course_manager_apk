@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-29T15:25:06Z`
-> Commit:  `b28869ea881348473b983e8fe09fef85046e14c3`
+> Updated: `2026-03-31T15:40:06Z`
+> Commit:  `feeb35f309eb23299ebd51fb6694215fbab2cc21`
 
 ```
 ./.github/workflows/build.yml
@@ -30,6 +30,7 @@
 ./app/src/main/java/com/school/manager/ui/screens/ClassesScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportImportDialog.kt
 ./app/src/main/java/com/school/manager/ui/screens/ExportScreen.kt
+./app/src/main/java/com/school/manager/ui/screens/GitHubSyncScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/KnowledgePointsDialogs.kt
 ./app/src/main/java/com/school/manager/ui/screens/KnowledgePointsScreen.kt
 ./app/src/main/java/com/school/manager/ui/screens/LessonBatchActionDialog.kt
@@ -52,6 +53,8 @@
 ./app/src/main/java/com/school/manager/util/AvatarUtil.kt
 ./app/src/main/java/com/school/manager/viewmodel/AppViewModel.kt
 ./app/src/main/java/com/school/manager/viewmodel/BackupManager.kt
+./app/src/main/java/com/school/manager/viewmodel/GitHubSyncService.kt
+./app/src/main/java/com/school/manager/viewmodel/GitHubSyncViewModel.kt
 ./app/src/main/java/com/school/manager/viewmodel/GsonModels.kt
 ./app/src/main/res/drawable/ic_launcher_foreground.xml
 ./app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
