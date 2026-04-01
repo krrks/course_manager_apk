@@ -40,9 +40,9 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Disconnected)
     val status: StateFlow<SyncStatus> = _status
 
-    val savedUrl:       String  get() = prefs.getString(KEY_URL,       "") ?: ""
-    val savedToken:     String  get() = prefs.getString(KEY_TOKEN,     "") ?: ""
-    val savedLastSync:  String? get() = prefs.getString(KEY_LAST_SYNC, null)
+    val savedUrl:      String  get() = prefs.getString(KEY_URL,       "") ?: ""
+    val savedToken:    String  get() = prefs.getString(KEY_TOKEN,     "") ?: ""
+    val savedLastSync: String? get() = prefs.getString(KEY_LAST_SYNC, null)
 
     init { restoreStatus() }
 
@@ -77,7 +77,7 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
         _status.value = SyncStatus.Disconnected
     }
 
-    /** Resets status to Ready after dismissing error/conflict dialogs without acting. */
+    /** Resets status to Ready after dismissing error/conflict dialogs. */
     fun restoreReady() {
         val url = prefs.getString(KEY_URL, null) ?: return
         _status.value = SyncStatus.Ready(url, prefs.getString(KEY_LAST_SYNC, null))
@@ -114,25 +114,33 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Pull ──────────────────────────────────────────────────────────────────
 
-    fun pull(context: Context, onState: (AppState?) -> Unit) {
+    /**
+     * Pulls state.json (always) and kp_custom.json (only when remote hash differs).
+     * [onResult] receives the pulled AppState and optionally a list of custom KPs
+     * that should be merged into the local DB. Built-in KPs are never touched.
+     */
+    fun pull(
+        context: Context,
+        onResult: (AppState?, List<KnowledgePoint>?) -> Unit
+    ) {
         val url   = prefs.getString(KEY_URL,   null) ?: return
         val token = prefs.getString(KEY_TOKEN, null) ?: return
         viewModelScope.launch {
             _status.value = SyncStatus.Syncing
-            var pulledState: AppState? = null
-            var pullError:   String?   = null
+            var result: Pair<AppState, List<KnowledgePoint>?>? = null
+            var pullError: String? = null
             withContext(Dispatchers.IO) {
-                try { pulledState = executePull(url, token, context) }
+                try { result = executePull(url, token, context) }
                 catch (e: Exception) { pullError = e.message ?: "Pull failed" }
             }
             if (pullError != null) {
                 _status.value = SyncStatus.Error(pullError!!)
-                onState(null)
+                onResult(null, null)
             } else {
                 val now = now()
                 prefs.edit().putString(KEY_LAST_SYNC, now).apply()
                 _status.value = SyncStatus.Ready(url, now)
-                onState(pulledState)
+                onResult(result?.first, result?.second)
             }
         }
     }
@@ -144,12 +152,25 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
         appState: AppState, context: Context,
         appVersion: String, force: Boolean
     ) {
-        val svc        = GitHubSyncService(url, token, gson)
-        val stripped   = appState.stripAvatarPaths()
-        val stateBytes = gson.toJson(stripped).toByteArray(Charsets.UTF_8)
-        val hash       = sha256(stateBytes)
+        val svc = GitHubSyncService(url, token, gson)
 
-        // Conflict detection: remote changed AND local changed since last sync
+        // State payload: avatar paths stripped, all KP omitted
+        val stateNoKp = appState.stripAvatarPaths().copy(
+            kpChapters      = emptyList(),
+            kpSections      = emptyList(),
+            knowledgePoints = emptyList()
+        )
+        val stateBytes = gson.toJson(stateNoKp).toByteArray(Charsets.UTF_8)
+        val stateHash  = sha256(stateBytes)
+
+        // Custom KPs: serialized separately, pushed only when changed
+        val customKps     = appState.knowledgePoints.filter { it.isCustom }
+        val kpBytes       = serializeCustomKps(customKps)
+        val kpHash        = sha256(kpBytes)
+        val lastKpHash    = prefs.getString(KEY_KP_HASH, null)
+        val kpChanged     = kpHash != lastKpHash
+
+        // Conflict detection on main state
         if (!force) {
             val remoteMetaBytes = svc.getFile("meta.json")?.second
             if (remoteMetaBytes != null) {
@@ -159,17 +180,23 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
                 val lastHash = prefs.getString(KEY_LAST_HASH, null)
                 if (remoteMeta != null && lastHash != null) {
                     val remoteChanged = remoteMeta.dataHash != lastHash
-                    val localChanged  = hash != lastHash
+                    val localChanged  = stateHash != lastHash
                     if (remoteChanged && localChanged) throw ConflictException()
                 }
             }
         }
 
-        // Push state.json
+        // Always push state.json
         if (!svc.putFile("state.json", stateBytes, svc.getFileSha("state.json"), "sync: update data"))
             throw Exception("Failed to upload state.json — check repo write permissions")
 
-        // Push avatars (get remote SHAs in one call, then upload each)
+        // Push kp_custom.json only when changed (or force)
+        if (kpChanged || force) {
+            svc.putFile("kp_custom.json", kpBytes, svc.getFileSha("kp_custom.json"), "sync: custom kps")
+            prefs.edit().putString(KEY_KP_HASH, kpHash).apply()
+        }
+
+        // Push avatars
         val avatarDir = File(context.filesDir, "avatars")
         if (avatarDir.exists()) {
             val remoteShAs = svc.listDir("avatars").associate { (n, s) -> n to s }
@@ -178,28 +205,32 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-        // Push meta.json (last — acts as "commit complete" marker)
+        // Push meta.json last — acts as "commit complete" marker
         val meta = GitHubMeta(
-            syncedAt     = Instant.now().toString(),
-            appVersion   = appVersion,
-            dataHash     = hash,
-            lessonCount  = appState.lessons.size,
-            studentCount = appState.students.size,
-            kpCount      = appState.knowledgePoints.size
+            syncedAt      = Instant.now().toString(),
+            appVersion    = appVersion,
+            dataHash      = stateHash,
+            lessonCount   = appState.lessons.size,
+            studentCount  = appState.students.size,
+            kpCustomHash  = kpHash,
+            customKpCount = customKps.size
         )
         svc.putFile("meta.json", gson.toJson(meta).toByteArray(), svc.getFileSha("meta.json"), "sync: meta")
-        prefs.edit().putString(KEY_LAST_HASH, hash).apply()
+        prefs.edit().putString(KEY_LAST_HASH, stateHash).apply()
     }
 
     // ── Core pull ─────────────────────────────────────────────────────────────
 
-    private fun executePull(url: String, token: String, context: Context): AppState {
+    private fun executePull(
+        url: String, token: String, context: Context
+    ): Pair<AppState, List<KnowledgePoint>?> {
         val svc = GitHubSyncService(url, token, gson)
 
+        // Download state.json (no KP data inside)
         val (_, stateBytes) = svc.getFile("state.json")
             ?: throw Exception("远端未找到数据，请先从本设备推送")
 
-        // Download avatars and build path remap (filename → absolute local path)
+        // Download avatars and build path remap
         val avatarDir = File(context.filesDir, "avatars").also { it.mkdirs() }
         val pathRemap = mutableMapOf<String, String>()
         svc.listDir("avatars").forEach { (name, _) ->
@@ -211,14 +242,44 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
         val state = parseGsonState(stateBytes.toString(Charsets.UTF_8), gson, pathRemap)
             ?: throw Exception("远端数据解析失败，文件可能已损坏")
 
+        // Check remote meta for kp_custom.json hash
+        val remoteMeta = runCatching {
+            svc.getFile("meta.json")?.second?.let {
+                gson.fromJson(it.toString(Charsets.UTF_8), GitHubMeta::class.java)
+            }
+        }.getOrNull()
+
+        val localKpHash = prefs.getString(KEY_KP_HASH, null)
+        var customKps: List<KnowledgePoint>? = null
+
+        // Download kp_custom.json only when remote hash differs from local
+        if (remoteMeta?.kpCustomHash?.isNotBlank() == true &&
+            remoteMeta.kpCustomHash != localKpHash) {
+            val kpFileBytes = svc.getFile("kp_custom.json")?.second
+            if (kpFileBytes != null) {
+                customKps = parseCustomKps(kpFileBytes, gson)
+                prefs.edit().putString(KEY_KP_HASH, remoteMeta.kpCustomHash).apply()
+            }
+        }
+
         prefs.edit().putString(KEY_LAST_HASH, sha256(stateBytes)).apply()
-        return state
+        return state to customKps
+    }
+
+    // ── Serialization ─────────────────────────────────────────────────────────
+
+    private fun serializeCustomKps(points: List<KnowledgePoint>): ByteArray {
+        val gsonPoints = points.map {
+            GsonKnowledgePoint(it.id, it.sectionId, it.no, it.title, it.content, true)
+        }
+        return gson.toJson(GsonCustomKps(gsonPoints)).toByteArray(Charsets.UTF_8)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun sha256(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 
     private fun now() = Instant.now().toString().take(19).replace("T", " ")
 
@@ -231,7 +292,6 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     } catch (_: Exception) {
-        // Rare keystore failure fallback
         context.getSharedPreferences("gh_sync_prefs_plain", Context.MODE_PRIVATE)
     }
 
@@ -240,12 +300,11 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
         private const val KEY_TOKEN     = "token"
         private const val KEY_LAST_SYNC = "last_sync"
         private const val KEY_LAST_HASH = "last_hash"
+        private const val KEY_KP_HASH   = "kp_custom_hash"   // hash of kp_custom.json
     }
 }
 
 // ── Private extension — strips absolute avatar paths to bare filenames ────────
-// On push: /data/.../avatars/avatar_42.jpg  →  avatar_42.jpg
-// On pull: BackupManager's pathRemap restores them to absolute paths.
 
 private fun AppState.stripAvatarPaths(): AppState = copy(
     teachers = teachers.map { t -> t.copy(avatarUri = t.avatarUri?.let { File(it).name }) },

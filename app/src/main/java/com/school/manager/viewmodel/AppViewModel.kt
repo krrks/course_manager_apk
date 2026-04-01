@@ -24,7 +24,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch(Dispatchers.IO) {
             if (repo.isEmpty()) repo.importAll(sampleAppState())
-            else repo.seedKnowledgePoints()   // idempotent — skips if already seeded
+            else repo.seedKnowledgePoints()
         }
     }
 
@@ -177,17 +177,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    /** Reset all data to built-in sample + built-in KP. */
     fun resetToSampleData() {
         viewModelScope.launch { repo.importAll(sampleAppState()) }
     }
 
     /**
-     * Full replace used by GitHub sync pull.
-     * Deletes all existing data then imports incoming state completely,
-     * so deletions on the remote are correctly reflected locally.
-     * If the incoming state has no KP data, re-seeds built-in KP.
+     * GitHub sync pull — full state replace (teachers, classes, students, lessons)
+     * without touching KP tables. Built-in KPs are preserved; custom KPs are
+     * updated separately via [syncMergeCustomKps] when kp_custom.json changed.
      */
+    fun syncImportStateOnly(incoming: AppState) {
+        viewModelScope.launch(Dispatchers.IO) { repo.importStateOnly(incoming) }
+    }
+
+    /**
+     * Replaces all local custom KPs with those pulled from kp_custom.json.
+     * Only called when the remote kp_custom.json hash differs from the local hash.
+     */
+    fun syncMergeCustomKps(points: List<KnowledgePoint>) {
+        viewModelScope.launch(Dispatchers.IO) { repo.mergeCustomKps(points) }
+    }
+
+    /** Legacy full-replace used by old sync path — kept for ZIP import. */
     fun syncImport(incoming: AppState) {
         viewModelScope.launch(Dispatchers.IO) { repo.importAll(incoming) }
     }

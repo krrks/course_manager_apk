@@ -32,7 +32,6 @@ class AppRepository(context: Context) {
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
 
     // ── KP seeding ────────────────────────────────────────────────────────────
-    // Runs only when kp_chapters is empty. Uses hardcoded data — no IO.
 
     suspend fun seedKnowledgePoints() {
         if (db.kpChapterDao().count() > 0) return
@@ -95,7 +94,6 @@ class AppRepository(context: Context) {
 
     // ── Reset / Import ────────────────────────────────────────────────────────
 
-    /** Clear all tables including KP data. */
     private suspend fun resetAll() {
         db.lessonDao().deleteAll()
         db.classDao().deleteAll()
@@ -107,27 +105,14 @@ class AppRepository(context: Context) {
         db.kpChapterDao().deleteAll()
     }
 
-    /**
-     * Full reset-and-replace. Used by:
-     *  - initial sample data load
-     *  - "重置为示例数据" (resets to sample, then re-seeds KP)
-     *
-     * After clearing, if the incoming state has no KP data (e.g. sample data),
-     * built-in KP points are seeded automatically.
-     */
+    /** Full reset-and-replace (sample data load, "reset to sample"). */
     suspend fun importAll(state: AppState) {
         resetAll()
         mergeAll(state)
         if (db.kpChapterDao().count() == 0) seedKnowledgePoints()
     }
 
-    /**
-     * Merge-by-ID import: same ID → overwrite; new ID → insert.
-     * Does not clear existing data.
-     * Used by ZIP import ("按 ID 合并").
-     * If the backup contains KP data it is merged too.
-     * If not (e.g. filtered export), existing KP is untouched.
-     */
+    /** Merge-by-ID import: same ID → overwrite; new ID → insert. */
     suspend fun mergeAll(incoming: AppState) {
         incoming.subjects.forEach        { e -> val en = e.toEntity(); if (db.subjectDao().insert(en)        == -1L) db.subjectDao().update(en) }
         incoming.teachers.forEach        { e -> val en = e.toEntity(); if (db.teacherDao().insert(en)        == -1L) db.teacherDao().update(en) }
@@ -137,5 +122,32 @@ class AppRepository(context: Context) {
         incoming.kpChapters.forEach      { e -> val en = e.toEntity(); if (db.kpChapterDao().insert(en)      == -1L) db.kpChapterDao().update(en) }
         incoming.kpSections.forEach      { e -> val en = e.toEntity(); if (db.kpSectionDao().insert(en)      == -1L) db.kpSectionDao().update(en) }
         incoming.knowledgePoints.forEach { e -> val en = e.toEntity(); if (db.knowledgePointDao().insert(en) == -1L) db.knowledgePointDao().update(en) }
+    }
+
+    /**
+     * GitHub sync pull — imports all non-KP tables (full replace),
+     * leaving kp_chapters / kp_sections / knowledge_points untouched.
+     * Built-in KPs stay intact; custom KPs are updated via [mergeCustomKps].
+     */
+    suspend fun importStateOnly(state: AppState) {
+        db.lessonDao().deleteAll()
+        db.classDao().deleteAll()
+        db.studentDao().deleteAll()
+        db.subjectDao().deleteAll()
+        db.teacherDao().deleteAll()
+        state.subjects.forEach { e -> val en = e.toEntity(); if (db.subjectDao().insert(en) == -1L) db.subjectDao().update(en) }
+        state.teachers.forEach { e -> val en = e.toEntity(); if (db.teacherDao().insert(en) == -1L) db.teacherDao().update(en) }
+        state.classes.forEach  { e -> val en = e.toEntity(); if (db.classDao().insert(en)   == -1L) db.classDao().update(en)   }
+        state.students.forEach { e -> val en = e.toEntity(); if (db.studentDao().insert(en) == -1L) db.studentDao().update(en) }
+        state.lessons.forEach  { e -> val en = e.toEntity(); if (db.lessonDao().insert(en)  == -1L) db.lessonDao().update(en)  }
+    }
+
+    /**
+     * Replaces all custom KPs with the supplied list from [kp_custom.json].
+     * Built-in KPs (isCustom=false) are never touched.
+     */
+    suspend fun mergeCustomKps(points: List<KnowledgePoint>) {
+        db.knowledgePointDao().deleteAllCustom()
+        points.forEach { db.knowledgePointDao().insert(it.toEntity()) }
     }
 }

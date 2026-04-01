@@ -83,4 +83,6 @@ import kotlinx.coroutines.flow.Flow
     @Query("DELETE FROM knowledge_points WHERE id = :id") suspend fun deleteById(id: Long)
     @Query("DELETE FROM knowledge_points") suspend fun deleteAll()
     @Query("SELECT COUNT(*) FROM knowledge_points") suspend fun count(): Int
+    /** Deletes all user-created knowledge points, leaving built-in (isCustom=0) intact. */
+    @Query("DELETE FROM knowledge_points WHERE isCustom = 1") suspend fun deleteAllCustom()
 }

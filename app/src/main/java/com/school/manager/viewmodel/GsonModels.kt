@@ -47,7 +47,15 @@ internal data class GsonState(
     val kpSections:      List<GsonKpSection>?        = null
 )
 
-// ── Parser ────────────────────────────────────────────────────────────────────
+/**
+ * Wrapper for kp_custom.json — only custom (user-created) knowledge points.
+ * Built-in KPs are seeded from [KnowledgePointsData] and never synced.
+ */
+internal data class GsonCustomKps(
+    val customPoints: List<GsonKnowledgePoint>? = null
+)
+
+// ── Parsers ───────────────────────────────────────────────────────────────────
 
 internal fun parseGsonState(
     json: String,
@@ -76,6 +84,7 @@ internal fun parseGsonState(
                    gl.code ?: "", gl.teacherIdOverride,
                    gl.knowledgePointIds ?: emptyList())
         } ?: emptyList(),
+        // KP fields: present in full ZIP backups; absent in GitHub sync state.json
         kpChapters = raw.kpChapters?.map {
             KpChapter(it.id ?: 0L, it.grade ?: "", it.no ?: 0, it.name ?: "")
         } ?: emptyList(),
@@ -88,3 +97,22 @@ internal fun parseGsonState(
         } ?: emptyList()
     )
 }.getOrNull()
+
+/**
+ * Parses [kp_custom.json] bytes into a list of custom [KnowledgePoint]s.
+ * Returns null on any parse failure.
+ */
+internal fun parseCustomKps(bytes: ByteArray, gson: Gson): List<KnowledgePoint>? =
+    runCatching {
+        val raw = gson.fromJson(bytes.toString(Charsets.UTF_8), GsonCustomKps::class.java)
+        raw.customPoints?.map { gkp ->
+            KnowledgePoint(
+                id        = gkp.id        ?: 0L,
+                sectionId = gkp.sectionId ?: 0L,
+                no        = gkp.no        ?: 0,
+                title     = gkp.title     ?: "",
+                content   = gkp.content   ?: "",
+                isCustom  = true
+            )
+        }
+    }.getOrNull()

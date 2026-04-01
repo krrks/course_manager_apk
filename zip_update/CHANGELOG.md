@@ -1,32 +1,29 @@
 #!build
-# 新增功能：GitHub 数据同步
+# GitHub sync: skip built-in KPs, only sync custom KPs when changed
 
-## 功能概述
-在设置页面新增「GitHub 数据同步」入口，支持将全部应用数据推送到用户私有 GitHub 仓库，
-或从仓库拉取数据到本地，实现多设备共享与云端备份。
+## 变更概述
+GitHub 同步不再传输 237 条内置知识点，大幅减少每次推送/拉取的数据量。
+自定义知识点单独存放在 `userdata_sync/kp_custom.json`，
+仅在内容发生变化时才推送或拉取。
 
-## 数据存储位置
-数据写入目标仓库的 `userdata_sync/` 目录：
-- `userdata_sync/meta.json`    — 同步元信息（时间、版本、数据 hash）
-- `userdata_sync/state.json`   — 全量 AppState（复用现有 Gson 序列化）
-- `userdata_sync/avatars/`     — 头像图片文件
+## 同步策略
+- `state.json` — 课次、班级、教师、学生、科目（不含任何知识点）
+- `kp_custom.json` — 仅用户自定义知识点（isCustom=true）
+- 推送时对 `kp_custom.json` 做 SHA-256 比对，未变化则跳过上传
+- 拉取时读取 `meta.json` 中的 `kpCustomHash`，与本地缓存 hash 比对，
+  仅在不同时才下载 `kp_custom.json`
+- 内置知识点（`isCustom=false`）永远不参与同步，由本地 `KnowledgePointsData` 保证
 
-## 新增文件
-- `GitHubSyncService.kt`    — GitHub Contents API 封装（HttpURLConnection，无新依赖）
-- `GitHubSyncViewModel.kt`  — 推送/拉取编排、冲突检测、PAT 加密存储
-- `GitHubSyncScreen.kt`     — 设置子页面 UI（连接、推送、拉取、冲突处理）
+## 拉取行为变化
+- 拉取不再调用 `syncImport`（全量替换含KP），改为：
+  1. `syncImportStateOnly` — 替换非KP数据，保留本地KP表
+  2. `syncMergeCustomKps`  — 仅在 hash 不同时替换自定义KP
 
 ## 修改文件
-- `AppViewModel.kt`     — 新增 `syncImport()` 方法（全量替换，正确处理删除操作）
-- `ExportScreen.kt`     — 设置页顶部新增「GitHub 同步设置」入口卡片
-- `Navigation.kt`       — 新增 `GitHubSync` 路由（不出现在侧边栏）
-- `MainActivity.kt`     — 注册 `github_sync` NavHost 路由
-- `app/build.gradle.kts`      — 新增 `androidx.security:security-crypto` 依赖
-- `gradle/libs.versions.toml` — 新增 securityCrypto 版本定义
-
-## 技术要点
-- PAT 使用 EncryptedSharedPreferences（Android Keystore AES256）加密存储
-- 冲突检测：基于 state.json 的 SHA-256 hash 比对，双端都有修改时弹出冲突对话框
-- 推送时检测到冲突可选「覆盖远端」或「拉取远端」
-- 拉取 = 全量替换（repo.importAll），保证删除操作正确同步
-- 无新网络库依赖，复用项目已有的 Gson
+- `GitHubSyncViewModel.kt` — 核心推送/拉取逻辑
+- `GitHubSyncService.kt`   — GitHubMeta 新增 kpCustomHash、customKpCount 字段
+- `GsonModels.kt`          — 新增 GsonCustomKps、parseCustomKps
+- `Daos.kt`                — KnowledgePointDao 新增 deleteAllCustom 查询
+- `AppRepository.kt`       — 新增 importStateOnly、mergeCustomKps
+- `AppViewModel.kt`        — 新增 syncImportStateOnly、syncMergeCustomKps
+- `GitHubSyncScreen.kt`    — pull 回调更新为双参数签名，更新说明文字

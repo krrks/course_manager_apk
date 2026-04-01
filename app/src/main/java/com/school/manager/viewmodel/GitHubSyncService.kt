@@ -13,7 +13,9 @@ internal data class GitHubMeta(
     val dataHash: String = "",
     val lessonCount: Int = 0,
     val studentCount: Int = 0,
-    val kpCount: Int = 0
+    val kpCount: Int = 0,              // kept for backward compat with old backups
+    val kpCustomHash: String = "",     // SHA-256 of kp_custom.json; "" = never pushed
+    val customKpCount: Int = 0         // number of custom KPs in kp_custom.json
 )
 
 /**
