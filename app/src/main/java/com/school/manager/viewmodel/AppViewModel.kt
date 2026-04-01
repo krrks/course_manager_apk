@@ -21,12 +21,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<AppState> = repo.appState
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppState())
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (repo.isEmpty()) repo.importAll(sampleAppState())
-            else repo.seedKnowledgePoints()
-        }
-    }
+    // No automatic data seeding — app starts empty on first launch.
+    // Users import their own data via the Export / GitHub sync screen.
 
     // ─── Lookups ──────────────────────────────────────────────────────────────
     fun subject(id: Long?)        = state.value.subjects.find        { it.id == id }
@@ -153,7 +149,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun updateKnowledgePoint(kp: KnowledgePoint) { viewModelScope.launch { repo.updateKnowledgePoint(kp) } }
     fun deleteKnowledgePoint(id: Long)            { viewModelScope.launch { repo.deleteKnowledgePoint(id) } }
 
-    // ─── Backup / Import / Reset ──────────────────────────────────────────────
+    // ─── Backup / Import / Delete ─────────────────────────────────────────────
     fun exportFullZip(context: Context): ByteArray? = backupManager(context).buildFullZip(state.value)
 
     fun exportFilteredZip(context: Context, teacherId: Long?, classId: Long?,
@@ -177,30 +173,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    fun resetToSampleData() {
-        viewModelScope.launch { repo.importAll(sampleAppState()) }
+    /** Deletes all data from every table. */
+    fun deleteAllData() {
+        viewModelScope.launch(Dispatchers.IO) { repo.deleteAllData() }
     }
 
-    /**
-     * GitHub sync pull — full state replace (teachers, classes, students, lessons)
-     * without touching KP tables. Built-in KPs are preserved; custom KPs are
-     * updated separately via [syncMergeCustomKps] when kp_custom.json changed.
-     */
+    // ─── GitHub sync ──────────────────────────────────────────────────────────
+
     fun syncImportStateOnly(incoming: AppState) {
         viewModelScope.launch(Dispatchers.IO) { repo.importStateOnly(incoming) }
     }
 
-    /**
-     * Replaces all local custom KPs with those pulled from kp_custom.json.
-     * Only called when the remote kp_custom.json hash differs from the local hash.
-     */
     fun syncMergeCustomKps(points: List<KnowledgePoint>) {
         viewModelScope.launch(Dispatchers.IO) { repo.mergeCustomKps(points) }
-    }
-
-    /** Legacy full-replace used by old sync path — kept for ZIP import. */
-    fun syncImport(incoming: AppState) {
-        viewModelScope.launch(Dispatchers.IO) { repo.importAll(incoming) }
     }
 
     private fun backupManager(context: Context) = BackupManager(

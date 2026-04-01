@@ -31,23 +31,6 @@ class AppRepository(context: Context) {
     suspend fun isEmpty(): Boolean =
         db.subjectDao().count() == 0 && db.teacherDao().all().isEmpty()
 
-    // ── KP seeding ────────────────────────────────────────────────────────────
-
-    suspend fun seedKnowledgePoints() {
-        if (db.kpChapterDao().count() > 0) return
-        KnowledgePointsData.chapters.forEach { raw ->
-            db.kpChapterDao().insert(KpChapterEntity(raw.id, raw.grade, raw.no, raw.name))
-        }
-        KnowledgePointsData.sections.forEach { raw ->
-            db.kpSectionDao().insert(KpSectionEntity(raw.id, raw.chapterId, raw.no, raw.name))
-        }
-        KnowledgePointsData.points.forEach { raw ->
-            db.knowledgePointDao().insert(
-                KnowledgePointEntity(raw.id, raw.sectionId, raw.no, raw.title, raw.content, false)
-            )
-        }
-    }
-
     // ── Subjects ──────────────────────────────────────────────────────────────
     suspend fun addSubject(s: Subject)    = db.subjectDao().insert(s.toEntity())
     suspend fun updateSubject(s: Subject) = db.subjectDao().update(s.toEntity())
@@ -105,11 +88,13 @@ class AppRepository(context: Context) {
         db.kpChapterDao().deleteAll()
     }
 
-    /** Full reset-and-replace (sample data load, "reset to sample"). */
+    /** Deletes all data from every table. */
+    suspend fun deleteAllData() = resetAll()
+
+    /** Full reset-and-replace. */
     suspend fun importAll(state: AppState) {
         resetAll()
         mergeAll(state)
-        if (db.kpChapterDao().count() == 0) seedKnowledgePoints()
     }
 
     /** Merge-by-ID import: same ID → overwrite; new ID → insert. */
@@ -127,7 +112,6 @@ class AppRepository(context: Context) {
     /**
      * GitHub sync pull — imports all non-KP tables (full replace),
      * leaving kp_chapters / kp_sections / knowledge_points untouched.
-     * Built-in KPs stay intact; custom KPs are updated via [mergeCustomKps].
      */
     suspend fun importStateOnly(state: AppState) {
         db.lessonDao().deleteAll()
@@ -143,7 +127,7 @@ class AppRepository(context: Context) {
     }
 
     /**
-     * Replaces all custom KPs with the supplied list from [kp_custom.json].
+     * Replaces all custom KPs with the supplied list.
      * Built-in KPs (isCustom=false) are never touched.
      */
     suspend fun mergeCustomKps(points: List<KnowledgePoint>) {

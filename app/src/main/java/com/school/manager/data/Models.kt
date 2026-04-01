@@ -22,36 +22,32 @@ data class Lesson(
 /** Knowledge point chapter — e.g. chapter 1 "机械运动" */
 data class KpChapter(
     val id: Long,
-    val grade: String,  // 初中 / 高中
-    val no: Int,        // chapter number (1, 2, 3 …)
-    val name: String    // title without number, e.g. "机械运动"
+    val grade: String,  // e.g. 初中 / 高中 / user-defined
+    val no: Int,        // chapter number
+    val name: String    // title without number prefix
 )
 
 /** Knowledge point section within a chapter */
 data class KpSection(
     val id: Long,
     val chapterId: Long,
-    val no: Int,        // section number within chapter
-    val name: String    // e.g. "长度和时间的测量"
+    val no: Int,
+    val name: String
 )
 
 /**
  * A single knowledge point with a short title and full content.
  *
  * title   — concise label shown in compact contexts (lesson records, chips).
- *           e.g. "摄氏温度两个标准"
- *           Falls back to a truncated content if blank.
  * content — full explanation shown in the knowledge points screen.
- *           e.g. "标准大气压下冰水混合物为0℃，沸水为100℃，两者间等分100份"
- *
- * isCustom = false → seeded from assets; true → user-created.
+ * isCustom = true → user-created.
  */
 data class KnowledgePoint(
     val id: Long,
     val sectionId: Long,
     val no: Int,
-    val title: String,          // short label (new field)
-    val content: String,        // full explanation
+    val title: String,
+    val content: String,
     val isCustom: Boolean = false
 ) {
     /** Display label: title if set, else first 20 chars of content. */
@@ -60,7 +56,6 @@ data class KnowledgePoint(
 
 /**
  * Fully resolved knowledge point with chapter + section context.
- * code ("1.1.1") and grade are computed — not stored anywhere.
  */
 data class KpFull(
     val chapter: KpChapter,
@@ -104,6 +99,8 @@ val SUBJECT_COLORS = listOf(
 
 val GRADES         = listOf("高一", "高二", "高三", "初一", "初二", "初三")
 val DAYS           = listOf("一", "二", "三", "四", "五", "六", "日")
+
+/** Default grade suggestions for the KP chapter form — user can type any value. */
 val PHYSICS_GRADES = listOf("初中", "高中")
 
 const val CAL_START_HOUR = 8
@@ -137,51 +134,3 @@ fun List<Lesson>.progressFor(classId: Long): Pair<Int, Int> {
 }
 fun genCode(prefix: String): String =
     "$prefix${(System.currentTimeMillis() % 100000).toString().padStart(5, '0')}"
-
-// ─── Sample Data ──────────────────────────────────────────────────────────────
-
-val sampleSubjects = listOf(
-    Subject(1, "数学", SUBJECT_COLORS[0], 1, "SBJ00001"),
-    Subject(2, "语文", SUBJECT_COLORS[1], 2, "SBJ00002"),
-    Subject(3, "英语", SUBJECT_COLORS[2], 3, "SBJ00003"),
-)
-val sampleTeachers = listOf(
-    Teacher(1, "王老师", "男", "138****0001", code = "T00001"),
-    Teacher(2, "李老师", "女", "139****0002", code = "T00002"),
-    Teacher(3, "张老师", "女", "137****0003", code = "T00003"),
-)
-val sampleClasses = listOf(
-    SchoolClass(1, "高一(1)班·数学·周一", "高一", 45, 1, subjectId = 1, code = "C00001"),
-    SchoolClass(2, "高一(2)班·语文·周三", "高一", 43, 2, subjectId = 2, code = "C00002"),
-    SchoolClass(3, "高二(1)班·英语·连续", "高二", 47, 3, subjectId = 3, code = "C00003"),
-)
-val sampleStudents = listOf(
-    Student(1, "陈小明", "20240101", "男", "高一", listOf(1)),
-    Student(2, "李小红", "20240102", "女", "高一", listOf(1, 2)),
-    Student(3, "张伟",   "20240201", "男", "高一", listOf(2)),
-    Student(4, "王芳",   "20240202", "女", "高二", listOf(2, 3)),
-    Student(5, "赵磊",   "20240301", "男", "高二", listOf(3)),
-)
-val sampleLessons: List<Lesson>
-    get() {
-        val fmt   = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        val today = LocalDate.now()
-        return listOf(
-            Lesson(1,  1, fmt.format(today.minusDays(14)), "08:00", "08:45", "completed", "函数与极限",  "讲解基本函数类型", listOf(1, 2), false, "L00001"),
-            Lesson(2,  1, fmt.format(today.minusDays(7)),  "08:00", "08:45", "completed", "导数基础",    "",                 listOf(1, 2), false, "L00002"),
-            Lesson(3,  1, fmt.format(today),               "08:00", "08:45", "pending",   "",            "",                 emptyList(), false, "L00003"),
-            Lesson(4,  1, fmt.format(today.plusDays(7)),   "08:00", "08:45", "pending",   "",            "",                 emptyList(), false, "L00004"),
-            Lesson(5,  2, fmt.format(today.minusDays(11)), "10:00", "10:45", "completed", "古诗文鉴赏",  "",                 listOf(2, 3), false, "L00005"),
-            Lesson(6,  2, fmt.format(today.minusDays(4)),  "10:00", "10:45", "cancelled", "",            "教师请假",          emptyList(), false, "L00006"),
-            Lesson(7,  2, fmt.format(today.plusDays(3)),   "10:00", "10:45", "pending",   "",            "",                 emptyList(), false, "L00007"),
-            Lesson(8,  3, fmt.format(today.minusDays(4)),  "09:00", "09:45", "completed", "时态复习",    "",                 listOf(4, 5), false, "L00008"),
-            Lesson(9,  3, fmt.format(today.minusDays(3)),  "09:00", "09:45", "completed", "阅读理解",    "",                 listOf(4, 5), false, "L00009"),
-            Lesson(10, 3, fmt.format(today.minusDays(2)),  "09:00", "09:45", "absent",    "",            "学生缺席",          emptyList(), false, "L00010"),
-            Lesson(11, 3, fmt.format(today.minusDays(1)),  "09:00", "09:45", "completed", "写作训练",    "",                 listOf(5),   false, "L00011"),
-            Lesson(12, 3, fmt.format(today),               "09:00", "09:45", "pending",   "",            "",                 emptyList(), false, "L00012"),
-        )
-    }
-fun sampleAppState(): AppState = AppState(
-    subjects = sampleSubjects, teachers = sampleTeachers,
-    classes  = sampleClasses,  students = sampleStudents, lessons = sampleLessons
-)

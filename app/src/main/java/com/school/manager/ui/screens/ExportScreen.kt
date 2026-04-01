@@ -27,47 +27,29 @@ import kotlinx.coroutines.delay
 
 @Composable
 private fun SectionCard(
-    icon: ImageVector,
-    iconColor: Color,
-    title: String,
-    subtitle: String,
-    badge: String? = null,
-    actionLabel: String = "执行",
-    enabled: Boolean = true,
-    onClick: () -> Unit
+    icon: ImageVector, iconColor: Color, title: String, subtitle: String,
+    badge: String? = null, actionLabel: String = "执行",
+    enabled: Boolean = true, onClick: () -> Unit
 ) {
     Surface(
-        shape           = RoundedCornerShape(16.dp),
-        color           = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-        modifier        = Modifier.fillMaxWidth()
+        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             Modifier.padding(16.dp),
-            verticalAlignment     = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = iconColor.copy(alpha = 0.12f)
-            ) {
-                Icon(icon, null, tint = iconColor,
-                    modifier = Modifier.padding(10.dp).size(24.dp))
+            Surface(shape = RoundedCornerShape(12.dp), color = iconColor.copy(alpha = 0.12f)) {
+                Icon(icon, null, tint = iconColor, modifier = Modifier.padding(10.dp).size(24.dp))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(title, fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.bodyLarge)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
                     if (badge != null) {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = iconColor.copy(alpha = 0.12f)
-                        ) {
+                        Surface(shape = RoundedCornerShape(20.dp), color = iconColor.copy(alpha = 0.12f)) {
                             Text(badge, style = MaterialTheme.typography.labelSmall,
-                                color    = iconColor, fontWeight = FontWeight.SemiBold,
+                                color = iconColor, fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                         }
                     }
@@ -75,12 +57,10 @@ private fun SectionCard(
                 if (subtitle.isNotBlank())
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = FluentMuted)
             }
-            Button(
-                onClick  = onClick,
-                enabled  = enabled,
-                shape    = RoundedCornerShape(10.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = iconColor)
-            ) { Text(actionLabel, color = Color.White) }
+            Button(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = iconColor)) {
+                Text(actionLabel, color = Color.White)
+            }
         }
     }
 }
@@ -97,86 +77,51 @@ fun ExportScreen(
     val state   by vm.state.collectAsState()
     var toast   by remember { mutableStateOf<String?>(null) }
 
-    // Import flow
     var pendingBytes  by remember { mutableStateOf<ByteArray?>(null) }
     var importPreview by remember { mutableStateOf<ImportResult?>(null) }
-
-    // Pending zip bytes for SAF save launchers
     var pendingFullBytes     by remember { mutableStateOf<ByteArray?>(null) }
     var pendingFilteredBytes by remember { mutableStateOf<ByteArray?>(null) }
 
     val appVersion = remember {
-        runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "─"
-        }.getOrDefault("─")
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "─" }.getOrDefault("─")
     }
 
     LaunchedEffect(toast) { if (toast != null) { delay(2500); toast = null } }
 
     // ── SAF launchers ─────────────────────────────────────────────────────────
-    val saveFullLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri ->
+    val saveFullLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null && pendingFullBytes != null) {
-            runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(pendingFullBytes!!) }
-            }
-            toast = "✅ 完整备份已保存"
-            pendingFullBytes = null
+            runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(pendingFullBytes!!) } }
+            toast = "✅ 完整备份已保存"; pendingFullBytes = null
         }
     }
-
-    val saveFilteredLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri ->
+    val saveFilteredLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null && pendingFilteredBytes != null) {
-            runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(pendingFilteredBytes!!) }
-            }
-            toast = "✅ 课次备份已保存"
-            pendingFilteredBytes = null
+            runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(pendingFilteredBytes!!) } }
+            toast = "✅ 课次备份已保存"; pendingFilteredBytes = null
         }
     }
-
-    val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val bytes = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        }.getOrNull()
+        val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
         if (bytes == null) { toast = "❌ 读取文件失败"; return@rememberLauncherForActivityResult }
-        pendingBytes  = bytes
-        importPreview = vm.peekImportZip(bytes, context)
+        pendingBytes = bytes; importPreview = vm.peekImportZip(bytes, context)
     }
 
-    // ── Stats badges ──────────────────────────────────────────────────────────
     val lessonCount   = state.lessons.size
     val kpCount       = state.knowledgePoints.size
     val customKpCount = state.knowledgePoints.count { it.isCustom }
 
-    // ── Reset confirm state ───────────────────────────────────────────────────
-    var showResetDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
-    Scaffold(
-        floatingActionButton = { ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer) }
-    ) { inner ->
+    Scaffold(floatingActionButton = { ScreenSpeedDialFab(onOpenDrawer = onOpenDrawer) }) { inner ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    top    = inner.calculateTopPadding() + 8.dp,
-                    bottom = inner.calculateBottomPadding() + 80.dp,
-                    start  = 16.dp, end = 16.dp
-                ),
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(top = inner.calculateTopPadding() + 8.dp, bottom = inner.calculateBottomPadding() + 80.dp, start = 16.dp, end = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ── Summary chips ─────────────────────────────────────────────────
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            // ── Summary ───────────────────────────────────────────────────────
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatBadge("📚", "$lessonCount 节课",     FluentBlue,   Modifier.weight(1f))
                 StatBadge("💡", "$kpCount 知识点",       FluentPurple, Modifier.weight(1f))
                 StatBadge("✏️", "$customKpCount 自定义", FluentAmber,  Modifier.weight(1f))
@@ -186,54 +131,36 @@ fun ExportScreen(
 
             // ── GitHub 同步 ───────────────────────────────────────────────────
             SectionLabel("☁️ GitHub 数据同步")
-            Text(
-                "将全部数据同步到你的私有 GitHub 仓库，支持多设备共享与灾难恢复",
-                style    = MaterialTheme.typography.bodySmall,
-                color    = FluentMuted,
-                modifier = Modifier.padding(horizontal = 2.dp)
-            )
-            SectionCard(
-                icon        = Icons.Default.Cloud,
-                iconColor   = Color(0xFF24292F),   // GitHub black
-                title       = "GitHub 同步设置",
-                subtitle    = "推送 / 拉取 · 冲突检测 · 含头像",
-                actionLabel = "前往"
-            ) { onNavigateToGitHubSync() }
+            Text("将全部数据同步到你的私有 GitHub 仓库，支持多设备共享与灾难恢复",
+                style = MaterialTheme.typography.bodySmall, color = FluentMuted,
+                modifier = Modifier.padding(horizontal = 2.dp))
+            SectionCard(icon = Icons.Default.Cloud, iconColor = Color(0xFF24292F),
+                title = "GitHub 同步设置", subtitle = "推送 / 拉取 · 冲突检测 · 含头像",
+                actionLabel = "前往") { onNavigateToGitHubSync() }
 
             HorizontalDivider(color = FluentBorder)
 
             // ── 完整备份 ──────────────────────────────────────────────────────
             SectionLabel("📦 完整备份")
-            Text(
-                "包含所有数据：班级、教师、学生、课次、知识点（含自定义）和头像",
-                style    = MaterialTheme.typography.bodySmall,
-                color    = FluentMuted,
-                modifier = Modifier.padding(horizontal = 2.dp)
-            )
-            SectionCard(
-                icon        = Icons.Default.FolderZip,
-                iconColor   = FluentBlue,
-                title       = "导出完整备份",
-                subtitle    = "${state.lessons.size} 节课 · ${state.students.size} 名学生 · $kpCount 知识点",
-                actionLabel = "导出"
-            ) {
+            Text("包含所有数据：班级、教师、学生、课次、知识点（含自定义）和头像",
+                style = MaterialTheme.typography.bodySmall, color = FluentMuted,
+                modifier = Modifier.padding(horizontal = 2.dp))
+            SectionCard(icon = Icons.Default.FolderZip, iconColor = FluentBlue,
+                title = "导出完整备份",
+                subtitle = "${state.lessons.size} 节课 · ${state.students.size} 名学生 · $kpCount 知识点",
+                actionLabel = "导出") {
                 val bytes = vm.exportFullZip(context)
-                if (bytes != null) {
-                    pendingFullBytes = bytes
-                    saveFullLauncher.launch("school_backup_full.zip")
-                } else toast = "❌ 生成备份失败"
+                if (bytes != null) { pendingFullBytes = bytes; saveFullLauncher.launch("school_backup_full.zip") }
+                else toast = "❌ 生成备份失败"
             }
 
             HorizontalDivider(color = FluentBorder)
 
-            // ── 课次备份（筛选）─────────────────────────────────────────────
+            // ── 课次筛选备份 ──────────────────────────────────────────────────
             SectionLabel("🔍 课次筛选备份")
-            Text(
-                "仅导出课次相关数据，不含知识点和头像，适合按教师或班级归档分享",
-                style    = MaterialTheme.typography.bodySmall,
-                color    = FluentMuted,
-                modifier = Modifier.padding(horizontal = 2.dp)
-            )
+            Text("仅导出课次相关数据，不含知识点和头像，适合按教师或班级归档分享",
+                style = MaterialTheme.typography.bodySmall, color = FluentMuted,
+                modifier = Modifier.padding(horizontal = 2.dp))
 
             var fTeacherId by remember { mutableLongStateOf(0L) }
             var fClassId   by remember { mutableLongStateOf(0L) }
@@ -242,78 +169,41 @@ fun ExportScreen(
 
             val filteredCount = remember(state.lessons, fTeacherId, fClassId, fFromDate, fToDate) {
                 state.lessons.count { l ->
-                    (fTeacherId == 0L    || l.effectiveTeacherId(state.classes) == fTeacherId) &&
-                    (fClassId   == 0L    || l.classId == fClassId) &&
+                    (fTeacherId == 0L || l.effectiveTeacherId(state.classes) == fTeacherId) &&
+                    (fClassId   == 0L || l.classId == fClassId) &&
                     (fFromDate.isBlank() || l.date >= fFromDate) &&
                     (fToDate.isBlank()   || l.date <= fToDate)
                 }
             }
-            val hasFilter = fTeacherId != 0L || fClassId != 0L ||
-                            fFromDate.isNotBlank() || fToDate.isNotBlank()
+            val hasFilter = fTeacherId != 0L || fClassId != 0L || fFromDate.isNotBlank() || fToDate.isNotBlank()
 
-            Surface(
-                shape           = RoundedCornerShape(12.dp),
-                color           = MaterialTheme.colorScheme.surface,
-                shadowElevation = 1.dp,
-                modifier        = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (state.teachers.isNotEmpty())
-                            Box(Modifier.weight(1f)) {
-                                DropdownFilterChip("全部教师",
-                                    items    = state.teachers.map { it.id to it.name },
-                                    selected = fTeacherId) { fTeacherId = it }
-                            }
+                            Box(Modifier.weight(1f)) { DropdownFilterChip("全部教师", state.teachers.map { it.id to it.name }, fTeacherId) { fTeacherId = it } }
                         if (state.classes.isNotEmpty())
-                            Box(Modifier.weight(1f)) {
-                                DropdownFilterChip("全部班级",
-                                    items    = state.classes.map { it.id to it.name },
-                                    selected = fClassId) { fClassId = it }
-                            }
+                            Box(Modifier.weight(1f)) { DropdownFilterChip("全部班级", state.classes.map { it.id to it.name }, fClassId) { fClassId = it } }
                     }
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(Modifier.weight(1f)) {
-                            DatePickerField("开始日期", fFromDate) { fFromDate = it }
-                        }
-                        Box(Modifier.weight(1f)) {
-                            DatePickerField("结束日期", fToDate) { fToDate = it }
-                        }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.weight(1f)) { DatePickerField("开始日期", fFromDate) { fFromDate = it } }
+                        Box(Modifier.weight(1f)) { DatePickerField("结束日期", fToDate)   { fToDate   = it } }
                     }
                     Button(
-                        onClick  = {
+                        onClick = {
                             if (!hasFilter) { toast = "⚠️ 请先设置至少一个筛选条件"; return@Button }
-                            val bytes = vm.exportFilteredZip(
-                                context   = context,
-                                teacherId = fTeacherId.takeIf { it != 0L },
-                                classId   = fClassId.takeIf   { it != 0L },
-                                fromDate  = fFromDate.ifBlank { null },
-                                toDate    = fToDate.ifBlank   { null }
-                            )
-                            if (bytes != null) {
-                                pendingFilteredBytes = bytes
-                                saveFilteredLauncher.launch("school_backup_lessons.zip")
-                            } else toast = "❌ 生成失败"
+                            val bytes = vm.exportFilteredZip(context,
+                                fTeacherId.takeIf { it != 0L }, fClassId.takeIf { it != 0L },
+                                fFromDate.ifBlank { null }, fToDate.ifBlank { null })
+                            if (bytes != null) { pendingFilteredBytes = bytes; saveFilteredLauncher.launch("school_backup_lessons.zip") }
+                            else toast = "❌ 生成失败"
                         },
-                        enabled  = hasFilter,
-                        shape    = RoundedCornerShape(10.dp),
-                        colors   = ButtonDefaults.buttonColors(containerColor = FluentPurple),
+                        enabled = hasFilter, shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = FluentPurple),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            if (hasFilter) "导出筛选课次（$filteredCount 节）"
-                            else "导出筛选课次（请先设置条件）",
-                            color = Color.White
-                        )
+                        Text(if (hasFilter) "导出筛选课次（$filteredCount 节）" else "导出筛选课次（请先设置条件）", color = Color.White)
                     }
                 }
             }
@@ -322,58 +212,37 @@ fun ExportScreen(
 
             // ── 导入 ──────────────────────────────────────────────────────────
             SectionLabel("📥 导入数据")
-            Text(
-                "选择本应用导出的 ZIP 文件，导入前显示预览。导入模式为按 ID 合并：相同 ID 的记录会被覆盖，新记录追加，知识点数据同样合并。",
-                style    = MaterialTheme.typography.bodySmall,
-                color    = FluentMuted,
-                modifier = Modifier.padding(horizontal = 2.dp)
-            )
-            SectionCard(
-                icon        = Icons.Default.FileOpen,
-                iconColor   = FluentGreen,
-                title       = "选择 ZIP 文件导入",
-                subtitle    = "支持完整备份和课次备份两种格式",
-                actionLabel = "选择"
-            ) {
-                importLauncher.launch(arrayOf("application/zip", "*/*"))
-            }
+            Text("选择本应用导出的 ZIP 文件，导入前显示预览。导入模式为按 ID 合并。",
+                style = MaterialTheme.typography.bodySmall, color = FluentMuted,
+                modifier = Modifier.padding(horizontal = 2.dp))
+            SectionCard(icon = Icons.Default.FileOpen, iconColor = FluentGreen,
+                title = "选择 ZIP 文件导入", subtitle = "支持完整备份和课次备份两种格式",
+                actionLabel = "选择") { importLauncher.launch(arrayOf("application/zip", "*/*")) }
 
             HorizontalDivider(color = FluentBorder)
 
             // ── 危险操作 ──────────────────────────────────────────────────────
             SectionLabel("⚠️ 危险操作")
-            SectionCard(
-                icon        = Icons.Default.DeleteForever,
-                iconColor   = FluentRed,
-                title       = "重置为示例数据",
-                subtitle    = "清空全部数据并恢复预设示例，知识点保留内置数据",
-                actionLabel = "重置"
-            ) { showResetDialog = true }
+            SectionCard(icon = Icons.Default.DeleteForever, iconColor = FluentRed,
+                title = "清空所有数据",
+                subtitle = "删除全部班级、教师、学生、课次及知识点数据，此操作不可撤销",
+                actionLabel = "清空") { showDeleteDialog = true }
 
-            // ── App version ───────────────────────────────────────────────────
             Spacer(Modifier.height(4.dp))
-            Text(
-                "智慧课务管理  v$appVersion",
-                style     = MaterialTheme.typography.bodySmall,
-                color     = FluentMuted,
-                textAlign = TextAlign.Center,
-                modifier  = Modifier.fillMaxWidth()
-            )
+            Text("智慧课务管理  v$appVersion",
+                style = MaterialTheme.typography.bodySmall, color = FluentMuted,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
 
         // ── Toast ──────────────────────────────────────────────────────────────
         toast?.let { msg ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-                Surface(
-                    modifier        = Modifier.padding(bottom = 100.dp).widthIn(max = 320.dp),
-                    shape           = RoundedCornerShape(12.dp),
-                    color           = if (msg.startsWith("✅")) Color(0xFFE8F5E9)
-                                      else MaterialTheme.colorScheme.errorContainer,
-                    shadowElevation = 4.dp
-                ) {
+                Surface(modifier = Modifier.padding(bottom = 100.dp).widthIn(max = 320.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (msg.startsWith("✅")) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.errorContainer,
+                    shadowElevation = 4.dp) {
                     Text(msg, modifier = Modifier.padding(12.dp),
-                        color      = if (msg.startsWith("✅")) FluentGreen
-                                     else MaterialTheme.colorScheme.onErrorContainer,
+                        color = if (msg.startsWith("✅")) FluentGreen else MaterialTheme.colorScheme.onErrorContainer,
                         fontWeight = FontWeight.Medium)
                 }
             }
@@ -394,30 +263,25 @@ fun ExportScreen(
         )
     }
 
-    // ── Reset confirm dialog ───────────────────────────────────────────────────
-    if (showResetDialog) {
+    // ── Delete all confirm dialog ──────────────────────────────────────────────
+    if (showDeleteDialog) {
         AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            shape            = RoundedCornerShape(20.dp),
-            title            = { Text("确认重置", fontWeight = FontWeight.Bold) },
-            text             = {
-                Text(
-                    "将清空全部班级、教师、学生、课次数据，并恢复为内置示例。" +
-                    "知识点将恢复为内置数据，自定义知识点会丢失。\n\n此操作不可撤销。",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+            onDismissRequest = { showDeleteDialog = false },
+            shape = RoundedCornerShape(20.dp),
+            title = { Text("确认清空", fontWeight = FontWeight.Bold) },
+            text  = {
+                Text("将删除全部班级、教师、学生、课次及知识点数据。\n\n此操作不可撤销。",
+                    style = MaterialTheme.typography.bodyMedium)
             },
             confirmButton = {
-                Button(
-                    onClick = { vm.resetToSampleData(); showResetDialog = false },
-                    shape   = RoundedCornerShape(12.dp),
-                    colors  = ButtonDefaults.buttonColors(containerColor = FluentRed)
-                ) { Text("确认重置", color = Color.White) }
+                Button(onClick = { vm.deleteAllData(); showDeleteDialog = false },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = FluentRed)) {
+                    Text("确认清空", color = Color.White)
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text("取消", color = FluentMuted)
-                }
+                TextButton(onClick = { showDeleteDialog = false }) { Text("取消", color = FluentMuted) }
             }
         )
     }
@@ -432,20 +296,12 @@ private fun SectionLabel(text: String) {
 
 @Composable
 private fun StatBadge(icon: String, label: String, color: Color, modifier: Modifier = Modifier) {
-    Surface(
-        shape    = RoundedCornerShape(12.dp),
-        color    = color.copy(alpha = 0.08f),
-        modifier = modifier
-    ) {
-        Column(
-            Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
+    Surface(shape = RoundedCornerShape(12.dp), color = color.copy(alpha = 0.08f), modifier = modifier) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(icon, fontSize = 18.sp)
-            Text(label, style = MaterialTheme.typography.labelSmall,
-                color = color, fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = color,
+                fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         }
     }
 }

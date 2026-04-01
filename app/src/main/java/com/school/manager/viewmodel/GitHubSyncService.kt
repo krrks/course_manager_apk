@@ -13,15 +13,16 @@ internal data class GitHubMeta(
     val dataHash: String = "",
     val lessonCount: Int = 0,
     val studentCount: Int = 0,
-    val kpCount: Int = 0,              // kept for backward compat with old backups
-    val kpCustomHash: String = "",     // SHA-256 of kp_custom.json; "" = never pushed
-    val customKpCount: Int = 0         // number of custom KPs in kp_custom.json
+    val kpCount: Int = 0,               // legacy — kept for backward compat
+    val kpCustomHash: String = "",      // legacy — kept for backward compat
+    val customKpCount: Int = 0,
+    /** Per-grade SHA-256 hashes of kp_custom_{grade}.json files. */
+    val gradeKpHashes: Map<String, String> = emptyMap()
 )
 
 /**
  * Low-level GitHub Contents API wrapper.
  * All relative paths resolve under [FOLDER] in the target repo.
- * Zero new dependencies — uses HttpURLConnection + Gson already in the project.
  */
 internal class GitHubSyncService(repoUrl: String, private val token: String, private val gson: Gson) {
 

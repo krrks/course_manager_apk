@@ -22,15 +22,8 @@ import androidx.compose.ui.state.ToggleableState
 
 // ─── Data structures ──────────────────────────────────────────────────────────
 
-private data class SectionGroup(
-    val section: KpSection,
-    val points: List<KpFull>
-)
-
-private data class ChapterGroup(
-    val chapter: KpChapter,
-    val sections: List<SectionGroup>
-) {
+private data class SectionGroup(val section: KpSection, val points: List<KpFull>)
+private data class ChapterGroup(val chapter: KpChapter, val sections: List<SectionGroup>) {
     val allPoints get() = sections.flatMap { it.points }
 }
 
@@ -53,6 +46,11 @@ internal fun KnowledgePointPickerSheet(
     var showAddForm by remember { mutableStateOf(false) }
     val sheetState  = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Derive available grades dynamically
+    val availableGrades = remember(allChapters) {
+        allChapters.map { it.grade }.distinct().sorted()
+    }
+
     // Precompute KpFull
     val allKpFull = remember(allPoints, allChapters, allSections) {
         allPoints.mapNotNull { kp ->
@@ -72,24 +70,15 @@ internal fun KnowledgePointPickerSheet(
                               || kp.chapter.name.contains(query, ignoreCase = true)
                               || kp.section.name.contains(query, ignoreCase = true))
         }
-        filtered
-            .groupBy { it.chapter }
-            .entries
-            .sortedBy { it.key.no }
-            .map { (chapter, pts) ->
-                ChapterGroup(
-                    chapter  = chapter,
-                    sections = pts.groupBy { it.section }
-                        .entries
-                        .sortedBy { it.key.no }
-                        .map { (section, spts) ->
-                            SectionGroup(section, spts.sortedBy { it.point.no })
-                        }
-                )
-            }
+        filtered.groupBy { it.chapter }.entries.sortedBy { it.key.no }.map { (chapter, pts) ->
+            ChapterGroup(
+                chapter  = chapter,
+                sections = pts.groupBy { it.section }.entries.sortedBy { it.key.no }
+                    .map { (section, spts) -> SectionGroup(section, spts.sortedBy { it.point.no }) }
+            )
+        }
     }
 
-    // Expansion state — auto-expand on search, collapse on grade change
     var expandedChapters by remember { mutableStateOf(emptySet<Long>()) }
     var expandedSections by remember { mutableStateOf(emptySet<Long>()) }
 
@@ -98,142 +87,77 @@ internal fun KnowledgePointPickerSheet(
             expandedChapters = chapterGroups.map { it.chapter.id }.toSet()
             expandedSections = chapterGroups.flatMap { it.sections }.map { it.section.id }.toSet()
         } else {
-            expandedChapters = emptySet()
-            expandedSections = emptySet()
+            expandedChapters = emptySet(); expandedSections = emptySet()
         }
     }
-    LaunchedEffect(fGrade) {
-        expandedChapters = emptySet()
-        expandedSections = emptySet()
-    }
+    LaunchedEffect(fGrade) { expandedChapters = emptySet(); expandedSections = emptySet() }
 
     val totalVisible = chapterGroups.sumOf { it.allPoints.size }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState       = sheetState,
-        shape            = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        onDismissRequest = onDismiss, sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
         Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // ── Header ─────────────────────────────────────────────────────
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                Text(
-                    "选择知识点",
-                    style      = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Button(
-                    onClick = { onConfirm(draft) },
-                    shape   = RoundedCornerShape(10.dp),
-                    colors  = ButtonDefaults.buttonColors(containerColor = FluentBlue)
-                ) { Text("确定（${draft.size} 个）") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("选择知识点", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Button(onClick = { onConfirm(draft) }, shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = FluentBlue)) {
+                    Text("确定（${draft.size} 个）")
+                }
             }
 
             HorizontalDivider(color = FluentBorder)
 
-            // ── Grade filter ───────────────────────────────────────────────
-            Row(
-                Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                FilterChip(
-                    selected = fGrade.isBlank(),
-                    onClick  = { fGrade = "" },
-                    label    = { Text("全部学段") }
-                )
-                PHYSICS_GRADES.forEach { g ->
-                    FilterChip(
-                        selected = fGrade == g,
-                        onClick  = { fGrade = if (fGrade == g) "" else g },
-                        label    = { Text(g) }
-                    )
+            // ── Grade filter — dynamically derived ─────────────────────────
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(selected = fGrade.isBlank(), onClick = { fGrade = "" }, label = { Text("全部学段") })
+                availableGrades.forEach { g ->
+                    FilterChip(selected = fGrade == g, onClick = { fGrade = if (fGrade == g) "" else g }, label = { Text(g) })
                 }
             }
 
             // ── Search ─────────────────────────────────────────────────────
             OutlinedTextField(
-                value         = query,
-                onValueChange = { query = it },
-                label         = { Text("搜索知识点") },
-                singleLine    = true,
-                shape         = RoundedCornerShape(12.dp),
-                modifier      = Modifier.fillMaxWidth(),
-                leadingIcon   = { Icon(Icons.Default.Search, null) },
-                trailingIcon  = {
-                    if (query.isNotBlank())
-                        IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp))
-                        }
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = FluentBlue,
-                    unfocusedBorderColor = FluentBorder
-                )
+                value = query, onValueChange = { query = it }, label = { Text("搜索知识点") },
+                singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = { if (query.isNotBlank()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp)) } },
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
             )
 
-            // ── Summary + expand-all toggle ────────────────────────────────
+            // ── Summary + expand-all ───────────────────────────────────────
             if (chapterGroups.isNotEmpty()) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "${chapterGroups.size} 章 · $totalVisible 个知识点",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = FluentMuted
-                    )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("${chapterGroups.size} 章 · $totalVisible 个知识点",
+                        style = MaterialTheme.typography.labelSmall, color = FluentMuted)
                     val allExpanded = chapterGroups.all { it.chapter.id in expandedChapters }
                     TextButton(
-                        onClick        = {
-                            if (allExpanded) {
-                                expandedChapters = emptySet()
-                                expandedSections = emptySet()
-                            } else {
+                        onClick = {
+                            if (allExpanded) { expandedChapters = emptySet(); expandedSections = emptySet() }
+                            else {
                                 expandedChapters = chapterGroups.map { it.chapter.id }.toSet()
-                                expandedSections = chapterGroups
-                                    .flatMap { it.sections }
-                                    .map { it.section.id }.toSet()
+                                expandedSections = chapterGroups.flatMap { it.sections }.map { it.section.id }.toSet()
                             }
                         },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Text(
-                            if (allExpanded) "全部折叠" else "全部展开",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
+                    ) { Text(if (allExpanded) "全部折叠" else "全部展开", style = MaterialTheme.typography.labelMedium) }
                 }
             }
 
             // ── Tree list ──────────────────────────────────────────────────
-            LazyColumn(
-                modifier            = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 380.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (chapterGroups.isEmpty()) {
                     item {
-                        Box(
-                            Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "没有符合条件的知识点",
-                                color = FluentMuted,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                            Text("没有符合条件的知识点", color = FluentMuted, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 } else {
@@ -245,20 +169,13 @@ internal fun KnowledgePointPickerSheet(
 
                         item(key = "ch_${cg.chapter.id}") {
                             ChapterRow(
-                                chapter      = cg.chapter,
-                                pointCount   = cg.allPoints.size,
-                                isExpanded   = chExpanded,
-                                allSelected  = chAllSel,
-                                someSelected = chSomeSel,
+                                chapter = cg.chapter, pointCount = cg.allPoints.size,
+                                isExpanded = chExpanded, allSelected = chAllSel, someSelected = chSomeSel,
                                 onToggleExpand = {
-                                    expandedChapters = if (chExpanded)
-                                        expandedChapters - cg.chapter.id
-                                    else
-                                        expandedChapters + cg.chapter.id
+                                    expandedChapters = if (chExpanded) expandedChapters - cg.chapter.id
+                                    else expandedChapters + cg.chapter.id
                                 },
-                                onToggleAll = {
-                                    draft = if (chAllSel) draft - chapterIds else draft + chapterIds
-                                }
+                                onToggleAll = { draft = if (chAllSel) draft - chapterIds else draft + chapterIds }
                             )
                         }
 
@@ -271,36 +188,21 @@ internal fun KnowledgePointPickerSheet(
 
                                 item(key = "sec_${sg.section.id}") {
                                     SectionRow(
-                                        section      = sg.section,
-                                        pointCount   = sg.points.size,
-                                        isExpanded   = secExpanded,
-                                        allSelected  = secAllSel,
-                                        someSelected = secSomeSel,
+                                        section = sg.section, pointCount = sg.points.size,
+                                        isExpanded = secExpanded, allSelected = secAllSel, someSelected = secSomeSel,
                                         onToggleExpand = {
-                                            expandedSections = if (secExpanded)
-                                                expandedSections - sg.section.id
-                                            else
-                                                expandedSections + sg.section.id
+                                            expandedSections = if (secExpanded) expandedSections - sg.section.id
+                                            else expandedSections + sg.section.id
                                         },
-                                        onToggleAll = {
-                                            draft = if (secAllSel) draft - sectionIds else draft + sectionIds
-                                        }
+                                        onToggleAll = { draft = if (secAllSel) draft - sectionIds else draft + sectionIds }
                                     )
                                 }
 
                                 if (secExpanded) {
                                     items(sg.points, key = { "kp_${it.point.id}" }) { kpFull ->
                                         val checked = kpFull.point.id in draft
-                                        PointRow(
-                                            kpFull  = kpFull,
-                                            checked = checked,
-                                            onToggle = {
-                                                draft = if (checked)
-                                                    draft - kpFull.point.id
-                                                else
-                                                    draft + kpFull.point.id
-                                            }
-                                        )
+                                        PointRow(kpFull = kpFull, checked = checked,
+                                            onToggle = { draft = if (checked) draft - kpFull.point.id else draft + kpFull.point.id })
                                     }
                                 }
                             }
@@ -314,24 +216,16 @@ internal fun KnowledgePointPickerSheet(
 
             // ── Add new point inline ───────────────────────────────────────
             if (!showAddForm) {
-                OutlinedButton(
-                    onClick  = { showAddForm = true },
-                    shape    = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                OutlinedButton(onClick = { showAddForm = true }, shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("添加新知识点")
+                    Spacer(Modifier.width(6.dp)); Text("添加新知识点")
                 }
             } else {
                 AddKpInlineForm(
-                    allChapters = allChapters,
-                    allSections = allSections,
-                    onSave      = { secId, no, kpTitle, content ->
-                        onAddNew(secId, no, kpTitle, content)
-                        showAddForm = false
-                    },
-                    onCancel    = { showAddForm = false }
+                    allChapters = allChapters, allSections = allSections,
+                    onSave = { secId, no, kpTitle, content -> onAddNew(secId, no, kpTitle, content); showAddForm = false },
+                    onCancel = { showAddForm = false }
                 )
             }
         }
@@ -342,35 +236,17 @@ internal fun KnowledgePointPickerSheet(
 
 @Composable
 private fun ChapterRow(
-    chapter: KpChapter,
-    pointCount: Int,
-    isExpanded: Boolean,
-    allSelected: Boolean,
-    someSelected: Boolean,
-    onToggleExpand: () -> Unit,
-    onToggleAll: () -> Unit
+    chapter: KpChapter, pointCount: Int, isExpanded: Boolean,
+    allSelected: Boolean, someSelected: Boolean,
+    onToggleExpand: () -> Unit, onToggleAll: () -> Unit
 ) {
-    Surface(
-        shape    = RoundedCornerShape(10.dp),
-        color    = if (isExpanded) FluentBlue.copy(.10f) else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            Modifier
-                .clickable(onClick = onToggleExpand)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            TriStateCheckbox(
-                state = when {
-                    allSelected  -> ToggleableState.On
-                    someSelected -> ToggleableState.Indeterminate
-                    else         -> ToggleableState.Off
-                },
-                onClick  = onToggleAll,
-                modifier = Modifier.size(20.dp)
-            )
+    Surface(shape = RoundedCornerShape(10.dp),
+        color = if (isExpanded) FluentBlue.copy(.10f) else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.clickable(onClick = onToggleExpand).padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            TriStateCheckbox(state = when { allSelected -> ToggleableState.On; someSelected -> ToggleableState.Indeterminate; else -> ToggleableState.Off },
+                onClick = onToggleAll, modifier = Modifier.size(20.dp))
             Surface(shape = RoundedCornerShape(4.dp), color = if (isExpanded) FluentBlue else FluentMuted.copy(.2f)) {
                 Text("第${chapter.no}章", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
                     color = if (isExpanded) androidx.compose.ui.graphics.Color.White else FluentMuted,
@@ -378,8 +254,7 @@ private fun ChapterRow(
             }
             Text(chapter.name, style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (isExpanded) FontWeight.Bold else FontWeight.Normal,
-                color = if (isExpanded) FluentBlue else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f))
+                color = if (isExpanded) FluentBlue else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
             Surface(shape = RoundedCornerShape(20.dp), color = FluentMuted.copy(.12f)) {
                 Text("$pointCount 个", style = MaterialTheme.typography.labelSmall, color = FluentMuted,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
@@ -394,41 +269,24 @@ private fun ChapterRow(
 
 @Composable
 private fun SectionRow(
-    section: KpSection,
-    pointCount: Int,
-    isExpanded: Boolean,
-    allSelected: Boolean,
-    someSelected: Boolean,
-    onToggleExpand: () -> Unit,
-    onToggleAll: () -> Unit
+    section: KpSection, pointCount: Int, isExpanded: Boolean,
+    allSelected: Boolean, someSelected: Boolean,
+    onToggleExpand: () -> Unit, onToggleAll: () -> Unit
 ) {
-    Surface(
-        shape    = RoundedCornerShape(8.dp),
-        color    = if (isExpanded) FluentTeal.copy(.08f) else MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp)
-    ) {
-        Row(
-            Modifier.clickable(onClick = onToggleExpand).padding(horizontal = 8.dp, vertical = 5.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            TriStateCheckbox(
-                state = when {
-                    allSelected  -> ToggleableState.On
-                    someSelected -> ToggleableState.Indeterminate
-                    else         -> ToggleableState.Off
-                },
-                onClick  = onToggleAll,
-                modifier = Modifier.size(18.dp)
-            )
+    Surface(shape = RoundedCornerShape(8.dp),
+        color = if (isExpanded) FluentTeal.copy(.08f) else MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp)) {
+        Row(Modifier.clickable(onClick = onToggleExpand).padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            TriStateCheckbox(state = when { allSelected -> ToggleableState.On; someSelected -> ToggleableState.Indeterminate; else -> ToggleableState.Off },
+                onClick = onToggleAll, modifier = Modifier.size(18.dp))
             Surface(shape = RoundedCornerShape(4.dp), color = if (isExpanded) FluentTeal else FluentMuted.copy(.15f)) {
                 Text("第${section.no}节", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
                     color = if (isExpanded) androidx.compose.ui.graphics.Color.White else FluentMuted,
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
             }
             Text(section.name, style = MaterialTheme.typography.bodySmall,
-                color = if (isExpanded) FluentTeal else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f))
+                color = if (isExpanded) FluentTeal else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
             Surface(shape = RoundedCornerShape(20.dp), color = FluentMuted.copy(.08f)) {
                 Text("$pointCount 条", style = MaterialTheme.typography.labelSmall, color = FluentMuted,
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
@@ -439,51 +297,34 @@ private fun SectionRow(
     }
 }
 
-// ─── Point row — shows displayTitle ──────────────────────────────────────────
+// ─── Point row ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PointRow(
-    kpFull: KpFull,
-    checked: Boolean,
-    onToggle: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 24.dp)
-            .clickable(onClick = onToggle)
+private fun PointRow(kpFull: KpFull, checked: Boolean, onToggle: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().padding(start = 24.dp).clickable(onClick = onToggle)
             .padding(vertical = 5.dp, horizontal = 4.dp),
-        verticalAlignment     = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Checkbox(
-            checked         = checked,
-            onCheckedChange = { onToggle() },
-            modifier        = Modifier.size(20.dp).padding(top = 1.dp)
-        )
+        verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Checkbox(checked = checked, onCheckedChange = { onToggle() }, modifier = Modifier.size(20.dp).padding(top = 1.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 ColorChip(kpFull.code, FluentBlue)
                 if (kpFull.isCustom) ColorChip("自定义", FluentAmber)
             }
-            // Show displayTitle bold (short label), content below in muted style
             Text(kpFull.displayTitle, style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold, maxLines = 2)
             if (kpFull.title.isNotBlank()) {
-                Text(kpFull.content, style = MaterialTheme.typography.labelSmall,
-                    color = FluentMuted, maxLines = 2)
+                Text(kpFull.content, style = MaterialTheme.typography.labelSmall, color = FluentMuted, maxLines = 2)
             }
         }
     }
     HorizontalDivider(color = FluentBorder.copy(alpha = 0.4f), modifier = Modifier.padding(start = 24.dp))
 }
 
-// ─── Inline add form — now with title field ───────────────────────────────────
+// ─── Inline add form ──────────────────────────────────────────────────────────
 
 @Composable
 private fun AddKpInlineForm(
-    allChapters: List<KpChapter>,
-    allSections: List<KpSection>,
+    allChapters: List<KpChapter>, allSections: List<KpSection>,
     onSave: (sectionId: Long, no: Int, title: String, content: String) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -498,15 +339,10 @@ private fun AddKpInlineForm(
     var content by remember { mutableStateOf("") }
 
     Surface(shape = RoundedCornerShape(12.dp), color = FluentBlueLight) {
-        Column(
-            Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text("添加知识点", style = MaterialTheme.typography.labelMedium,
-                color = FluentBlue, fontWeight = FontWeight.Bold)
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("添加知识点", style = MaterialTheme.typography.labelMedium, color = FluentBlue, fontWeight = FontWeight.Bold)
             if (sortedChapters.isEmpty()) {
-                Text("请先在知识点管理页添加章节",
-                    style = MaterialTheme.typography.bodySmall, color = FluentAmber)
+                Text("请先在知识点管理页添加章节", style = MaterialTheme.typography.bodySmall, color = FluentAmber)
             } else {
                 FormDropdown("章", selectedChapter?.let { "第${it.no}章 ${it.name}" } ?: "",
                     sortedChapters.map { "第${it.no}章 ${it.name}" }) { sel ->
@@ -523,25 +359,15 @@ private fun AddKpInlineForm(
                 }
                 FormTextField("条目号", no, { no = it }, "如 1")
                 val preview = "${selectedChapter?.no ?: "?"}.${selectedSection?.no ?: "?"}.${no.ifBlank { "?" }}"
-                Text("编号：$preview", style = MaterialTheme.typography.labelSmall,
-                    color = FluentBlue, fontWeight = FontWeight.SemiBold)
+                Text("编号：$preview", style = MaterialTheme.typography.labelSmall, color = FluentBlue, fontWeight = FontWeight.SemiBold)
             }
-            // Short title (shown in lesson records)
             FormTextField("标题", kpTitle, { kpTitle = it }, "如：摄氏温度温标")
-            // Full content
-            OutlinedTextField(
-                value         = content,
-                onValueChange = { content = it },
-                label         = { Text("内容") },
-                shape         = RoundedCornerShape(12.dp),
-                modifier      = Modifier.fillMaxWidth(),
-                minLines      = 2, maxLines = 4,
-                colors        = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder)
-            )
+            OutlinedTextField(value = content, onValueChange = { content = it }, label = { Text("内容") },
+                shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
+                minLines = 2, maxLines = 4,
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FluentBlue, unfocusedBorderColor = FluentBorder))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp)) { Text("取消") }
+                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)) { Text("取消") }
                 Button(
                     onClick = {
                         val secId = selectedSection?.id ?: return@Button
