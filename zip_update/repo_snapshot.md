@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-03-31T15:40:06Z`
-> Commit:  `feeb35f309eb23299ebd51fb6694215fbab2cc21`
+> Updated: `2026-04-01T02:12:47Z`
+> Commit:  `8dccf49f0090970bd83c6faa4627985069b13c16`
 
 ```
 ./.github/workflows/build.yml
@@ -79,6 +79,10 @@
 ./keys/keystore.properties
 ./keys/release.jks
 ./settings.gradle.kts
+./userdata_sync/avatars/avatar_1773224297620.jpg
+./userdata_sync/avatars/avatar_1773984305201.jpg
+./userdata_sync/meta.json
+./userdata_sync/state.json
 ./zip_update/CHANGELOG.md
 ./zip_update/applied_patches.txt
 ./zip_update/patches/test_file.txt
