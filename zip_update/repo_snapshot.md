@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-04-01T02:12:47Z`
-> Commit:  `8dccf49f0090970bd83c6faa4627985069b13c16`
+> Updated: `2026-04-01T07:59:18Z`
+> Commit:  `e8bacf5fc28044bfec47c82febf9efa08207f073`
 
 ```
 ./.github/workflows/build.yml
@@ -12,11 +12,9 @@
 ./app/build.gradle.kts
 ./app/proguard-rules.pro
 ./app/src/main/AndroidManifest.xml
-./app/src/main/assets/knowledge_points.json
 ./app/src/main/java/com/school/manager/MainActivity.kt
 ./app/src/main/java/com/school/manager/Navigation.kt
 ./app/src/main/java/com/school/manager/data/BackupModels.kt
-./app/src/main/java/com/school/manager/data/KnowledgePointsData.kt
 ./app/src/main/java/com/school/manager/data/Models.kt
 ./app/src/main/java/com/school/manager/data/db/AppDatabase.kt
 ./app/src/main/java/com/school/manager/data/db/Daos.kt
@@ -81,6 +79,7 @@
 ./settings.gradle.kts
 ./userdata_sync/avatars/avatar_1773224297620.jpg
 ./userdata_sync/avatars/avatar_1773984305201.jpg
+./userdata_sync/kp_custom.json
 ./userdata_sync/meta.json
 ./userdata_sync/state.json
 ./zip_update/CHANGELOG.md
