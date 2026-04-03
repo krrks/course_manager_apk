@@ -1,10 +1,10 @@
 #!build
-# GitHub 同步优化：跳过重复上传 + 全量知识点同步
+# 修复废弃 API 警告：MasterKeys → MasterKey.Builder
 
-1. 推送时若数据内容未变化，自动跳过 state.json 上传，节省 GitHub API 请求
-2. 推送时若知识点内容未变化，自动跳过 kp_data.json 上传（哈希比对）
-3. 头像文件按文件名比对，远端已存在时跳过上传
-4. 知识点现改为全量同步：所有 KP（含原内置条目）连同章节结构一起推送至 kp_data.json
-5. 拉取时全量替换章节/节/知识点（新格式），完整同步知识点体系到其他设备
-6. 兼容旧格式回退：远端为旧版 kp_custom_{grade}.json 时仍可正常拉取（仅替换自定义 KP）
-7. 修复：推送时跳过 state.json 上传后，meta.json 保留远端原有 dataHash，避免数据不一致
+修复 GitHubSyncViewModel.kt 中使用已废弃的 security-crypto API 导致的编译警告：
+
+- 将 `MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)` 替换为
+  `MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()`
+- 将废弃的 5 参数 `EncryptedSharedPreferences.create(fileName, keyAlias, context, …)` 替换为
+  新签名 `EncryptedSharedPreferences.create(context, fileName, masterKey, …)`
+- 更新 docs/readme_deprecated.md，记录此废弃符号及替代方案

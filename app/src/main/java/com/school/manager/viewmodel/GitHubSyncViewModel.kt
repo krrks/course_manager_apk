@@ -6,7 +6,7 @@ import android.content.SharedPreferences
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
+import androidx.security.crypto.MasterKey
 import com.google.gson.GsonBuilder
 import com.school.manager.data.*
 import kotlinx.coroutines.Dispatchers
@@ -275,8 +275,9 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
     private fun now() = Instant.now().toString().take(19).replace("T", " ")
 
     private fun openPrefs(context: Context): SharedPreferences = try {
+        val mk = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
         EncryptedSharedPreferences.create(
-            "gh_sync_prefs", MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC), context,
+            context, "gh_sync_prefs", mk,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
