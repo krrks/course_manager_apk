@@ -3,6 +3,7 @@ package com.school.manager.data.repository
 import android.content.Context
 import com.school.manager.data.*
 import com.school.manager.data.db.*
+import com.school.manager.viewmodel.KpSyncData
 import kotlinx.coroutines.flow.*
 
 class AppRepository(context: Context) {
@@ -127,8 +128,31 @@ class AppRepository(context: Context) {
     }
 
     /**
-     * Replaces all custom KPs with the supplied list.
-     * Built-in KPs (isCustom=false) are never touched.
+     * GitHub sync KP pull — replaces KP data based on what the remote provided.
+     *
+     * New format (data.chapters non-empty): full replacement of chapters + sections + points.
+     * Legacy format (data.chapters empty): only replace custom (isCustom=true) KPs,
+     *   leaving built-in KPs and the chapter/section hierarchy intact.
+     */
+    suspend fun replaceAllKpData(data: KpSyncData) {
+        if (data.chapters.isNotEmpty()) {
+            // Full replacement — remote sent the complete KP hierarchy
+            db.knowledgePointDao().deleteAll()
+            db.kpSectionDao().deleteAll()
+            db.kpChapterDao().deleteAll()
+            data.chapters.forEach { db.kpChapterDao().insert(it.toEntity()) }
+            data.sections.forEach { db.kpSectionDao().insert(it.toEntity()) }
+            data.points.forEach   { db.knowledgePointDao().insert(it.toEntity()) }
+        } else {
+            // Legacy replacement — only swap out custom KPs
+            db.knowledgePointDao().deleteAllCustom()
+            data.points.forEach { db.knowledgePointDao().insert(it.toEntity()) }
+        }
+    }
+
+    /**
+     * Legacy: replaces custom KPs only. Kept for backward compat.
+     * Prefer [replaceAllKpData] for new code.
      */
     suspend fun mergeCustomKps(points: List<KnowledgePoint>) {
         db.knowledgePointDao().deleteAllCustom()

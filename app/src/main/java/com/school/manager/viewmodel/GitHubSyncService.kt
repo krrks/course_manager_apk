@@ -16,8 +16,8 @@ internal data class GitHubMeta(
     val kpCount: Int = 0,               // legacy — kept for backward compat
     val kpCustomHash: String = "",      // legacy — kept for backward compat
     val customKpCount: Int = 0,
-    /** Per-grade SHA-256 hashes of kp_custom_{grade}.json files. */
-    val gradeKpHashes: Map<String, String> = emptyMap()
+    val kpDataHash: String = "",        // hash of kp_data.json (all KPs, new format)
+    val gradeKpHashes: Map<String, String> = emptyMap()  // legacy — kept for backward compat
 )
 
 /**

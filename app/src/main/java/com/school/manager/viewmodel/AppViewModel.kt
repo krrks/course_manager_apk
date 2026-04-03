@@ -21,9 +21,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<AppState> = repo.appState
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppState())
 
-    // No automatic data seeding — app starts empty on first launch.
-    // Users import their own data via the Export / GitHub sync screen.
-
     // ─── Lookups ──────────────────────────────────────────────────────────────
     fun subject(id: Long?)        = state.value.subjects.find        { it.id == id }
     fun teacher(id: Long?)        = state.value.teachers.find        { it.id == id }
@@ -180,10 +177,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─── GitHub sync ──────────────────────────────────────────────────────────
 
+    /** Replaces all non-KP tables with pulled state (teachers, classes, students, lessons, subjects). */
     fun syncImportStateOnly(incoming: AppState) {
         viewModelScope.launch(Dispatchers.IO) { repo.importStateOnly(incoming) }
     }
 
+    /**
+     * Replaces KP data with what was pulled from remote.
+     * New format: full hierarchy (chapters + sections + all points).
+     * Legacy format: custom-KPs-only replacement.
+     */
+    fun syncReplaceAllKps(data: KpSyncData) {
+        viewModelScope.launch(Dispatchers.IO) { repo.replaceAllKpData(data) }
+    }
+
+    /** Legacy alias kept for backward compat. */
     fun syncMergeCustomKps(points: List<KnowledgePoint>) {
         viewModelScope.launch(Dispatchers.IO) { repo.mergeCustomKps(points) }
     }

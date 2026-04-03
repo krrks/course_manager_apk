@@ -48,11 +48,33 @@ internal data class GsonState(
 )
 
 /**
- * Wrapper for kp_custom.json — only custom (user-created) knowledge points.
- * Built-in KPs are seeded from [KnowledgePointsData] and never synced.
+ * Full KP dataset for GitHub sync: all chapters, sections, and points.
+ * Replaces the old kp_custom_{grade}.json approach.
+ * Includes both built-in (isCustom=false) and user-created (isCustom=true) points.
+ */
+internal data class GsonKpData(
+    val chapters: List<GsonKpChapter>?      = null,
+    val sections: List<GsonKpSection>?      = null,
+    val points:   List<GsonKnowledgePoint>? = null
+)
+
+/**
+ * Legacy wrapper for kp_custom.json / kp_custom_{grade}.json — only custom KPs.
+ * Kept for backward-compat pull of old remote format.
  */
 internal data class GsonCustomKps(
     val customPoints: List<GsonKnowledgePoint>? = null
+)
+
+/**
+ * Fully resolved KP sync payload passed from ViewModel to AppViewModel/Repository.
+ * When [chapters] is empty (legacy remote format), only custom [points] are replaced.
+ * When [chapters] is non-empty (new kp_data.json format), the full KP hierarchy is replaced.
+ */
+data class KpSyncData(
+    val chapters: List<KpChapter>,
+    val sections: List<KpSection>,
+    val points:   List<KnowledgePoint>
 )
 
 // ── Parsers ───────────────────────────────────────────────────────────────────
@@ -84,7 +106,6 @@ internal fun parseGsonState(
                    gl.code ?: "", gl.teacherIdOverride,
                    gl.knowledgePointIds ?: emptyList())
         } ?: emptyList(),
-        // KP fields: present in full ZIP backups; absent in GitHub sync state.json
         kpChapters = raw.kpChapters?.map {
             KpChapter(it.id ?: 0L, it.grade ?: "", it.no ?: 0, it.name ?: "")
         } ?: emptyList(),
@@ -99,8 +120,20 @@ internal fun parseGsonState(
 }.getOrNull()
 
 /**
- * Parses [kp_custom.json] bytes into a list of custom [KnowledgePoint]s.
- * Returns null on any parse failure.
+ * Parses [kp_data.json] (new format) into a [KpSyncData] with full chapter/section/point hierarchy.
+ */
+internal fun parseKpData(bytes: ByteArray, gson: Gson): KpSyncData? = runCatching {
+    val raw = gson.fromJson(bytes.toString(Charsets.UTF_8), GsonKpData::class.java) ?: return null
+    KpSyncData(
+        chapters = raw.chapters?.map { KpChapter(it.id ?: 0L, it.grade ?: "", it.no ?: 0, it.name ?: "") } ?: emptyList(),
+        sections = raw.sections?.map { KpSection(it.id ?: 0L, it.chapterId ?: 0L, it.no ?: 0, it.name ?: "") } ?: emptyList(),
+        points   = raw.points?.map { KnowledgePoint(it.id ?: 0L, it.sectionId ?: 0L, it.no ?: 0,
+                       it.title ?: "", it.content ?: "", it.isCustom ?: false) } ?: emptyList()
+    )
+}.getOrNull()
+
+/**
+ * Parses legacy [kp_custom.json] / [kp_custom_{grade}.json] into a list of custom [KnowledgePoint]s.
  */
 internal fun parseCustomKps(bytes: ByteArray, gson: Gson): List<KnowledgePoint>? =
     runCatching {

@@ -31,18 +31,12 @@ internal fun GitHubSyncScreen(
     val appState by appVm.state.collectAsState()
     val context  = LocalContext.current
 
-    var urlInput   by remember { mutableStateOf(syncVm.savedUrl) }
-    var tokenInput by remember { mutableStateOf(syncVm.savedToken) }
-    var toastMsg   by remember { mutableStateOf<String?>(null) }
-    var showConflict by remember { mutableStateOf(false) }
-
+    var urlInput       by remember { mutableStateOf(syncVm.savedUrl) }
+    var tokenInput     by remember { mutableStateOf(syncVm.savedToken) }
+    var toastMsg       by remember { mutableStateOf<String?>(null) }
+    var showConflict   by remember { mutableStateOf(false) }
     var prevWasSyncing by remember { mutableStateOf(false) }
-
-    val appVersion = remember {
-        runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
-        }.getOrDefault("")
-    }
+    val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "" }.getOrDefault("") }
 
     LaunchedEffect(status) {
         when {
@@ -84,32 +78,19 @@ internal fun GitHubSyncScreen(
                     }
                 }
 
-                Column(
-                    Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // ── Connected status banner ───────────────────────────────
-                    if (isConnected) {
-                        ConnectedBanner(
-                            repoUrl   = syncVm.savedUrl,
-                            lastSync  = (status as? SyncStatus.Ready)?.lastSync ?: syncVm.savedLastSync,
-                            isSyncing = isBusy
-                        )
-                    }
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (isConnected) ConnectedBanner(
+                        repoUrl   = syncVm.savedUrl,
+                        lastSync  = (status as? SyncStatus.Ready)?.lastSync ?: syncVm.savedLastSync,
+                        isSyncing = isBusy)
 
                     // ── Error banner ──────────────────────────────────────────
                     if (status is SyncStatus.Error) {
-                        Surface(shape = RoundedCornerShape(10.dp), color = FluentRed.copy(.10f),
-                            modifier = Modifier.fillMaxWidth()) {
-                            Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(10.dp), color = FluentRed.copy(.10f), modifier = Modifier.fillMaxWidth()) {
+                            Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Warning, null, tint = FluentRed, modifier = Modifier.size(18.dp))
-                                Text((status as SyncStatus.Error).message,
-                                    style = MaterialTheme.typography.bodySmall, color = FluentRed,
-                                    modifier = Modifier.weight(1f))
-                                TextButton(onClick = { syncVm.restoreReady() }, contentPadding = PaddingValues(0.dp)) {
-                                    Text("×", color = FluentRed, fontSize = 18.sp)
-                                }
+                                Text((status as SyncStatus.Error).message, style = MaterialTheme.typography.bodySmall, color = FluentRed, modifier = Modifier.weight(1f))
+                                TextButton(onClick = { syncVm.restoreReady() }, contentPadding = PaddingValues(0.dp)) { Text("×", color = FluentRed, fontSize = 18.sp) }
                             }
                         }
                     }
@@ -163,9 +144,9 @@ internal fun GitHubSyncScreen(
                             }
                             OutlinedButton(
                                 onClick  = {
-                                    syncVm.pull(context) { state, customKps ->
+                                    syncVm.pull(context) { state, kpData ->
                                         state?.let { appVm.syncImportStateOnly(it) }
-                                        customKps?.let { appVm.syncMergeCustomKps(it) }
+                                        kpData?.let { appVm.syncReplaceAllKps(it) }
                                     }
                                 },
                                 enabled  = !isBusy,
@@ -177,8 +158,8 @@ internal fun GitHubSyncScreen(
                             }
                         }
                         Text(
-                            "推送：课表、学生、班级数据及自定义知识点上传远端；内置知识点不同步。\n" +
-                            "拉取：下载并替换本地非知识点数据；自定义知识点仅在远端有更新时下载。",
+                            "推送：所有数据（含课表及全部知识点）上传远端，内容无变化时自动跳过。\n" +
+                            "拉取：下载并替换本地数据；知识点仅在远端有更新时下载。",
                             style = MaterialTheme.typography.bodySmall, color = FluentMuted
                         )
 
@@ -198,10 +179,9 @@ internal fun GitHubSyncScreen(
                         modifier = Modifier.fillMaxWidth()) {
                         Text(
                             "• 数据存储于仓库的 userdata_sync/ 目录\n" +
-                            "• 需要 PAT（Settings → Developer → Personal access tokens），\n" +
-                            "  权限选 repository → Contents → Read & Write\n" +
-                            "• 内置知识点（237条）不占用同步流量；仅自定义知识点同步\n" +
-                            "• 自定义知识点仅在内容变化时才推送/拉取",
+                            "• 需要 PAT 权限：repository → Contents → Read & Write\n" +
+                            "• 全部知识点（含内置）随课表一起同步；内容无变化自动跳过\n" +
+                            "• 状态/知识点数据均只在变化时才上传，减少 API 消耗",
                             style    = MaterialTheme.typography.bodySmall,
                             color    = FluentBlueDark,
                             modifier = Modifier.padding(12.dp)
@@ -264,9 +244,9 @@ internal fun GitHubSyncScreen(
                     OutlinedButton(
                         onClick = {
                             showConflict = false
-                            syncVm.pull(context) { state, customKps ->
+                            syncVm.pull(context) { state, kpData ->
                                 state?.let { appVm.syncImportStateOnly(it) }
-                                customKps?.let { appVm.syncMergeCustomKps(it) }
+                                kpData?.let { appVm.syncReplaceAllKps(it) }
                             }
                         },
                         shape = RoundedCornerShape(12.dp)
@@ -281,30 +261,20 @@ internal fun GitHubSyncScreen(
 
 @Composable
 private fun ConnectedBanner(repoUrl: String, lastSync: String?, isSyncing: Boolean) {
-    Surface(
-        shape    = RoundedCornerShape(12.dp),
-        color    = if (isSyncing) FluentBlueLight else Color(0xFFECFDF5),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment     = Alignment.CenterVertically
-        ) {
-            if (isSyncing) {
-                CircularProgressIndicator(color = FluentBlue, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Default.CheckCircle, null, tint = FluentGreen, modifier = Modifier.size(20.dp))
-            }
+    Surface(shape = RoundedCornerShape(12.dp),
+        color = if (isSyncing) FluentBlueLight else Color(0xFFECFDF5),
+        modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (isSyncing) CircularProgressIndicator(color = FluentBlue, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            else Icon(Icons.Default.CheckCircle, null, tint = FluentGreen, modifier = Modifier.size(20.dp))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(if (isSyncing) "同步中..." else "已连接",
-                    style      = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color      = if (isSyncing) FluentBlue else FluentGreen)
+                    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                    color = if (isSyncing) FluentBlue else FluentGreen)
                 Text(repoUrl, style = MaterialTheme.typography.bodySmall, color = FluentMuted)
                 if (!isSyncing && lastSync != null)
-                    Text("最后同步: $lastSync",
-                        style = MaterialTheme.typography.labelSmall, color = FluentMuted)
+                    Text("最后同步: $lastSync", style = MaterialTheme.typography.labelSmall, color = FluentMuted)
             }
         }
     }

@@ -10,13 +10,9 @@ import androidx.security.crypto.MasterKeys
 import com.google.gson.GsonBuilder
 import com.school.manager.data.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.security.MessageDigest
-import java.time.Instant
+import kotlinx.coroutines.flow.MutableStateFlow; import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch; import kotlinx.coroutines.withContext
+import java.io.File; import java.security.MessageDigest; import java.time.Instant
 
 // ── Status ────────────────────────────────────────────────────────────────────
 
@@ -72,10 +68,7 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun disconnect() {
-        prefs.edit().clear().apply()
-        _status.value = SyncStatus.Disconnected
-    }
+    fun disconnect() { prefs.edit().clear().apply(); _status.value = SyncStatus.Disconnected }
 
     fun restoreReady() {
         val url = prefs.getString(KEY_URL, null) ?: return
@@ -111,12 +104,12 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Pull ──────────────────────────────────────────────────────────────────
 
-    fun pull(context: Context, onResult: (AppState?, List<KnowledgePoint>?) -> Unit) {
+    fun pull(context: Context, onResult: (AppState?, KpSyncData?) -> Unit) {
         val url   = prefs.getString(KEY_URL,   null) ?: return
         val token = prefs.getString(KEY_TOKEN, null) ?: return
         viewModelScope.launch {
             _status.value = SyncStatus.Syncing
-            var result: Pair<AppState, List<KnowledgePoint>?>? = null
+            var result: Pair<AppState, KpSyncData?>? = null
             var pullError: String? = null
             withContext(Dispatchers.IO) {
                 try { result = executePull(url, token, context) }
@@ -143,75 +136,73 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val svc = GitHubSyncService(url, token, gson)
 
-        // State payload: strip avatar paths, omit all KP data
+        // Build state payload (KP data kept separate)
         val stateNoKp = appState.stripAvatarPaths().copy(
             kpChapters = emptyList(), kpSections = emptyList(), knowledgePoints = emptyList()
         )
         val stateBytes = gson.toJson(stateNoKp).toByteArray(Charsets.UTF_8)
         val stateHash  = sha256(stateBytes)
 
-        // Conflict detection on main state
+        // Fetch remote meta once (used for conflict check and as reference state hash)
+        val remoteMetaBytes = svc.getFile("meta.json")?.second
+        val remoteMeta = remoteMetaBytes?.let { bytes ->
+            runCatching { gson.fromJson(bytes.toString(Charsets.UTF_8), GitHubMeta::class.java) }.getOrNull()
+        }
+
+        // Conflict detection
         if (!force) {
-            val remoteMetaBytes = svc.getFile("meta.json")?.second
-            if (remoteMetaBytes != null) {
-                val remoteMeta = runCatching {
-                    gson.fromJson(remoteMetaBytes.toString(Charsets.UTF_8), GitHubMeta::class.java)
-                }.getOrNull()
-                val lastHash = prefs.getString(KEY_LAST_HASH, null)
-                if (remoteMeta != null && lastHash != null &&
-                    remoteMeta.dataHash != lastHash && stateHash != lastHash)
-                    throw ConflictException()
+            val lastHash = prefs.getString(KEY_LAST_HASH, null)
+            if (remoteMeta != null && lastHash != null && remoteMeta.dataHash != lastHash && stateHash != lastHash)
+                throw ConflictException()
+        }
+
+        // Upload state.json only if changed
+        val lastStateHash = prefs.getString(KEY_LAST_HASH, null)
+        val stateChanged  = stateHash != lastStateHash
+        if (stateChanged || force) {
+            if (!svc.putFile("state.json", stateBytes, svc.getFileSha("state.json"), "sync: update state"))
+                throw Exception("Failed to upload state.json — check repo write permissions")
+        }
+
+        // Upload kp_data.json (full hierarchy: all chapters, sections, points)
+        var kpDataHash = prefs.getString(KEY_KP_DATA_HASH, "") ?: ""
+        if (appState.kpChapters.isNotEmpty() || appState.knowledgePoints.isNotEmpty()) {
+            val kpBytes = gson.toJson(GsonKpData(
+                chapters = appState.kpChapters.map { GsonKpChapter(it.id, it.grade, it.no, it.name) },
+                sections = appState.kpSections.map { GsonKpSection(it.id, it.chapterId, it.no, it.name) },
+                points   = appState.knowledgePoints.map { GsonKnowledgePoint(it.id, it.sectionId, it.no, it.title, it.content, it.isCustom) }
+            )).toByteArray(Charsets.UTF_8)
+            val kpHash = sha256(kpBytes)
+            if (kpHash != prefs.getString(KEY_KP_DATA_HASH, null) || force) {
+                svc.putFile("kp_data.json", kpBytes, svc.getFileSha("kp_data.json"), "sync: kp data")
+                prefs.edit().putString(KEY_KP_DATA_HASH, kpHash).apply()
+                kpDataHash = kpHash
             }
         }
 
-        // Always push state.json
-        if (!svc.putFile("state.json", stateBytes, svc.getFileSha("state.json"), "sync: update data"))
-            throw Exception("Failed to upload state.json — check repo write permissions")
-
-        // Push custom KPs grouped by grade
-        val customKps = appState.knowledgePoints.filter { it.isCustom }
-        val kpsByGrade = customKps.groupBy { kp ->
-            val sec = appState.kpSections.find { it.id == kp.sectionId }
-            appState.kpChapters.find { it.id == sec?.chapterId }?.grade ?: "unknown"
-        }
-        val gradeHashes = mutableMapOf<String, String>()
-        kpsByGrade.forEach { (grade, kps) ->
-            val bytes = serializeCustomKps(kps)
-            val hash  = sha256(bytes)
-            gradeHashes[grade] = hash
-            val storedHash = prefs.getString("$KEY_KP_HASH_PREFIX$grade", null)
-            if (hash != storedHash || force) {
-                svc.putFile("kp_custom_$grade.json", bytes, svc.getFileSha("kp_custom_$grade.json"), "sync: kps $grade")
-                prefs.edit().putString("$KEY_KP_HASH_PREFIX$grade", hash).apply()
-            }
-        }
-
-        // Push avatars
+        // Upload avatars (skip files already on remote)
         val avatarDir = File(context.filesDir, "avatars")
         if (avatarDir.exists()) {
             val remoteShas = svc.listDir("avatars").associate { (n, s) -> n to s }
             avatarDir.listFiles()?.forEach { f ->
-                svc.putFile("avatars/${f.name}", f.readBytes(), remoteShas[f.name], "sync: avatar")
+                if (!remoteShas.containsKey(f.name) || force)
+                    svc.putFile("avatars/${f.name}", f.readBytes(), remoteShas[f.name], "sync: avatar")
             }
         }
 
-        // Push meta.json last — acts as "commit complete" marker
-        val meta = GitHubMeta(
-            syncedAt      = Instant.now().toString(),
-            appVersion    = appVersion,
-            dataHash      = stateHash,
-            lessonCount   = appState.lessons.size,
-            studentCount  = appState.students.size,
-            customKpCount = customKps.size,
-            gradeKpHashes = gradeHashes
-        )
-        svc.putFile("meta.json", gson.toJson(meta).toByteArray(), svc.getFileSha("meta.json"), "sync: meta")
-        prefs.edit().putString(KEY_LAST_HASH, stateHash).apply()
+        // Push meta.json last — preserves remote dataHash when state upload was skipped
+        val effectiveHash = if (stateChanged || force) stateHash else remoteMeta?.dataHash?.takeIf { it.isNotBlank() } ?: stateHash
+        svc.putFile("meta.json", gson.toJson(GitHubMeta(
+            syncedAt = Instant.now().toString(), appVersion = appVersion, dataHash = effectiveHash,
+            lessonCount = appState.lessons.size, studentCount = appState.students.size,
+            customKpCount = appState.knowledgePoints.count { it.isCustom }, kpDataHash = kpDataHash
+        )).toByteArray(), svc.getFileSha("meta.json"), "sync: meta")
+        prefs.edit().putString(KEY_LAST_HASH, effectiveHash).apply()
     }
 
     // ── Core pull ─────────────────────────────────────────────────────────────
 
-    private fun executePull(url: String, token: String, context: Context): Pair<AppState, List<KnowledgePoint>?> {
+    private fun executePull(url: String, token: String, context: Context): Pair<AppState, KpSyncData?> {
         val svc = GitHubSyncService(url, token, gson)
 
         val (_, stateBytes) = svc.getFile("state.json")
@@ -235,77 +226,72 @@ class GitHubSyncViewModel(app: Application) : AndroidViewModel(app) {
             }
         }.getOrNull()
 
-        var customKps: List<KnowledgePoint>? = null
+        var kpSyncData: KpSyncData? = null
 
-        // Per-grade KP sync (new format)
-        val remoteGradeHashes = remoteMeta?.gradeKpHashes ?: emptyMap()
-        if (remoteGradeHashes.isNotEmpty()) {
-            val anyChanged = remoteGradeHashes.any { (grade, remoteHash) ->
-                prefs.getString("$KEY_KP_HASH_PREFIX$grade", null) != remoteHash
-            }
-            if (anyChanged) {
-                val allKps = mutableListOf<KnowledgePoint>()
-                remoteGradeHashes.forEach { (grade, remoteHash) ->
-                    val bytes = svc.getFile("kp_custom_$grade.json")?.second
-                    if (bytes != null) parseCustomKps(bytes, gson)?.let { allKps.addAll(it) }
-                    prefs.edit().putString("$KEY_KP_HASH_PREFIX$grade", remoteHash).apply()
-                }
-                customKps = allKps
-            }
-        } else if (remoteMeta?.kpCustomHash?.isNotBlank() == true) {
-            // Legacy fallback: single kp_custom.json (pre-grade-split format)
-            val localLegacyHash = prefs.getString(KEY_KP_HASH_LEGACY, null)
-            if (remoteMeta.kpCustomHash != localLegacyHash) {
-                val bytes = svc.getFile("kp_custom.json")?.second
+        // ── New format: kp_data.json (all KPs with chapter/section hierarchy) ──
+        val remoteKpDataHash = remoteMeta?.kpDataHash?.takeIf { it.isNotBlank() }
+        if (remoteKpDataHash != null) {
+            val localKpDataHash = prefs.getString(KEY_KP_DATA_HASH, null)
+            if (remoteKpDataHash != localKpDataHash) {
+                val bytes = svc.getFile("kp_data.json")?.second
                 if (bytes != null) {
-                    customKps = parseCustomKps(bytes, gson)
-                    prefs.edit().putString(KEY_KP_HASH_LEGACY, remoteMeta.kpCustomHash).apply()
+                    kpSyncData = parseKpData(bytes, gson)
+                    prefs.edit().putString(KEY_KP_DATA_HASH, remoteKpDataHash).apply()
+                }
+            }
+        } else {
+            // Legacy: per-grade kp_custom_{grade}.json
+            val gradeHashes = remoteMeta?.gradeKpHashes ?: emptyMap()
+            if (gradeHashes.isNotEmpty()) {
+                if (gradeHashes.any { (g, h) -> prefs.getString("$KEY_KP_HASH_PREFIX$g", null) != h }) {
+                    val allKps = mutableListOf<KnowledgePoint>()
+                    gradeHashes.forEach { (g, h) ->
+                        svc.getFile("kp_custom_$g.json")?.second?.let { parseCustomKps(it, gson)?.let { kps -> allKps.addAll(kps) } }
+                        prefs.edit().putString("$KEY_KP_HASH_PREFIX$g", h).apply()
+                    }
+                    kpSyncData = KpSyncData(emptyList(), emptyList(), allKps)
+                }
+            } else if (remoteMeta?.kpCustomHash?.isNotBlank() == true) {
+                // Oldest legacy: single kp_custom.json
+                val localLegacy = prefs.getString(KEY_KP_HASH_LEGACY, null)
+                if (remoteMeta.kpCustomHash != localLegacy) {
+                    svc.getFile("kp_custom.json")?.second?.let { bytes ->
+                        parseCustomKps(bytes, gson)?.let { kpSyncData = KpSyncData(emptyList(), emptyList(), it) }
+                        prefs.edit().putString(KEY_KP_HASH_LEGACY, remoteMeta.kpCustomHash).apply()
+                    }
                 }
             }
         }
 
         prefs.edit().putString(KEY_LAST_HASH, sha256(stateBytes)).apply()
-        return state to customKps
+        return state to kpSyncData
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun serializeCustomKps(points: List<KnowledgePoint>): ByteArray {
-        val gsonPoints = points.map {
-            GsonKnowledgePoint(it.id, it.sectionId, it.no, it.title, it.content, true)
-        }
-        return gson.toJson(GsonCustomKps(gsonPoints)).toByteArray(Charsets.UTF_8)
-    }
-
     private fun sha256(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes)
-            .joinToString("") { "%02x".format(it) }
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     private fun now() = Instant.now().toString().take(19).replace("T", " ")
 
     private fun openPrefs(context: Context): SharedPreferences = try {
         EncryptedSharedPreferences.create(
-            "gh_sync_prefs",
-            MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
-            context,
+            "gh_sync_prefs", MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC), context,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
-    } catch (_: Exception) {
-        context.getSharedPreferences("gh_sync_prefs_plain", Context.MODE_PRIVATE)
-    }
+    } catch (_: Exception) { context.getSharedPreferences("gh_sync_prefs_plain", Context.MODE_PRIVATE) }
 
     companion object {
         private const val KEY_URL            = "repo_url"
         private const val KEY_TOKEN          = "token"
         private const val KEY_LAST_SYNC      = "last_sync"
         private const val KEY_LAST_HASH      = "last_hash"
-        private const val KEY_KP_HASH_LEGACY = "kp_custom_hash"   // legacy single-file hash
-        private const val KEY_KP_HASH_PREFIX = "kp_hash_grade_"   // prefix for per-grade hashes
+        private const val KEY_KP_DATA_HASH   = "kp_data_hash"
+        private const val KEY_KP_HASH_LEGACY = "kp_custom_hash"
+        private const val KEY_KP_HASH_PREFIX = "kp_hash_grade_"
     }
 }
-
-// ── Private extension — strips absolute avatar paths to bare filenames ────────
 
 private fun AppState.stripAvatarPaths(): AppState = copy(
     teachers = teachers.map { t -> t.copy(avatarUri = t.avatarUri?.let { File(it).name }) },
