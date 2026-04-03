@@ -132,16 +132,17 @@ internal fun WeekView(
                                         Text("${l.startTime}–${l.endTime}",
                                             style   = MaterialTheme.typography.labelSmall,
                                             color   = FluentMuted, maxLines = 1)
-                                        if (total > 0)
-                                            Text("$done/$total",
-                                                style      = MaterialTheme.typography.labelSmall,
-                                                color      = color,
-                                                fontWeight = FontWeight.SemiBold)
+                                        // 班级名称优先，再显示上课次数
                                         if (clsName.isNotBlank())
                                             Text(clsName,
                                                 style    = MaterialTheme.typography.labelSmall,
                                                 color    = FluentMuted,
                                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        if (total > 0)
+                                            Text("$done/$total",
+                                                style      = MaterialTheme.typography.labelSmall,
+                                                color      = color,
+                                                fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
