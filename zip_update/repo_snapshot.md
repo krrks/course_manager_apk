@@ -1,7 +1,7 @@
 # Repository Snapshot
 
-> Updated: `2026-04-03T03:41:49Z`
-> Commit:  `efa8faf78ada93f24083ac1a98a61dfd7a40cb97`
+> Updated: `2026-04-03T16:00:05Z`
+> Commit:  `67f1bfd83cd9a1c5c5e220f0a0ae01944c7a6c31`
 
 ```
 ./.github/workflows/build.yml
@@ -80,6 +80,7 @@
 ./userdata_sync/avatars/avatar_1773224297620.jpg
 ./userdata_sync/avatars/avatar_1773984305201.jpg
 ./userdata_sync/kp_custom.json
+./userdata_sync/kp_data.json
 ./userdata_sync/meta.json
 ./userdata_sync/state.json
 ./zip_update/CHANGELOG.md
