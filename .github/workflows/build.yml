@@ -49,6 +49,8 @@ jobs:
           fetch-depth: 0
 
       # ── Check if app/ or zip_update/ has any changes ──────────────────────
+      # userdata_sync/ is intentionally excluded — it holds sync data files
+      # pushed directly by the mobile app and should never trigger a build.
       - name: Check if app/ or zip_update/ changed
         id: relevance
         if: github.event_name == 'push'
